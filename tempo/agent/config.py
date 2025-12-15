@@ -47,3 +47,12 @@ class AgentConfig:
     # Debugging
     verbose: bool = False
     log_level: str = "INFO"
+    
+    # Legacy/convenience aliases
+    scope: str | None = None  # Optional scope description
+    
+    @property
+    def max_steps(self) -> int:
+        """Alias for max_total_steps."""
+        return self.max_total_steps
+
