@@ -1322,7 +1322,45 @@ class SummarizeOutputTool(Tool):
         )
 ```
 
-### 5.7 LLM Client (`tempo/infra/llm.py`)
+        #### Finish Task Tool (`tempo/tools/meta.py`)
+        
+        ```python
+        class FinishTaskTool(Tool):
+            """Signal completion of the agent's objective."""
+            
+            name = "finish_task"
+            description = "Signal that the objective has been achieved."
+            category = ToolCategory.META
+            
+            async def execute(self, findings: str, purpose: str) -> ToolResult:
+                return ToolResult(
+                    success=True,
+                    output=f"Task finished. Findings: {findings}",
+                    metadata={"finish": True}
+                )
+                
+            def get_schema(self) -> ToolSchema:
+                return ToolSchema(
+                    name=self.name,
+                    description=self.description,
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "findings": {
+                                "type": "string",
+                                "description": "A summary of the findings or answer to the objective.",
+                            },
+                            "purpose": {
+                                "type": "string",
+                                "description": "A one-sentence summary of why this tool is being called.",
+                            }
+                        },
+                        "required": ["findings", "purpose"],
+                    },
+                )
+        ```
+        
+        ### 5.7 LLM Client (`tempo/infra/llm.py`)
 
 ```python
 import litellm
@@ -1524,6 +1562,7 @@ class Agent:
         # Register meta tools
         self.tools.register(TransitionPhaseTool(self.workflow))
         self.tools.register(SummarizeOutputTool(self.context, self.summarizer))
+        self.tools.register(FinishTaskTool())
     
     async def run(
         self,
@@ -1555,7 +1594,8 @@ class Agent:
             b. Append "Output captured. Now call `summarize_tool_output` to compress this data." to output
             c. Update context (raw output)
         4. If phase transition tool: update workflow state
-        5. Return step result
+        5. If finish task tool: return result with success=True
+        6. Return step result
         """
         pass
     
@@ -2002,6 +2042,7 @@ You have access to the following tools:
 - **Be methodical**: Test one hypothesis at a time.
 - **Be patient**: Some vulnerabilities require multiple attempts to confirm.
 - **Be safe**: Never cause permanent damage or access unauthorized systems.
+- **Completion**: When you have achieved the objective, call the `finish_task` tool with your findings.
 
 ## Phase Transitions
  
