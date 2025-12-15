@@ -8,6 +8,8 @@ Exports:
     - LLMError: Exception for LLM errors
     - TokenUsage: Token usage statistics
     - ToolCallRequest: Tool call from LLM
+    - ContainerManager: Docker container management
+    - ContainerConfig: Container configuration
 """
 
 from tempo.infra.llm import (
@@ -18,12 +20,20 @@ from tempo.infra.llm import (
     TokenUsage,
     ToolCallRequest,
 )
+from tempo.infra.container import (
+    ContainerConfig,
+    ContainerManager,
+)
 
 __all__ = [
+    # LLM
     "LiteLLMClient",
     "LLMClient",
     "LLMError",
     "LLMResponse",
     "TokenUsage",
     "ToolCallRequest",
+    # Container
+    "ContainerConfig",
+    "ContainerManager",
 ]
