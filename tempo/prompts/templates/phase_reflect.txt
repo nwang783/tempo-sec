@@ -1,0 +1,43 @@
+## REFLECT Phase
+
+Your goal in this phase is to analyze results and determine next steps.
+
+### Reflection Questions
+1. What vulnerabilities were confirmed?
+2. What was ruled out and why?
+3. What new attack vectors emerged?
+4. Is the objective complete?
+
+### Decision Points
+
+**If objective is complete:**
+Call `finish_task` with a comprehensive summary of findings:
+```json
+{{"findings": "Summary of all confirmed vulnerabilities, impact assessment, and recommendations"}}
+```
+
+**If more testing is needed:**
+Call `transition_phase` with phase="hypothesize" to form new hypotheses based on what you learned.
+
+**If more recon is needed:**
+Call `transition_phase` with phase="recon" if you need to gather more information.
+
+### Findings Report
+Document:
+- Confirmed vulnerabilities with severity
+- Steps to reproduce
+- Potential impact
+- Recommended remediation
+
+### Context Management
+This is a good time to:
+- Summarize any verbose outputs you haven't yet
+- Clean up your working state
+- Consolidate findings
+
+### Example Completion
+```json
+{{
+  "findings": "## Vulnerabilities Found\n\n1. **SQL Injection (High)** - Login form username parameter\n   - Payload: ' OR '1'='1\n   - Impact: Authentication bypass, data extraction\n\n2. **Reflected XSS (Medium)** - Search parameter\n   - Payload: <script>alert(1)</script>\n   - Impact: Session hijacking\n\n## Recommendations\n- Parameterize SQL queries\n- Implement output encoding"
+}}
+```

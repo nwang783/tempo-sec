@@ -1353,11 +1353,191 @@ class SummarizeOutputTool(Tool):
                             "purpose": {
                                 "type": "string",
                                 "description": "A one-sentence summary of why this tool is being called.",
-                            }
-                        },
-                        "required": ["findings", "purpose"],
                     },
                 )
+        ```
+
+#### Branch to Subtasks Tool (`tempo/tools/meta.py`)
+
+This tool enables agent-initiated branching. When called, the agent spawns one or more "subagent" clones to work on subtasks in parallel. 
+
+```python
+class BranchToSubtasksTool(Tool):
+    """Spawn parallel subagents to work on subtasks."""
+    
+    name = "branch_to_subtasks"
+    description = """Spawn parallel subagents to investigate subtasks. Use this for:
+    - Investigating multiple hypotheses in parallel
+    - Research tasks that can be done independently
+    - Any work that should result in a summary
+    
+    Each subtask will be handled by a clone of yourself. When all subtasks complete,
+    their summaries will be merged and returned to you."""
+    category = ToolCategory.META
+    
+    def __init__(self, branch_coordinator: BranchCoordinator):
+        self.coordinator = branch_coordinator
+        
+    async def execute(self, subtasks: list[str], purpose: str) -> ToolResult:
+        """
+        Spawn subagents for each subtask.
+        
+        This returns a pending result. The actual summaries will be
+        injected once all subagents complete.
+        """
+        branch_id = await self.coordinator.spawn_subtasks(subtasks)
+        return ToolResult(
+            success=True,
+            output=f"Spawned {len(subtasks)} subagents. Waiting for results...",
+            metadata={"branch_id": branch_id, "pending": True}
+        )
+        
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "subtasks": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of subtask objectives for subagents to work on",
+                    },
+                    "purpose": {
+                        "type": "string",
+                        "description": "A one-sentence summary of why this tool is being called.",
+                    }
+                },
+                "required": ["subtasks", "purpose"],
+            },
+        )
+```
+
+#### Finish Subtask Tool (`tempo/tools/meta.py`)
+
+Called by subagents to signal completion and report their findings:
+
+```python
+class FinishSubtaskTool(Tool):
+    """Signal completion of a subtask (used by subagents)."""
+    
+    name = "finish_subtask"
+    description = """Signal that your subtask is complete. Provide a summary of:
+    - What you investigated
+    - What actions you took  
+    - Key findings or results
+    
+    Your summary will be merged with other subagent results and returned
+    to the main agent."""
+    category = ToolCategory.META
+    
+    def __init__(self, branch_coordinator: BranchCoordinator):
+        self.coordinator = branch_coordinator
+        
+    async def execute(
+        self, 
+        summary: str, 
+        findings: list[dict] | None = None,
+        purpose: str = "",
+    ) -> ToolResult:
+        """Report subtask completion."""
+        return ToolResult(
+            success=True,
+            output=f"Subtask complete.",
+            metadata={
+                "subtask_complete": True,
+                "summary": summary,
+                "findings": findings or [],
+            }
+        )
+        
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": "Summary of what you did and found",
+                    },
+                    "findings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "description": {"type": "string"},
+                                "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                            }
+                        },
+                        "description": "Optional structured findings",
+                    },
+                    "purpose": {
+                        "type": "string",
+                        "description": "A one-sentence summary of why this tool is being called.",
+                    }
+                },
+                "required": ["summary", "purpose"],
+            },
+        )
+```
+
+### 5.8 Branch Coordinator (`tempo/agent/branch_coordinator.py`)
+
+Manages agent-initiated branching and subagent lifecycle:
+
+```python
+@dataclass
+class SubtaskResult:
+    """Result from a completed subtask."""
+    subtask_id: str
+    objective: str
+    summary: str
+    findings: list[dict]
+    success: bool
+    error: str | None = None
+
+
+class BranchCoordinator:
+    """
+    Coordinates agent-initiated branching.
+    
+    When the agent calls branch_to_subtasks:
+    1. Creates branch frames in ContextStore
+    2. Spawns subagent runs (clones with subtask objectives)
+    3. Collects results as subagents call finish_subtask
+    4. Merges summaries into a single message for main agent
+    """
+    
+    def __init__(self, context_store: ContextStore, agent_factory: Callable):
+        self.context = context_store
+        self.agent_factory = agent_factory  # Creates subagent instances
+        self._pending_branches: dict[str, list[str]] = {}  # branch_id -> subtask_ids
+        self._results: dict[str, SubtaskResult] = {}  # subtask_id -> result
+    
+    async def spawn_subtasks(self, subtasks: list[str]) -> str:
+        """
+        Spawn subagents for each subtask.
+        
+        Returns a branch_id that can be used to track completion.
+        """
+        pass
+    
+    async def await_completion(self, branch_id: str) -> list[SubtaskResult]:
+        """Wait for all subtasks in a branch to complete."""
+        pass
+    
+    def merge_results(self, results: list[SubtaskResult]) -> str:
+        """Merge subtask results into a single summary message."""
+        parts = []
+        for r in results:
+            parts.append(f"## Subtask: {r.objective}\n{r.summary}")
+            if r.findings:
+                parts.append(f"Findings: {len(r.findings)} items")
+        return "\n\n---\n\n".join(parts)
         ```
         
         ### 5.7 LLM Client (`tempo/infra/llm.py`)

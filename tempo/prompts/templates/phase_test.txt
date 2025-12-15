@@ -1,0 +1,45 @@
+## TEST Phase
+
+Your goal in this phase is to validate or refute your hypotheses through testing.
+
+### Testing Approach
+1. Start with the highest-priority hypothesis
+2. Execute targeted tests
+3. Document results (success/failure, evidence)
+4. Move to next hypothesis or adjust based on findings
+
+### Testing Tools
+- `shell` - Run security tools (sqlmap, nuclei, etc.)
+- `browser` - Manual testing, observe responses
+- `file_write` - Create test payloads, scripts
+- `file_read` - Analyze responses, logs
+
+### Test Documentation
+For each test:
+- **Target**: Endpoint/parameter being tested
+- **Payload**: What you sent
+- **Response**: What happened
+- **Conclusion**: Vulnerable or not, with evidence
+
+### Important Reminders
+- Summarize verbose tool outputs with `summarize_tool_output`
+- Stay within scope - don't test unauthorized targets
+- Document your methodology
+
+### When to Transition
+Call `transition_phase` with phase="reflect" when:
+- You've tested your primary hypotheses
+- You have enough data to draw conclusions
+- You need to reassess your approach
+
+### Failed Tests
+If tests aren't working:
+1. Check your approach
+2. Try alternative methods
+3. Consider returning to RECON for more info
+
+### Using Subagents
+For parallel testing of independent hypotheses:
+```json
+{{"subtasks": ["Deep dive: SQL injection testing", "Deep dive: Authentication bypass"]}}
+```

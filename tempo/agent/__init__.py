@@ -1,0 +1,37 @@
+"""
+Agent module for Tempo Sec.
+
+Exports:
+    - AgentConfig: Agent configuration dataclass
+    - BranchCoordinator: Manages agent-initiated branching
+    - SubtaskResult: Result from a subtask
+    - WorkflowManager: Phase transition management
+    - WorkflowError: Workflow rule violation
+    - OutputSummarizer: Tool output summarization
+    - Agent: Main agent runner
+    - AgentResult: Final result of an agent run
+    - StepResult: Result of a single step
+"""
+
+from tempo.agent.config import AgentConfig
+from tempo.agent.branch_coordinator import (
+    BranchCoordinator,
+    SubtaskResult,
+    PendingBranch,
+)
+from tempo.agent.workflow import WorkflowManager, WorkflowError
+from tempo.agent.summarizer import OutputSummarizer
+from tempo.agent.runner import Agent, AgentResult, StepResult
+
+__all__ = [
+    "AgentConfig",
+    "BranchCoordinator",
+    "SubtaskResult",
+    "PendingBranch",
+    "WorkflowManager",
+    "WorkflowError",
+    "OutputSummarizer",
+    "Agent",
+    "AgentResult",
+    "StepResult",
+]

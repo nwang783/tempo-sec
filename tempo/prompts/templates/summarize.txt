@@ -1,0 +1,18 @@
+Summarize the following tool output concisely. Focus on information relevant to the security testing objective.
+
+## Tool: {tool_name}
+## Input: {tool_input}
+
+## Output to Summarize:
+{tool_output}
+
+## Current Objective:
+{objective}
+
+## Instructions:
+1. Extract key findings relevant to the objective
+2. Note any errors or issues
+3. Identify actionable information
+4. Keep summary under 200 words
+
+Provide ONLY the summary, no preamble.
