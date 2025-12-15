@@ -1,0 +1,51 @@
+# Tempo Sec Configuration
+# Copy to config.toml and customize for your environment
+
+[model]
+# LLM provider and model
+# Options: "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o", "openai/gpt-4-turbo"
+provider = "anthropic/claude-sonnet-4-20250514"
+
+[context]
+# Maximum context tokens before triggering summarization
+max_tokens = 100000
+# Automatically suggest summarization for long outputs
+auto_summarize = true
+# Directory for saving context files
+persistence_dir = "./contexts"
+
+[workflow]
+# Require explicit phase transitions via tool calls
+enforce_phases = true
+# Maximum steps per workflow phase
+max_steps_per_phase = 20
+# Hard limit on total agent steps
+max_total_steps = 100
+
+[branching]
+# Maximum parallel branches (subagents)
+max_branches = 5
+# Maximum nesting depth for branches
+max_branch_depth = 3
+# Step limit per branch
+branch_step_limit = 10
+
+[container]
+# Docker image for sandbox execution
+image = "tempo-sec-base:latest"
+# Container execution timeout (seconds)
+timeout = 300
+
+[scope]
+# Allowed target domains (empty = all allowed)
+allowed_domains = []
+# Explicitly excluded domains
+excluded_domains = []
+# Whether to allow subdomains of allowed domains
+allow_subdomains = true
+
+[logging]
+# Logging level: DEBUG, INFO, WARNING, ERROR
+level = "INFO"
+# Enable verbose output
+verbose = false
