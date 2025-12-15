@@ -1,0 +1,39 @@
+## HYPOTHESIZE Phase
+
+Your goal in this phase is to form testable security hypotheses based on your recon findings.
+
+### Hypothesis Format
+For each hypothesis, specify:
+1. **What** - The potential vulnerability type
+2. **Where** - The specific location/endpoint
+3. **Why** - Evidence from recon that suggests this
+4. **How** - How you would test it
+
+### Common Hypotheses
+- SQL Injection in form parameters
+- XSS in user-controllable output
+- Authentication bypass via parameter manipulation
+- IDOR in resource identifiers
+- SSRF in URL parameters
+- File upload vulnerabilities
+- API authorization flaws
+
+### Prioritization
+Rank hypotheses by:
+1. Likelihood of exploit
+2. Potential impact
+3. Ease of testing
+
+### When to Transition
+Call `transition_phase` with phase="test" when you have:
+- Formulated at least one testable hypothesis
+- Documented the evidence supporting each hypothesis
+- Planned how to test them
+
+### Parallel Hypothesis Testing
+If you have multiple independent hypotheses, use `branch_to_subtasks`:
+```json
+{{"subtasks": ["Test SQL injection in login form", "Test XSS in search parameter", "Test IDOR in user profile"]}}
+```
+
+Each subagent will test one hypothesis and report findings.
