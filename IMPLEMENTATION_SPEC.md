@@ -427,6 +427,19 @@ class ToolSchema:
     
     def to_openai_format(self) -> dict:
         """Convert to OpenAI/Anthropic tool format."""
+        # Ensure 'purpose' is in the parameters
+        if "purpose" not in self.parameters.get("properties", {}):
+            if "properties" not in self.parameters:
+                self.parameters["properties"] = {}
+            self.parameters["properties"]["purpose"] = {
+                "type": "string",
+                "description": "A one-sentence summary of why this tool is being called."
+            }
+            if "required" not in self.parameters:
+                self.parameters["required"] = []
+            if "purpose" not in self.parameters["required"]:
+                self.parameters["required"].append("purpose")
+
         return {
             "type": "function",
             "function": {
@@ -515,8 +528,6 @@ class LLMClient(ABC):
         self,
         messages: list[dict[str, str]],
         tools: list[dict] | None = None,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
     ) -> LLMResponse:
         """
         Send a completion request.
@@ -537,7 +548,6 @@ class LLMClient(ABC):
         self,
         messages: list[dict[str, str]],
         response_model: type[T],
-        temperature: float = 0.7,
     ) -> T:
         """
         Request a structured response matching a Pydantic model.
@@ -568,8 +578,7 @@ class AgentConfig:
     
     # Model settings
     model: str = "anthropic/claude-sonnet-4-20250514"
-    temperature: float = 0.7
-    max_tokens: int = 4096
+    # temperature and max_tokens are managed by the model/provider defaults or per-request logic
     
     # Context management
     max_context_tokens: int = 100000        # Trigger summarization near this limit
@@ -1213,6 +1222,106 @@ class FileWriteTool(Tool):
         )
 ```
 
+### 5.7 Meta Tools
+
+#### Transition Phase Tool (`tempo/tools/meta.py`)
+
+```python
+class TransitionPhaseTool(Tool):
+    """Transition the agent to a new workflow phase."""
+    
+    name = "transition_phase"
+    description = "Transition to a new phase (recon, hypothesize, test, reflect)"
+    category = ToolCategory.META
+    
+    def __init__(self, workflow_manager: WorkflowManager):
+        self.workflow = workflow_manager
+        
+    async def execute(self, phase: str, justification: str, purpose: str) -> ToolResult:
+        try:
+            target_phase = Phase(phase.lower())
+            self.workflow.transition(target_phase)
+            return ToolResult(
+                success=True,
+                output=f"Transitioned to {target_phase.value}. Justification: {justification}"
+            )
+        except ValueError:
+            return ToolResult(success=False, output=f"Invalid phase: {phase}")
+        except WorkflowError as e:
+            return ToolResult(success=False, output=str(e))
+            
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "phase": {
+                        "type": "string",
+                        "enum": [p.value for p in Phase],
+                        "description": "The target phase",
+                    },
+                    "justification": {
+                        "type": "string",
+                        "description": "Why you are moving to this phase",
+                    },
+                    "purpose": {
+                        "type": "string",
+                        "description": "A one-sentence summary of why this tool is being called.",
+                    },
+                },
+                "required": ["phase", "justification", "purpose"],
+            },
+        )
+```
+
+#### Summarize Output Tool (`tempo/tools/meta.py`)
+
+```python
+class SummarizeOutputTool(Tool):
+    """Summarize the output of a previous tool call."""
+    
+    name = "summarize_tool_output"
+    description = "Summarize a previous tool output to save context tokens"
+    category = ToolCategory.META
+    
+    def __init__(self, context_store: ContextStore, summarizer: OutputSummarizer):
+        self.context = context_store
+        self.summarizer = summarizer
+        
+    async def execute(self, tool_call_id: str, summary: str, purpose: str) -> ToolResult:
+        self.context.summarize_tool_call(tool_call_id, summary)
+        return ToolResult(
+            success=True,
+            output=f"Summarized tool call {tool_call_id}"
+        )
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "tool_call_id": {
+                        "type": "string",
+                        "description": "ID of the tool call to summarize",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "Concise summary of the tool output",
+                    },
+                    "purpose": {
+                        "type": "string",
+                        "description": "A one-sentence summary of why this tool is being called.",
+                    },
+                },
+                "required": ["tool_call_id", "summary", "purpose"],
+            },
+        )
+```
+
 ### 5.7 LLM Client (`tempo/infra/llm.py`)
 
 ```python
@@ -1252,8 +1361,6 @@ class LiteLLMClient(LLMClient):
                 model=self.model,
                 messages=messages,
                 tools=tools,
-                temperature=temperature,
-                max_tokens=max_tokens,
                 **self.default_kwargs,
             )
             return self._normalize_response(response)
@@ -1272,7 +1379,6 @@ class LiteLLMClient(LLMClient):
             model=self.model,
             messages=messages,
             response_model=response_model,
-            temperature=temperature,
         )
     
     def _normalize_response(self, response) -> LLMResponse:
@@ -1414,6 +1520,10 @@ class Agent:
         self.config = config or AgentConfig()
         self.workflow = WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, prompts, config)
+        
+        # Register meta tools
+        self.tools.register(TransitionPhaseTool(self.workflow))
+        self.tools.register(SummarizeOutputTool(self.context, self.summarizer))
     
     async def run(
         self,
@@ -1440,8 +1550,11 @@ class Agent:
         
         1. Build prompt from current context and phase
         2. Call LLM
-        3. If tool call: execute, summarize, update context
-        4. If phase transition: update workflow state
+        3. If tool call: 
+            a. Execute tool
+            b. Append "Output captured. Now call `summarize_tool_output` to compress this data." to output
+            c. Update context (raw output)
+        4. If phase transition tool: update workflow state
         5. Return step result
         """
         pass
@@ -1595,18 +1708,12 @@ class OutputSummarizer:
         return response.content
     
     def should_summarize(self, tool_call: ToolCall) -> bool:
-        """Determine if a tool call output should be summarized."""
-        if not self.config.auto_summarize:
-            return False
-        
-        # Always summarize long outputs
-        if len(tool_call.raw_output) > 2000:
-            return True
-        
-        # Check context budget
-        # ...
-        
-        return False
+        """
+        Determine if a tool call output should be summarized.
+        Note: The agent is now responsible for initiating summarization via the `summarize_tool_output` tool.
+        This method might be used for auto-summarization fallbacks if configured.
+        """
+        pass
 ```
 
 ---
@@ -1897,13 +2004,13 @@ You have access to the following tools:
 - **Be safe**: Never cause permanent damage or access unauthorized systems.
 
 ## Phase Transitions
-
-To change phases, include in your response: `PHASE: <phase_name>`
-
-Valid phases: recon, hypothesize, test, reflect
-
-{phase_instructions}
-```
+ 
+ Use the `transition_phase` tool to move between phases when you have completed the requirements for the current phase.
+ 
+ Valid phases: recon, hypothesize, test, reflect
+ 
+ {phase_instructions}
+ ```
 
 ### Recon Phase (`tempo/prompts/templates/recon.md`)
 
