@@ -199,6 +199,7 @@ tempo-sec/
 │   └── ctf_challenge.py            # Full CTF workflow example
 │
 ├── pyproject.toml
+├── config.toml                     # Configuration for API keys and scope
 ├── README.md
 └── .gitignore
 ```
@@ -592,11 +593,41 @@ class AgentConfig:
     # Persistence
     persistence_dir: str = "./contexts"
     auto_checkpoint: bool = True            # Checkpoint after each tool call
+
+    # Scope
+    allowed_domains: list[str] = field(default_factory=list)
+    excluded_domains: list[str] = field(default_factory=list)
+    allow_subdomains: bool = True
     
     # Debugging
     verbose: bool = False
     log_level: str = "INFO"
 ```
+
+
+
+### 4.5 External Configuration
+
+The agent supports loading sensitive credentials and scope definitions from a TOML configuration file (default: `config.toml`).
+
+```toml
+[api_keys]
+openai = "sk-..."
+anthropic = "sk-ant-..."
+github = "ghp_..."
+
+[scope]
+allowed_domains = ["example.com", "api.example.com"]
+excluded_domains = ["internal.example.com"]
+allowed_ips = ["192.168.1.0/24"]
+excluded_ips = ["192.168.1.1"]
+allow_subdomains = true
+```
+
+**Scope Enforcement**:
+- **Allowed Domains**: The agent will only interact with these domains.
+- **Excluded Domains**: Explicitly forbidden domains, even if they match allowed patterns.
+- **Subdomains**: If `allow_subdomains` is true, any subdomain of an allowed domain is permitted.
 
 ---
 
