@@ -20,7 +20,7 @@ enforce_phases = true
 # Maximum steps per workflow phase
 max_steps_per_phase = 20
 # Hard limit on total agent steps
-max_total_steps = 100
+max_total_steps = 500
 
 [branching]
 # Maximum parallel branches (subagents)
@@ -28,7 +28,7 @@ max_branches = 5
 # Maximum nesting depth for branches
 max_branch_depth = 3
 # Step limit per branch
-branch_step_limit = 10
+branch_step_limit = 100
 
 [container]
 # Docker image for sandbox execution
