@@ -1,0 +1,87 @@
+# Tempo Sec - UML Diagrams
+
+This directory contains UML diagrams for the Tempo Sec cybersecurity agent.
+
+## Viewing the Diagrams
+
+### PlantUML Diagrams
+
+PlantUML files (`.puml`) can be viewed in several ways:
+
+1. **Online**: Click the URLs below to view rendered diagrams
+2. **VS Code**: Install the "PlantUML" extension
+3. **IntelliJ**: Built-in PlantUML support
+4. **Command line**: `java -jar plantuml.jar diagram.puml`
+
+### Mermaid Diagrams
+
+Mermaid files (`.mermaid`) can be viewed in:
+
+1. **GitHub**: Renders automatically in markdown
+2. **VS Code**: Install "Mermaid Preview" extension
+3. **Online**: Use [Mermaid Live Editor](https://mermaid.live)
+
+---
+
+## PlantUML Diagrams
+
+| Diagram | Description | View Online |
+|---------|-------------|-------------|
+| [component_diagram](plantuml/component_diagram.puml) | High-level component architecture | [View](https://www.plantuml.com/plantuml/png/VLPDRnCn4BtlhnY21AVm0pYWje5AHIcjcaeSKBNoUfsDYTTUsLwr0V7V6O_NktQeI2xspClupSUpS-4yitxi5N3J3qOBxUjMiiwoldhZ3w8NC2WcTUMEKWyCpGjmvqzAW1NSCzqfaK4Qne-TDQDkDqOP2s-lluHlLNdfyIUF0YF0Jd1OmoP5WqlB3z9ZjD6AgXem1Ei4h2wxuDooax0hO0vOsDSgxE5t1VZv4I4FezR2FisOwFjkx76lp3FSCetcw7-UZ15oD_fXzB0R-vvP-Ml2k7bR_SdeR8psuYKdnAEbf9HWEs-iUCfXBbWYwCeopGy5iuPCTT_P2BaNraddXUOnoh3i2T0opnhcaDZNtTqtk9PAE6BrqnbTjqt1_TvYiRtBk0_HKdAFCBWQfMedMX5NDz4qmGxXN4nqBpiNKS5IysWXqDu4FAn2nnNp4pUVTWMxHsDKpis7VSaiGE11T5W1Uw8ZxRI9_jr1A0K15LiOjgdKvjbXeDdNH4FqKjbEMDQU036R_MoCe1kDMb4g3oAJgKZaHkyjGr8ZZNAMaGoECgFjzXOsIkAuKa2b-fhJTXaZL1_Yyo7XoJhF2LTcR66rHVrWH3fCuHh3aLkR5dbzDlmuCMbf6Lk4QS8gDks3DxrAGutxEZX3RkyXQgmLWz0jJf_4vf7AOBt-LCusV8IUo683F7OvmvLZX41QpMEO8LDV4IDU11znME90P9YbM8WAXUJOYnoGP8vk6atYQOtA88lA4HHkDYkS0qCtmbc6gHu8L8QrgKQXE3UOljLCbVMPZwVK2sranvQPd7lEX5ULbGw8xCRurvbV5zcQVEc6gCww4doBGbznbgbKSwkedYIvmfIKLXWpSHNsHL5KLjHBABF6Lq4QxQgivLItQSOBGP1d6d2YCu_eefc9qokUXTWhpaeRZo-Ux0uUp3v_Yb1AT_X-2Ko41QgGhFI-EPnUp6fvEbs5Om8XsddCuZN1t--2X2P1zV5UYC-6r1sy0poI7mSZ_nSokqW38JQmHcBbJfEoa6quX-csCI-YnHOiMMSnBt29_nF-0W) |
+| [class_diagram_context](plantuml/class_diagram_context.puml) | Context layer data models | [View](https://www.plantuml.com/plantuml/png/dLPHRzis47xNh-2o5oMrWktL3qNJBC46D2qGkG_3412qUBOvYwH0KawxTVzzHugqI3lTkjaFbex7ZtVVVNVq6-kOSQFiITSpQoaNR6kOf9rM3ZwvwZkt0mbaw9bGbTqBDJ1S9clMxRT6ZuhVwbuRyltzdVzMbHEk1x82EMZIGaSQSZiXaP-OO-H1S-XjLO4Q9Na0QzaM7ZNk-BCY-6b_RLTt3-7nOtlt61vkslQNTdNpVXNULXy-lAEFT-t7TwlghweAGIUW2FBA8E0oHv_C8INbbiGwCrcSa83vos59E7FWNwS52OwXXQ5TT2xOcYRkqTJRwijixTN6Q3cP_QxBu-5pY2kj-rlMzob6mVCuS94g9Y6p8TEZoyymx9dgqGNhqSkEKZBpELZ85_9UA_YNrFXec1DQKMcNH2YNSBeEGrwIDOOocS0ORSw04mrJ97IZJP9AaSyUbAMM7O1dXtmRTOcfcRkRBPQjTPX6OgyRZK4R7NRCvgJjFWyQ1Mi1C-c5TRzvuATua51SgEqBAqgxumQ4UafdMAVb_rR07FISI6o5U-mWU548s5m-hMWh2jePG2nEcJiNQz1QoY1AxocJLeTqfkL4RrotFi8Ysc3ksHhwN8sMTZlezeCMleDcbU32sZ3LxUZPKhJhzU_GEN60hshfsmZDoJkZj7NQ94gRZNUn4vWlwABOEoNU90a5PvfNeK7vMDyXXN40Ov4_K1rWM2PRQKfD1i2JS8C3uvp6MjL-H2r8d4YOt44BFdiTYrOVdmgVgUl57v1v2huWSHeKlkFWrK93dUkhg_qpCrjRUCo5hKFPBxEw6pY0SNKYgTWtrRTM2t8iiGS-QIFxB1og06iS_L_4ac2s43t0OZ8sPIEWZ1Ovvc0IaRQ-FEzd77n2-gIdEUHTva67CwdEC-mru_N0t6wMM13JBB6t8Qe7fl0yapGMXnxoYhudEtDLn2PWYbFu1Ds8HPZPMf39fatAOZhh4UpOOpOd8KpcD3WYSZ4_obuxlo9IpyDWgMD8pd-z0Z2YTDaspUlYZYs6syMF5-IgQSZ53zVNLnV7w_2VV8vp_sKd_Cs6LD7s9q15vvqvHgoYg5LPuklhroNZIp8OpKUafwhyPK6CsEuSqPlJBh_NHbh2Y3C0dhQnSsCGn44mSXpknC06Z9ya5ly8SU8X8_1QExnqCkIag5iVVsXY8aEO4aBXVaPbzM39tCHsWUP977ZTBGWwaAbfy3Kxxmq-ul--lm4) |
+| [class_diagram_tools](plantuml/class_diagram_tools.puml) | Tools layer data models | [View](https://www.plantuml.com/plantuml/png/hLN1Rjim3BtxAxJiadPniLrp69fcwH2iIO4uGrSCXQ78h2D4bWo9Nfgr_VVHiXFRQmzhk-HYaJJVuoD5dpha5ejCCQ6uSt4YUMfv5gCnoWNlS0qPi5nngGEtaJhdv6GhBZQfDOLEnaOPozwVJyf_4A141Mm9MMvO18A5R5dcOLyuSZOp2L3E07IHUVkO8wJ6xjXzmEWt-J4PVrzEB-V-TBQul8gcyw_-S3wzc4JNqN8oyyVvP7brkVZcdqVpqSLrD8tyOJPPZeB78F2rU8m5k49XZV315KA0SqEs8bTbCWNc1GwPGriPm5fZ_PaziBdHK9apG9vG6KEMI85rEhI5mC924bUkaTvruID10l8zlEOPj90ISCBA7ANHBQkN612iQq65OUL44viSD9VnhR4Pn_vH7KIeV4Kvk43MmBy8MDJj67QQquQ_tqCyaant80g4_l7nPijjwew6BRsVHAU0iVDQzEl0IfazdrjERyMko39kvM-mVUlp75Nq3f96Qr2gLLWeZ4QQJQ26ZVUFCwvv2hQZsvwjC8IWam53cG6rVi2snj9SfpJuzca9_ultcJLR1xRDdExKRcjbkgRPgztFCYwi6Z2uyqB6IkgD6p3g7e1sQuCleNnWSouLB80dRn4ovxWcNbgOXDGRi8pVnQiTmZDpy8-Chgn4U3kbyYtGr5YUqqL9NaMdj4qrRKQbkarxEIMn8IV90xWshoUpW5JIGEqtPUYtStNpVv9zu8DkEXIiVuKcieobrB-CJ0wG_N8Xr7YTBQVedMhtbtJAKvd_vc-kZRUaSDEv3Vs3I8ToA_9bIHum33ztLqp7Mc_i8SkjIGfQrrrtlL6fUBWb4FgUD4iX31-geA1zuHfhP_2xvcRw6llJCMXyGQSjlKyzPiAGzJwUd1ptweXJ6Z_wiFu1) |
+| [class_diagram_agent](plantuml/class_diagram_agent.puml) | Agent & infrastructure models | [View](https://www.plantuml.com/plantuml/png/XLVRRjms47tNLx0fKEocbj5dFHX9Z1Ge4BU1xQ8FHI1mgV4kQufKUV6bIVwzGrBYHRjEx0Vlpf33CpFd3Eatnb9jtIW84zIOVk1qh-dOqpr8s_nW3p02cGJbiZ7tN4uKdMH7sVrUAoU7IoMK9Z_--jx_DetbLW2vXN5Iv0OOQSbR7uVyH7wJTveQgnspJWEvKWC8qpJXK7Ahxa7-QV1CyhaX-FFpfDKusTvwX-a8Hop1pj0im78bZtrMMIegyzTyW1ANL8Xh-DU1iSifVEW8OefV91sX-4hrtes87KCDd1MnFdoukWOpAMaIMgQanQLXD_b2VbSI5aXAz0mFnYY26_lt2iYdkCpvrBkY3D4y-Y8LaEwuvERGQw16oSAkwICQ8wIEl9NF7YpTePyoInBgIy5zBoBcpul_QoegR4Om_dHpHZnmi-tAP5_SrgUs3aM401uZt1QLunRMEDfLaYsNCPpIFGiBE-JEOefBseeBHx3n3n8G4T2dcGqd4laE-gMSVKuZ7DrBfKSg-7-GAhvPFgnEIMa72LmgUSVt2s7MdVM0GLEFeYDtGj6PqZc5WkVU61ZtT48Wr5dL6pUEL2F8Zkom8j6p66bGJqPG4HRadT8C-kb03PXokp_LM9XCZqYZVuKfwY-iMNbscafsWDFcVe397WhNRFQ1Ui57RYlzIukp217mCMWcbJ1xB1z1kN8N8ZQeFf2OsS1rgN9VBeJ6xYV5FTTomgXIzGX3FwWHuou2nfspQE692JTyOq48WBtOfGKv-0FedJ9BVn9LRZ1d990JQKI5AaWtxa0N2Gan5ee_ulQBOsT65hhNeuwbuPuD7VdeBHKJp44vCGIYSUag9e7MIbVSgRc-oi0nXheg0wZTFy0iVoZx5xbbAVAvI1H77d9gPbi0cUm3b_ibFp-XvzmEpvF2MokmT-rRL5FD_UzbimogUND7BkE76vn74KqRRoiyy6FuyCvnCS0yhC98wi8DT0rx1AIVemDxsEMndCx0AT6L8oCw7fM-nxdms96_vazNLA80vaEIu36HFvoTdBr9bcfcQYStgVfdM6Vi_rBWE3537xPTsSdSe0qwCaShkSBJX4y1oD5nYYwnGX_UXNLnvzAF9BoDeBimP_Eb1gWHky5NmmZOC7GzA3xatgpgK7JfT0MPqnfDnrngeng2q1Y-QTAD7zkNHD8VC0kbdsCwzKr4PQ6c3OwK47DRSlwqF-GqvykK7lgbojan2p7EvIBATgNQL9ar0PRId2BSjvZxOYdR-aA1JPetPwGWbxUM7PqJER5jc-TW-RfwtRRbcsZjUlNB-VdhL-ktNLE_CjhsoqMHTEqyFx-eddCTmNeC3iTLqqJj-tFA_AErRI_gAP3DTHsplT9_DcTasRPMUFOSIJkwV1h5pL5aaVtbO2xJF29BZUgakywnUGDom7yW_WS) |
+| [sequence_diagram](plantuml/sequence_diagram.puml) | Agent step execution flow | [View](https://www.plantuml.com/plantuml/png/XLPBRvmm4BxpAzpqmagR_W0ELTAebIgb3uNjAOgG5oORTurDyRX9-kixDZPWs5Ls3vXvppSFSsMGzsXRoGpyiQ1gg1h13prlitVu12smJdAXCdCKgkD4PdjU7m-zjggvqLBtxFsNp-wVPIXG0jj1ssbMGiqksVK15B8IeIF2O3tBo0gAMdISM1U_3FGNZ1jcwP2olBBdSNTAcJTQ8RnWYRe7BrCFX5JgPw_R3ZzP8PlWflCKauhjj9PtS106-rSlXKHOoDpUVhkH8aOaPPkoVrZiB9QsRNal_WLdPdnT1q-O1gawlcMP0u5TVXmIBbXlLQxtlw56yHSs6NTFZX3moAJM7Nka2W2ldvXnA5k5Gh96AyWO_RoWCnZG8PEW28gg1ME8QVBD81SjHnGTCPpPvHHGLBj_y18Dd5HCNGV42xPtPQZCAmNQLWCrxvwuWUs0zoAKM2b73ETvA8cTPJHptJGQxwbW1y3ArDJUV0N1K7j7ygUvJqU8Qci89iNK9VLAGVYqdGI4F49uEcdNLuv0pxbZQhuxC9rM1fPUeyPWHwAJfIhJi1aS6fdLN4hFFeD4xlDIl8NDABRAtSt8o5rR6vkuOF02jQLClLLQ6XOdiqc_34qVMIDbwPKojn97kKNJfKPE1-OxdpTDvKDoSEJZQND2br3a5dKrpYy3nVSIcb4aSJ6DUJ6T9mzRDflXn43COxOdvlo9l6wZaHSc8BKSssSTsUjP3xFHEY4vG_rCjAUn6U6V0fwA89fjT3R5JmigBGb80w6hqVOgh7g5RzGw35f-NPPVoztrzzqsAfufkTz537kkZ42X5UMCLBPpLGzWFUl--2ZryuT9CLVmN7bhcpT0iLr3Y5Pq1LD9QzlJTiQbPiGZFiyiTjfAzR7JGc6-OVVYSUZWYVgGEGDPK2HDTzSKmmqT9YoR5JbSCLUaHDy6_m4) |
+| [state_diagram](plantuml/state_diagram.puml) | Workflow phase state machine | [View](https://www.plantuml.com/plantuml/png/RLJBRjim4BppAxR8hO1_88SYYI7N0Ph4i0mKRL4KDBMI25EaG59-fEY_TqbPaYN5leZSsTdXxf0FpdFhcqe1VNZyaqbUM5wnJxx42g5MN6hc3bBNdBPXpyMXiARHsT8eO-5kbOG_OrvwXR33gZQGee05V3Vsa2jpWat97K8QwE65Yr9gPEpNvz-mM7o1RR9yUuLxY38OYoAkctyPqAy3VkMao4fTnDr-HQcfu1eelK0_YprdgBtCB-3G7gL0DqEy6Yh8jQcuahDmA1m4t8FKkO4Y1Z1Z_pgbwn-RjzqwIPz_9XEzZvghotkdjryHrHQF4azWKHWD6VTyXbWPMm6LChQJT1lTM4a1BzyHzXUmqXqca45rUQaDyJXqL8vdbq7uBabt4yKxTBxJU_qcYkICeg44Jpl13deItz8nR4Rqhb7UJO9FZLGPRCno71W41bO7mbIrGe-3l6so-fOifmgJ8rSDxqKEIs9gZu-GIvtHZfiZUY_Kt7kq-WF8Xiu76i-U_8Zr333ejfWh55w62HeTXRUc3P1RKn3d-Z5DXb7Gs6wWdVqrOWQLiHYDnjWjHPnD65VF5ResWyofeiCOYxajecrgptCznO2ubedPxMW26ncUTRdZIYUWLjAJ0AwnEHSuWetR4C1z3zm8UAqQXH_fukLIyD3Q4QZjU-yKfiEzjR8eFPYybKJZUk7dTdI0r4ShI3f0ZHRgy0Wnr1c4n6bwK4309Kr_RxaM9OHx3iGGqkdbKmhLZVpOd633WV21FkaP_Gy) |
+| [activity_branching](plantuml/activity_branching.puml) | Branching/cloning flow | [View](https://www.plantuml.com/plantuml/png/bPAnSjim38PtFWMQBicG8UbcBx5rTgPCxkYx7aD14c8IL4YmiT--86tVUUaGIQUJ0Ea3_XzuoMAJbE31Eg6_9AS_xycocuX7yqCc30YpjyGc7uXdcso0T-iEOug5-oxwcE3dTbDFOuJ48_p6C4VOeOD7M5zPiFNnovXMpPZ5QaGMe5xlD11c2CKBpHxtR4MK3xcamJhCI_swIsW5mKte3dCa5WqECHqCwB7eV6I4rPxlT-T_uEbXUKvjZhCsg0giJ9VGApAcIiib19jEi5es5jYnghmXhc-8pzyXhlz7x6w8lxv3x9O6kOUcsIpUC8tNNFLE3Obx3beCN6J1O_LdyLRVRVEvHeaBvZr_aKnWlOU1kDUvL7-pnDaOZbemqJY9Dh6nRWBNcXvHycLIpdhDNMf0cK4YdBS5sbWqgLVJcW6Fw8eYjOkwDjvZ_VbUzoNZPwauZPs01aYOOqawQ_0KIB1_E8DsDme_q6cYITKCr_ftrqO6NKgyQmvL4SQywAEkz3y) |
+
+## Mermaid Diagrams
+
+| Diagram | Description |
+|---------|-------------|
+| [component_diagram](mermaid/component_diagram.mermaid) | High-level component architecture |
+| [class_diagram](mermaid/class_diagram.mermaid) | Core class relationships |
+| [sequence_diagram](mermaid/sequence_diagram.mermaid) | Agent step execution flow |
+| [state_diagram](mermaid/state_diagram.mermaid) | Workflow phase state machine |
+| [branching_diagram](mermaid/branching_diagram.mermaid) | Branching/cloning flow |
+
+---
+
+## Diagram Descriptions
+
+### Component Diagram
+Shows the high-level architecture of Tempo Sec with its four main layers:
+- **Agent Layer**: Orchestration and workflow management
+- **Context Layer**: State management with branching/checkpointing
+- **Tools Layer**: Capability execution in sandboxed container
+- **Prompts Layer**: LLM instruction templates
+- **Infrastructure Layer**: LLM client and container management
+
+### Class Diagrams
+Detail the data models for each component:
+- **Context models**: ContextFrame, Message, ToolCall, AgentState
+- **Tool models**: Tool base class, ToolRegistry, specific tools
+- **Agent models**: Agent, AgentConfig, LLMClient, WorkflowManager
+
+### Sequence Diagram
+Shows the flow of a single agent step:
+1. Render context messages
+2. Build system prompt
+3. Call LLM with tools
+4. Execute tool if requested
+5. Summarize output (optional)
+6. Update context
+
+### State Diagram
+Shows the workflow phase state machine:
+- RECON → HYPOTHESIZE → TEST → REFLECT
+- Valid transitions between phases
+- Enforced step limits per phase
+
+### Branching Diagram
+Shows how the agent clones itself to explore multiple paths:
+1. Identify attack surfaces
+2. Create checkpoint
+3. Spawn clones (parallel exploration)
+4. Collect summaries
+5. Merge back to main context

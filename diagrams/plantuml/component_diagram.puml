@@ -1,0 +1,91 @@
+@startuml component_diagram
+!theme plain
+skinparam componentStyle rectangle
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Component Architecture
+
+package "Agent Layer" as agent_layer {
+    [Agent Runner] as agent
+    [Workflow Manager] as workflow
+    [Output Summarizer] as summarizer
+}
+
+package "Context Layer" as context_layer {
+    [Context Store] as context_store
+    [Branch Manager] as branch_mgr
+    [Persistence] as persistence
+    database "JSON Files" as json_db
+}
+
+package "Prompts Layer" as prompts_layer {
+    [Prompt Builder] as prompt_builder
+    [Phase Configs] as phase_configs
+    folder "Templates" as templates
+}
+
+package "Tools Layer" as tools_layer {
+    [Tool Registry] as registry
+    [Shell Tool] as shell
+    [Browser Tool] as browser
+    [Filesystem Tools] as filesystem
+    [Installer Tool] as installer
+}
+
+package "Infrastructure Layer" as infra_layer {
+    [LLM Client] as llm_client
+    [Container Manager] as container_mgr
+    cloud "LiteLLM" as litellm
+    node "Docker" as docker
+    file "config.toml" as config_file
+}
+
+' Agent dependencies
+agent --> context_store : manages state
+agent --> prompt_builder : builds prompts
+agent --> registry : executes tools
+agent --> llm_client : LLM calls
+agent --> workflow : phase control
+agent --> summarizer : compress outputs
+agent --> config_file : loads config
+
+' Internal dependencies
+workflow --> phase_configs
+summarizer --> llm_client
+summarizer --> prompt_builder
+
+context_store --> branch_mgr
+context_store --> persistence
+persistence --> json_db
+
+prompt_builder --> templates
+prompt_builder --> phase_configs
+
+registry --> shell
+registry --> browser
+registry --> filesystem
+registry --> installer
+
+' Infra connections
+llm_client --> litellm
+container_mgr --> docker
+shell --> container_mgr
+browser --> container_mgr
+filesystem --> container_mgr
+
+note right of agent_layer
+  Orchestration layer
+  Composes all components
+end note
+
+note right of context_layer
+  State management
+  Branching & checkpoints
+end note
+
+note right of tools_layer
+  Capability execution
+  Sandboxed in container
+end note
+
+@enduml

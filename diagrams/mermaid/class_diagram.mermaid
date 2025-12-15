@@ -1,0 +1,70 @@
+classDiagram
+    class ContextFrame {
+        +String id
+        +String parent_id
+        +DateTime created_at
+        +List~Message~ messages
+        +List~ToolCall~ tool_calls
+        +AgentState state
+        +String label
+        +Boolean is_checkpoint
+        +Boolean is_branch_point
+        +to_dict() Dict
+        +from_dict(data) ContextFrame
+    }
+    
+    class Message {
+        +MessageRole role
+        +String content
+        +DateTime timestamp
+        +Dict metadata
+    }
+    
+    class ToolCall {
+        +String id
+        +String tool_name
+        +Dict input
+        +String raw_output
+        +String summary
+        +Boolean success
+        +output_for_context() String
+        +tokens_saved() Int
+    }
+    
+    class AgentState {
+        +String current_phase
+        +List hypotheses
+        +List findings
+        +List notes
+    }
+    
+    class ContextStore {
+        +ContextFrame current_frame
+        +add_message(role, content)
+        +add_tool_call(tool_call)
+        +summarize_tool_call(id, summary)
+        +checkpoint(label) String
+        +revert(frame_id)
+        +branch(n, objectives) List
+        +merge_branches(ids, summaries)
+        +render_messages() List
+    }
+    
+    class Agent {
+        +ContextStore context
+        +PromptBuilder prompts
+        +ToolRegistry tools
+        +LLMClient llm
+        +AgentConfig config
+        +run(objective) AgentResult
+        +step() StepResult
+        +branch_explore(objectives) List
+    }
+    
+    ContextFrame "1" *-- "0..*" Message
+    ContextFrame "1" *-- "0..*" ToolCall
+    ContextFrame "1" *-- "1" AgentState
+    ContextStore "1" *-- "0..*" ContextFrame
+    Agent --> ContextStore
+    Agent --> ToolRegistry
+    Agent --> LLMClient

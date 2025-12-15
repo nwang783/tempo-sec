@@ -1,0 +1,65 @@
+flowchart TB
+    subgraph Agent["Agent Layer"]
+        AR[Agent Runner]
+        WM[Workflow Manager]
+        OS[Output Summarizer]
+    end
+    
+    subgraph Context["Context Layer"]
+        CS[Context Store]
+        BM[Branch Manager]
+        PS[Persistence]
+        JF[(JSON Files)]
+    end
+    
+    subgraph Prompts["Prompts Layer"]
+        PB[Prompt Builder]
+        PC[Phase Configs]
+        TM[Templates]
+    end
+    
+    subgraph Tools["Tools Layer"]
+        TR[Tool Registry]
+        ST[Shell Tool]
+        BT[Browser Tool]
+        FT[Filesystem Tools]
+        IT[Installer Tool]
+    end
+    
+    subgraph Infra["Infrastructure Layer"]
+        LC[LLM Client]
+        CM[Container Manager]
+        LL{{LiteLLM}}
+        DK{{Docker}}
+        CF[config.toml]
+    end
+    
+    AR --> CS
+    AR --> PB
+    AR --> TR
+    AR --> LC
+    AR --> WM
+    AR --> OS
+    AR --> CF
+    
+    WM --> PC
+    OS --> LC
+    OS --> PB
+    
+    CS --> BM
+    CS --> PS
+    PS --> JF
+    
+    PB --> TM
+    PB --> PC
+    
+    TR --> ST
+    TR --> BT
+    TR --> FT
+    TR --> IT
+    
+    LC --> LL
+    CM --> DK
+    ST --> CM
+    BT --> CM
+    FT --> CM

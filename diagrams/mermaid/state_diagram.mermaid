@@ -1,0 +1,27 @@
+stateDiagram-v2
+    [*] --> RECON
+    
+    RECON --> HYPOTHESIZE: PHASE: hypothesize
+    RECON --> RECON: need more info
+    
+    HYPOTHESIZE --> TEST: PHASE: test
+    HYPOTHESIZE --> RECON: need more recon
+    
+    TEST --> REFLECT: PHASE: reflect
+    TEST --> TEST: more tests
+    
+    REFLECT --> RECON: new surface
+    REFLECT --> HYPOTHESIZE: new hypothesis
+    REFLECT --> TEST: verify
+    REFLECT --> [*]: complete
+    
+    note right of RECON
+        Gather info
+        Map attack surface
+        Note anomalies
+    end note
+    
+    note right of TEST
+        Can branch for
+        parallel testing
+    end note

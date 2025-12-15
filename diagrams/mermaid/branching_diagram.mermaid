@@ -1,0 +1,19 @@
+flowchart TD
+    A[Main Agent @ Frame 5] --> B{Identify Attack Surfaces}
+    B --> C[Clone A: Surface 1]
+    B --> D[Clone B: Surface 2]
+    B --> E[Clone C: Surface 3]
+    
+    C --> F[Explore & Test]
+    D --> G[Explore & Test]
+    E --> H[Explore & Test]
+    
+    F --> I[Summary A]
+    G --> J[Summary B]
+    H --> K[Summary C]
+    
+    I --> L[Merge into Main Context]
+    J --> L
+    K --> L
+    
+    L --> M[Main Agent @ Frame 6<br/>Contains all summaries]

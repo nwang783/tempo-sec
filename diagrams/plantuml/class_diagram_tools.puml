@@ -1,0 +1,100 @@
+@startuml class_diagram_tools
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Tools Data Models
+
+enum ToolCategory {
+    EXECUTION
+    BROWSING
+    FILESYSTEM
+    NETWORK
+    ANALYSIS
+    META
+}
+
+class ToolResult {
+    +success: bool
+    +output: str
+    +error: str | None
+    +metadata: dict
+    +structured_data: Any
+}
+
+class ToolSchema {
+    +name: str
+    +description: str
+    +parameters: dict
+    --
+    +to_openai_format(): dict
+}
+
+abstract class Tool {
+    +name: str
+    +description: str
+    +category: ToolCategory
+    --
+    {abstract} +execute(**kwargs): ToolResult
+    {abstract} +get_schema(): ToolSchema
+    +default_summarizer(result): str
+}
+
+class ShellTool {
+    -container: ContainerManager
+    --
+    +execute(command, timeout, working_dir): ToolResult
+    +get_schema(): ToolSchema
+    +default_summarizer(result): str
+}
+
+class BrowserTool {
+    -playwright: Browser
+    --
+    +execute(url, extract_links, screenshot): ToolResult
+    +get_schema(): ToolSchema
+}
+
+class FileReadTool {
+    -container: ContainerManager
+    --
+    +execute(path, encoding, max_bytes): ToolResult
+    +get_schema(): ToolSchema
+}
+
+class FileWriteTool {
+    -container: ContainerManager
+    --
+    +execute(path, content, append): ToolResult
+    +get_schema(): ToolSchema
+}
+
+class ToolInstallerTool {
+    -container: ContainerManager
+    --
+    +execute(package, method): ToolResult
+    +get_schema(): ToolSchema
+}
+
+class ToolRegistry {
+    -tools: dict[str, Tool]
+    --
+    +register(tool): void
+    +get(name): Tool | None
+    +list_tools(): list[str]
+    +get_schemas(): list[dict]
+    +default(container): ToolRegistry
+}
+
+Tool --> ToolCategory
+Tool --> ToolResult : produces
+Tool --> ToolSchema : defines
+
+ShellTool --|> Tool
+BrowserTool --|> Tool
+FileReadTool --|> Tool
+FileWriteTool --|> Tool
+ToolInstallerTool --|> Tool
+
+ToolRegistry "1" o-- "0..*" Tool
+
+@enduml

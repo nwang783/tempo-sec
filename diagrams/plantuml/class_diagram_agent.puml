@@ -1,0 +1,140 @@
+@startuml class_diagram_agent
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Agent & Infrastructure Models
+
+class TokenUsage {
+    +prompt_tokens: int
+    +completion_tokens: int
+    +total_tokens: int
+}
+
+class ToolCallRequest {
+    +id: str
+    +name: str
+    +arguments: dict
+}
+
+class LLMResponse {
+    +content: str | None
+    +tool_calls: list[ToolCallRequest]
+    +usage: TokenUsage
+    +model: str
+    +finish_reason: str
+    +raw_response: Any
+}
+
+abstract class LLMClient {
+    {abstract} +complete(messages, tools): LLMResponse
+    {abstract} +complete_structured(messages, model): T
+}
+
+class LiteLLMClient {
+    -model: str
+    -instructor_client: Instructor
+    --
+    +complete(messages, tools, temp, max_tokens): LLMResponse
+    +complete_structured(messages, response_model): T
+    -_normalize_response(response): LLMResponse
+}
+
+class AgentConfig {
+    +model: str
+    +temperature: float
+    +max_tokens: int
+    +max_context_tokens: int
+    +auto_summarize: bool
+    +summarization_model: str | None
+    +enforce_phases: bool
+    +max_steps_per_phase: int
+    +max_total_steps: int
+    +max_branches: int
+    +max_branch_depth: int
+    +branch_step_limit: int
+    +container_image: str
+    +container_timeout: int
+    +persistence_dir: str
+    +auto_checkpoint: bool
+    +allowed_domains: list[str]
+    +excluded_domains: list[str]
+    +allow_subdomains: bool
+    +verbose: bool
+}
+
+class StepResult {
+    +step_number: int
+    +llm_response: LLMResponse
+    +tool_calls: list[ToolCall]
+    +phase_transition: Phase | None
+    +should_continue: bool
+    +error: str | None
+}
+
+class AgentResult {
+    +success: bool
+    +objective: str
+    +steps_taken: int
+    +final_phase: Phase
+    +findings: list[dict]
+    +hypotheses: list[dict]
+    +context_id: str
+    +error: str | None
+}
+
+class Agent {
+    -context: ContextStore
+    -prompts: PromptBuilder
+    -tools: ToolRegistry
+    -llm: LLMClient
+    -config: AgentConfig
+    -workflow: WorkflowManager
+    -summarizer: OutputSummarizer
+    --
+    +run(objective, initial_phase, max_steps): AgentResult
+    +step(): StepResult
+    +branch_explore(objectives, steps): list[BranchResult]
+    +checkpoint(label): str
+    +revert(frame_id): void
+}
+
+class WorkflowManager {
+    -config: AgentConfig
+    -current_phase: Phase
+    -phase_step_counts: dict
+    -transition_history: list
+    --
+    +can_transition(to_phase): bool
+    +transition(to_phase): void
+    +record_step(): void
+    +should_force_transition(): Phase | None
+}
+
+class OutputSummarizer {
+    -llm: LLMClient
+    -prompts: PromptBuilder
+    -config: AgentConfig
+    --
+    +summarize(tool_call, objective, tool): str
+    +should_summarize(tool_call): bool
+}
+
+LLMResponse *-- TokenUsage
+LLMResponse *-- "0..*" ToolCallRequest
+LiteLLMClient --|> LLMClient
+LiteLLMClient ..> LLMResponse : produces
+
+Agent *-- AgentConfig
+Agent --> ContextStore
+Agent --> PromptBuilder
+Agent --> ToolRegistry
+Agent --> LLMClient
+Agent --> WorkflowManager
+Agent --> OutputSummarizer
+Agent ..> StepResult : produces
+Agent ..> AgentResult : produces
+
+OutputSummarizer --> LLMClient
+OutputSummarizer --> PromptBuilder
+
+@enduml

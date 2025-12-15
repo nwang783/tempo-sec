@@ -1,0 +1,124 @@
+@startuml class_diagram_context
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Context Data Models
+
+enum MessageRole {
+    SYSTEM
+    USER
+    ASSISTANT
+    TOOL_RESULT
+}
+
+class Message {
+    +role: MessageRole
+    +content: str
+    +timestamp: datetime
+    +metadata: dict
+    --
+    +to_dict(): dict
+    +from_dict(data): Message
+}
+
+class ToolCall {
+    +id: str
+    +tool_name: str
+    +input: dict
+    +raw_output: str
+    +summary: str | None
+    +timestamp: datetime
+    +duration_ms: int
+    +success: bool
+    +error: str | None
+    --
+    +output_for_context: str
+    +tokens_saved: int
+    +to_dict(): dict
+    +from_dict(data): ToolCall
+}
+
+class AgentState {
+    +current_phase: str
+    +hypotheses: list[dict]
+    +findings: list[dict]
+    +notes: list[str]
+    +custom: dict
+    --
+    +to_dict(): dict
+    +from_dict(data): AgentState
+}
+
+class ContextFrame {
+    +id: str
+    +parent_id: str | None
+    +created_at: datetime
+    +messages: list[Message]
+    +tool_calls: list[ToolCall]
+    +state: AgentState
+    +label: str
+    +is_checkpoint: bool
+    +is_branch_point: bool
+    +branch_objective: str | None
+    --
+    +to_dict(): dict
+    +from_dict(data): ContextFrame
+}
+
+class ContextStore {
+    -frames: dict[str, ContextFrame]
+    -current_frame_id: str
+    -session_id: str
+    -persistence_dir: str
+    --
+    +current_frame: ContextFrame
+    +add_message(role, content): void
+    +add_tool_call(tool_call): void
+    +summarize_tool_call(id, summary): void
+    +update_state(**kwargs): void
+    +checkpoint(label): str
+    +revert(frame_id): void
+    +branch(n, objectives): list[str]
+    +switch_to_branch(frame_id): void
+    +merge_branches(ids, summaries): void
+    +render_messages(): list[dict]
+    +estimate_tokens(): int
+    +save(): str
+    +load(path): ContextStore
+}
+
+class BranchManager {
+    -context_store: ContextStore
+    --
+    +branch_and_execute(objectives, executor): list[BranchResult]
+}
+
+class BranchResult {
+    +branch_id: str
+    +objective: str
+    +summary: str
+    +steps_taken: int
+    +success: bool
+    +error: str | None
+}
+
+Message --> MessageRole
+ContextFrame "1" *-- "0..*" Message
+ContextFrame "1" *-- "0..*" ToolCall
+ContextFrame "1" *-- "1" AgentState
+ContextStore "1" *-- "0..*" ContextFrame
+ContextStore "1" -- "1" BranchManager
+BranchManager ..> BranchResult : produces
+
+note right of ContextFrame
+  Forms a tree structure
+  via parent_id references
+end note
+
+note bottom of ContextStore
+  Core state management
+  Handles checkpoints,
+  branching, and rendering
+end note
+
+@enduml

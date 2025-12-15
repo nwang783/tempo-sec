@@ -1,0 +1,65 @@
+@startuml state_diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Workflow Phase State Machine
+
+[*] --> RECON : start
+
+state RECON {
+    [*] --> Gathering
+    Gathering : Scan target
+    Gathering : Identify services
+    Gathering : Note anomalies
+    Gathering --> [*] : info gathered
+}
+
+state HYPOTHESIZE {
+    [*] --> Analyzing
+    Analyzing : Review recon data
+    Analyzing : Form theories
+    Analyzing : Prioritize by risk
+    Analyzing --> [*] : hypotheses ready
+}
+
+state TEST {
+    [*] --> Testing
+    Testing : Execute test plan
+    Testing : Record results
+    Testing : Build PoCs
+    Testing --> [*] : tests complete
+}
+
+state REFLECT {
+    [*] --> Evaluating
+    Evaluating : Analyze findings
+    Evaluating : Identify patterns
+    Evaluating : Plan next steps
+    Evaluating --> [*] : reflection done
+}
+
+RECON --> HYPOTHESIZE : PHASE: hypothesize
+RECON --> RECON : need more info
+
+HYPOTHESIZE --> TEST : PHASE: test
+HYPOTHESIZE --> RECON : need more recon
+
+TEST --> REFLECT : PHASE: reflect
+TEST --> TEST : more tests needed
+
+REFLECT --> RECON : new attack surface
+REFLECT --> HYPOTHESIZE : new hypothesis
+REFLECT --> TEST : need verification
+REFLECT --> [*] : complete
+
+note right of RECON
+  Max steps enforced
+  per phase
+end note
+
+note right of TEST
+  Can branch here for
+  parallel hypothesis testing
+end note
+
+@enduml

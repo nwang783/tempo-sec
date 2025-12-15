@@ -1,0 +1,45 @@
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant C as ContextStore
+    participant P as PromptBuilder
+    participant T as ToolRegistry
+    participant L as LLMClient
+    participant S as Summarizer
+    participant D as Container
+    
+    U->>A: run(objective)
+    
+    loop Each Step
+        A->>C: render_messages()
+        C-->>A: messages[]
+        
+        A->>P: build_system_prompt(phase)
+        P-->>A: prompt
+        
+        A->>T: get_schemas()
+        T-->>A: schemas[]
+        
+        A->>L: complete(messages, tools)
+        L-->>A: LLMResponse
+        
+        alt Tool Call Requested
+            A->>T: get(tool_name)
+            T-->>A: Tool
+            A->>D: execute(input)
+            D-->>A: ToolResult
+            A->>C: add_tool_call()
+            
+            opt Auto Summarize
+                A->>S: summarize(tool_call)
+                S->>L: complete(prompt)
+                L-->>S: summary
+                S-->>A: summary
+                A->>C: summarize_tool_call()
+            end
+        else Content Response
+            A->>C: add_message()
+        end
+    end
+    
+    A-->>U: AgentResult

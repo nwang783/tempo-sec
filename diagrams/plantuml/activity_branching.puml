@@ -1,0 +1,44 @@
+@startuml activity_branching
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Branching Flow
+
+start
+
+:Agent identifies multiple\nattack surfaces;
+
+:Create checkpoint;
+
+fork
+    :Clone A\n(Surface 1);
+    :Explore path;
+    :Generate summary A;
+fork again
+    :Clone B\n(Surface 2);
+    :Explore path;
+    :Generate summary B;
+fork again
+    :Clone C\n(Surface 3);
+    :Explore path;
+    :Generate summary C;
+end fork
+
+:Merge summaries into\nmain context;
+
+:Main agent continues\nwith all findings;
+
+stop
+
+note right
+  Each clone gets identical
+  context up to branch point
+  
+  Clones execute in parallel
+  (or sequentially if resources limited)
+  
+  Summaries injected into
+  next "context frame"
+end note
+
+@enduml

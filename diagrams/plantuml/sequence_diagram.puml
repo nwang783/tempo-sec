@@ -1,0 +1,78 @@
+@startuml sequence_diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Tempo Sec - Agent Step Sequence
+
+participant "User" as user
+participant "Agent" as agent
+participant "ContextStore" as context
+participant "PromptBuilder" as prompts
+participant "ToolRegistry" as tools
+participant "LLMClient" as llm
+participant "OutputSummarizer" as summarizer
+participant "Container" as container
+
+user -> agent: run(objective)
+activate agent
+
+loop for each step until done
+    agent -> context: render_messages()
+    activate context
+    context --> agent: messages[]
+    deactivate context
+    
+    agent -> prompts: build_system_prompt(phase, tools)
+    activate prompts
+    prompts --> agent: system_prompt
+    deactivate prompts
+    
+    agent -> tools: get_schemas()
+    activate tools
+    tools --> agent: tool_schemas[]
+    deactivate tools
+    
+    agent -> llm: complete(messages, tools)
+    activate llm
+    llm --> agent: LLMResponse
+    deactivate llm
+    
+    alt LLM requests tool call
+        agent -> tools: get(tool_name)
+        tools --> agent: Tool
+        
+        agent -> container: execute(tool_input)
+        activate container
+        container --> agent: ToolResult
+        deactivate container
+        
+        agent -> context: add_tool_call(tool_call)
+        
+        alt auto_summarize enabled
+            agent -> summarizer: summarize(tool_call, objective)
+            activate summarizer
+            summarizer -> llm: complete(summarize_prompt)
+            llm --> summarizer: summary
+            summarizer --> agent: summary
+            deactivate summarizer
+            
+            agent -> context: summarize_tool_call(id, summary)
+        end
+        
+    else LLM returns content
+        agent -> context: add_message(ASSISTANT, content)
+        
+        alt phase transition detected
+            agent -> agent: workflow.transition(new_phase)
+            agent -> context: update_state(current_phase)
+        end
+    end
+    
+    agent -> context: checkpoint() [if auto_checkpoint]
+end
+
+agent --> user: AgentResult
+
+deactivate agent
+
+@enduml
