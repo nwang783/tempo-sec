@@ -160,12 +160,13 @@ async def main():
                 workflow_manager=workflow,
             )
             
-            # Create agent with logging callbacks
+            # Create agent with logging callbacks (use same workflow as tools)
             agent = Agent(
                 config=agent_config,
                 llm=llm,
                 tools=tools,
                 context=context,
+                workflow=workflow,  # Share workflow manager with TransitionPhaseTool
                 on_tool_call=log_tool_call,
             )
             
@@ -184,12 +185,13 @@ async def main():
         workflow = WorkflowManager(agent_config)
         tools = create_local_tools(context_store=context, workflow_manager=workflow)
         
-        # Create agent with logging callbacks
+        # Create agent with logging callbacks (use same workflow as tools)
         agent = Agent(
             config=agent_config,
             llm=llm,
             tools=tools,
             context=context,
+            workflow=workflow,  # Share workflow manager with TransitionPhaseTool
             on_tool_call=log_tool_call,
         )
         

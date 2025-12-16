@@ -58,6 +58,7 @@ class Agent:
         tools: ToolRegistry,
         context: ContextStore | None = None,
         prompts: PromptBuilder | None = None,
+        workflow: "WorkflowManager | None" = None,
         on_step: "Callable[[StepResult], None] | None" = None,
         on_tool_call: "Callable[[ToolCall], None] | None" = None,
     ):
@@ -70,6 +71,7 @@ class Agent:
             tools: Tool registry
             context: Context store (created if not provided)
             prompts: Prompt builder (created if not provided)
+            workflow: Workflow manager (created if not provided, pass to share with tools)
             on_step: Callback invoked after each step completes
             on_tool_call: Callback invoked after each tool execution
         """
@@ -83,7 +85,8 @@ class Agent:
         self._on_step = on_step
         self._on_tool_call = on_tool_call
         
-        self.workflow = WorkflowManager(config)
+        # Use provided workflow manager or create one (share with TransitionPhaseTool!)
+        self.workflow = workflow or WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
         self.branch_coordinator = BranchCoordinator(
             self.context,
