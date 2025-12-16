@@ -23,7 +23,7 @@ class PhaseConfig:
     phase: Phase
     description: str
     allowed_transitions: list[Phase]
-    max_steps: int = 20
+    max_steps: int | None = None  # None = no per-phase limit, use global config only
     required_outputs: list[str] = field(default_factory=list)  # e.g., ["hypotheses"] for HYPOTHESIZE
 
 

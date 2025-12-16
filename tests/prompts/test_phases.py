@@ -78,9 +78,9 @@ class TestPhaseConfig:
         assert config.required_outputs == []
     
     def test_default_max_steps(self):
-        """Test default max steps for phases."""
+        """Test default max steps for phases (None = no per-phase limit)."""
         for config in PHASE_CONFIGS.values():
-            assert config.max_steps == 20
+            assert config.max_steps is None
 
 
 class TestPhaseTransitions:

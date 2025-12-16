@@ -13,7 +13,7 @@ from pathlib import Path
 import tomli
 from dotenv import load_dotenv
 
-from tempo.agent import Agent, AgentConfig
+from tempo.agent import Agent, AgentConfig, WorkflowManager
 from tempo.context import ContextStore
 from tempo.context.frame import ToolCall
 from tempo.infra import LiteLLMClient, ContainerManager
@@ -150,10 +150,14 @@ async def main():
         async with container:  # Auto start/stop
             print(f"Container started. Running agent...\n")
             
-            # Create sandboxed tools
+            # Create workflow manager and tools
+            workflow = WorkflowManager(agent_config)
+            
+            # Create sandboxed tools with workflow manager for transition_phase
             tools = create_sandboxed_tools(
                 container=container,
                 context_store=context,
+                workflow_manager=workflow,
             )
             
             # Create agent with logging callbacks
@@ -176,8 +180,9 @@ async def main():
     else:
         print("WARNING: Running in local mode (no container). Set TEMPO_LOCAL_MODE=true only for testing.\n")
         
-        # Create local tools (with warning)
-        tools = create_local_tools(context_store=context)
+        # Create workflow manager and local tools
+        workflow = WorkflowManager(agent_config)
+        tools = create_local_tools(context_store=context, workflow_manager=workflow)
         
         # Create agent with logging callbacks
         agent = Agent(
