@@ -156,12 +156,13 @@ async def main():
                 context_store=context,
             )
             
-            # Create agent
+            # Create agent with logging callbacks
             agent = Agent(
                 config=agent_config,
                 llm=llm,
                 tools=tools,
                 context=context,
+                on_tool_call=log_tool_call,
             )
             
             print(f"Starting agent with objective:\n{objective}")
@@ -178,12 +179,13 @@ async def main():
         # Create local tools (with warning)
         tools = create_local_tools(context_store=context)
         
-        # Create agent
+        # Create agent with logging callbacks
         agent = Agent(
             config=agent_config,
             llm=llm,
             tools=tools,
             context=context,
+            on_tool_call=log_tool_call,
         )
         
         print(f"Starting agent with objective:\n{objective}")

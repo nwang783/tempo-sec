@@ -95,6 +95,26 @@ class Agent:
         self._findings: list[dict] = []
         self._hypotheses: list[dict] = []
     
+    def _get_phase_filtered_tools(self) -> list[dict]:
+        """
+        Get tool schemas filtered by current phase.
+        
+        The complete_analysis tool is only available in the REFLECT phase
+        to prevent premature task completion.
+        """
+        from tempo.prompts.phases import Phase
+        
+        all_schemas = self.tools.get_schemas()
+        
+        # Only show complete_analysis in reflect phase
+        if self.workflow.current_phase != Phase.REFLECT:
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") != "complete_analysis"
+            ]
+        
+        return all_schemas
+    
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
         async def executor(context: ContextStore, objective: str) -> SubtaskResult:
@@ -225,10 +245,13 @@ class Agent:
         # Get messages for LLM
         messages = self.context.render_messages()
         
+        # Get phase-filtered tool schemas (hide complete_analysis until reflect)
+        tool_schemas = self._get_phase_filtered_tools()
+        
         # Call LLM
         response = await self.llm.complete(
             messages=messages,
-            tools=self.tools.get_schemas(),
+            tools=tool_schemas,
         )
         
         # Add assistant response to context
