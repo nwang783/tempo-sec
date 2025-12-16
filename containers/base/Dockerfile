@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     gobuster \
     dirb \
     hydra \
+    whatweb \
     && rm -rf /var/lib/apt/lists/*
 
 # Python

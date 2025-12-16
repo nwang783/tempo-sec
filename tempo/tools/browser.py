@@ -2,7 +2,12 @@
 Browser tool for web navigation and content extraction.
 """
 
+from typing import TYPE_CHECKING
+
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
+
+if TYPE_CHECKING:
+    from tempo.infra.container import ContainerManager
 
 
 class BrowserTool(Tool):
@@ -12,27 +17,45 @@ class BrowserTool(Tool):
     description = "Navigate to a URL and extract page content"
     category = ToolCategory.BROWSING
     
-    def __init__(self):
-        """Initialize the browser tool."""
+    def __init__(self, container_manager: "ContainerManager | None" = None):
+        """
+        Initialize the browser tool.
+        
+        Args:
+            container_manager: Container for sandboxed execution.
+                               If None, uses local playwright (for testing only).
+        """
+        self.container = container_manager
         self._browser = None
         self._page = None
+        self._playwright = None
     
     async def _ensure_browser(self):
         """Ensure browser is initialized."""
-        if self._browser is None:
-            from playwright.async_api import async_playwright
+        if self._browser is not None:
+            return
             
-            self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.launch(headless=True)
-            self._page = await self._browser.new_page()
+        if self.container is not None:
+            # Browser runs in container - we'll use curl/wget for basic fetching
+            # and execute playwright commands via container exec
+            return  # Container mode uses exec-based approach
+        
+        # Local mode - use playwright directly
+        from playwright.async_api import async_playwright
+        
+        self._playwright = await async_playwright().start()
+        self._browser = await self._playwright.chromium.launch(headless=True)
+        self._page = await self._browser.new_page()
     
     async def _cleanup(self):
         """Clean up browser resources."""
         if self._browser:
             await self._browser.close()
+        if self._playwright:
             await self._playwright.stop()
-            self._browser = None
-            self._page = None
+        self._browser = None
+        self._page = None
+        self._playwright = None
     
     async def execute(
         self,
@@ -58,6 +81,11 @@ class BrowserTool(Tool):
         try:
             await self._ensure_browser()
             
+            # Container mode - execute playwright script in container
+            if self.container is not None:
+                return await self._execute_in_container(url, extract_links, screenshot)
+            
+            # Local mode - use direct playwright
             # Navigate to URL
             response = await self._page.goto(url, wait_until="domcontentloaded")
             
@@ -133,6 +161,86 @@ class BrowserTool(Tool):
                 output="",
                 error=str(e),
             )
+    
+    async def _execute_in_container(
+        self,
+        url: str,
+        extract_links: bool = False,
+        screenshot: bool = False,
+    ) -> ToolResult:
+        """Execute browser commands in the container using playwright."""
+        # Build the optional links extraction code
+        links_code = ""
+        if extract_links:
+            links_code = '''
+            links = await page.evaluate("""
+                () => Array.from(document.querySelectorAll('a[href]'))
+                    .map(a => ({text: a.innerText.trim(), href: a.href}))
+                    .filter(l => l.text && l.href.startswith('http'))
+                    .slice(0, 20)
+            """)
+            print()
+            print(f"Links ({len(links)}):")
+            for link in links:
+                print(f"  - [{link['text'][:50]}]({link['href']})")
+'''
+        
+        # Python script to run inside container
+        script = f'''
+import asyncio
+from playwright.async_api import async_playwright
+
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        
+        try:
+            response = await page.goto("{url}", wait_until="domcontentloaded")
+            
+            if response is None or response.status >= 400:
+                status = response.status if response else 'unknown'
+                print(f"ERROR: HTTP {{status}}")
+                return
+            
+            title = await page.title()
+            content = await page.evaluate("""
+                () => {{
+                    const scripts = document.querySelectorAll('script, style, noscript');
+                    scripts.forEach(el => el.remove());
+                    return document.body.innerText;
+                }}
+            """)
+            
+            print(f"Title: {{title}}")
+            print(f"URL: {url}")
+            print()
+            print("Content:")
+            print(content[:5000] if len(content) > 5000 else content)
+{links_code}
+        finally:
+            await browser.close()
+
+asyncio.run(main())
+'''
+        
+        exit_code, stdout, stderr = await self.container.exec(
+            f"python3 -c '{script}'",
+            timeout=60,
+        )
+        
+        if exit_code != 0 or stdout.startswith("ERROR:"):
+            return ToolResult(
+                success=False,
+                output="",
+                error=stderr or stdout,
+            )
+        
+        return ToolResult(
+            success=True,
+            output=stdout,
+            metadata={"url": url},
+        )
     
     def get_schema(self) -> ToolSchema:
         """Return the JSON schema for this tool's parameters."""

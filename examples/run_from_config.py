@@ -2,7 +2,8 @@
 """
 Run Tempo Sec using config.toml settings.
 
-This script loads all configuration from config.toml instead of hardcoded values.
+This script loads all configuration from config.toml and runs
+tools in a sandboxed Docker container.
 """
 
 import asyncio
@@ -14,16 +15,10 @@ from dotenv import load_dotenv
 
 from tempo.agent import Agent, AgentConfig
 from tempo.context import ContextStore
-from tempo.infra import LiteLLMClient
-from tempo.tools import (
-    ToolRegistry,
-    ShellTool,
-    FileReadTool,
-    FileWriteTool,
-    BrowserTool,
-    FinishTaskTool,
-    SummarizeOutputTool,
-)
+from tempo.context.frame import ToolCall
+from tempo.infra import LiteLLMClient, ContainerManager
+from tempo.infra.container import ContainerConfig
+from tempo.tools.tool_factory import create_sandboxed_tools, create_local_tools
 
 
 def load_config(config_path: str = "config.toml") -> dict:
@@ -72,6 +67,20 @@ def create_agent_config(config: dict) -> AgentConfig:
     )
 
 
+# ============================================================================
+# Logging Callbacks - Real-time output during agent execution
+# ============================================================================
+
+def log_tool_call(tool_call: ToolCall) -> None:
+    """Log each tool call as it happens."""
+    output_preview = tool_call.raw_output[:300] if tool_call.raw_output else "(no output)"
+    if len(tool_call.raw_output or "") > 300:
+        output_preview += "..."
+    print(f"\n  [Tool: {tool_call.tool_name}]")
+    print(f"    Input: {tool_call.input}")
+    print(f"    Output: {output_preview}")
+
+
 async def main():
     """Run agent using config.toml settings."""
     
@@ -92,6 +101,7 @@ async def main():
     print(f"  Model: {agent_config.model}")
     print(f"  Max Steps: {agent_config.max_total_steps}")
     print(f"  Allowed Domains: {agent_config.allowed_domains}")
+    print(f"  Container Image: {agent_config.container_image}")
     print(f"  Verbose: {agent_config.verbose}")
     print(f"{'='*50}\n")
     
@@ -104,25 +114,8 @@ async def main():
     # Initialize LLM client
     llm = LiteLLMClient(model=agent_config.model)
     
-    # Create context store (needed before registering SummarizeOutputTool)
+    # Create context store
     context = ContextStore(persistence_dir=agent_config.persistence_dir)
-    
-    # Set up tools
-    tools = ToolRegistry()
-    tools.register(ShellTool())
-    tools.register(FileReadTool())
-    tools.register(FileWriteTool())
-    tools.register(BrowserTool())
-    tools.register(FinishTaskTool())
-    tools.register(SummarizeOutputTool(context_store=context))
-    
-    # Create agent
-    agent = Agent(
-        config=agent_config,
-        llm=llm,
-        tools=tools,
-        context=context,
-    )
     
     # Determine target from config
     domains = agent_config.allowed_domains
@@ -143,14 +136,64 @@ async def main():
     Scope is limited to: {', '.join(str(d) for d in domains) if domains else 'example.com'}
     """
     
-    print(f"Starting agent with objective:\n{objective}")
-    print("-" * 50)
+    # Check if we should use container
+    use_container = os.getenv("TEMPO_LOCAL_MODE", "").lower() != "true"
     
-    # Run the agent
-    result = await agent.run(
-        objective=objective,
-        max_steps=agent_config.max_total_steps,
-    )
+    if use_container:
+        print("Starting sandboxed container...")
+        container_config = ContainerConfig(
+            image=agent_config.container_image,
+            timeout=agent_config.container_timeout,
+        )
+        container = ContainerManager(container_config)
+        
+        async with container:  # Auto start/stop
+            print(f"Container started. Running agent...\n")
+            
+            # Create sandboxed tools
+            tools = create_sandboxed_tools(
+                container=container,
+                context_store=context,
+            )
+            
+            # Create agent
+            agent = Agent(
+                config=agent_config,
+                llm=llm,
+                tools=tools,
+                context=context,
+            )
+            
+            print(f"Starting agent with objective:\n{objective}")
+            print("-" * 50)
+            
+            # Run the agent
+            result = await agent.run(
+                objective=objective,
+                max_steps=agent_config.max_total_steps,
+            )
+    else:
+        print("WARNING: Running in local mode (no container). Set TEMPO_LOCAL_MODE=true only for testing.\n")
+        
+        # Create local tools (with warning)
+        tools = create_local_tools(context_store=context)
+        
+        # Create agent
+        agent = Agent(
+            config=agent_config,
+            llm=llm,
+            tools=tools,
+            context=context,
+        )
+        
+        print(f"Starting agent with objective:\n{objective}")
+        print("-" * 50)
+        
+        # Run the agent
+        result = await agent.run(
+            objective=objective,
+            max_steps=agent_config.max_total_steps,
+        )
     
     # Print results
     print("-" * 50)

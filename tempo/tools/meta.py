@@ -16,7 +16,12 @@ class TransitionPhaseTool(Tool):
     """Transition the agent to a new workflow phase."""
     
     name = "transition_phase"
-    description = "Transition to a new phase (recon, hypothesize, test, reflect)"
+    description = """Move to the next workflow phase (recon → hypothesize → test → reflect).
+    
+    Use this tool when you have completed work in the current phase and are ready to proceed.
+    This does NOT end the analysis - it advances to the next phase of investigation.
+    
+    Call this BEFORE calling complete_analysis."""
     category = ToolCategory.META
     
     def __init__(self, workflow_manager: "WorkflowManager"):
@@ -163,10 +168,18 @@ class SummarizeOutputTool(Tool):
 
 
 class FinishTaskTool(Tool):
-    """Signal completion of the agent's objective."""
+    """Signal completion of the agent's ENTIRE security analysis."""
     
-    name = "finish_task"
-    description = "Signal that the objective has been achieved."
+    name = "complete_analysis"
+    description = """Signal that the ENTIRE security analysis is complete and all phases are done.
+    
+    DO NOT use this to finish a single phase - use transition_phase instead.
+    Only call this when you have:
+    1. Completed all relevant phases (recon, hypothesize, test, reflect)
+    2. Documented all findings
+    3. No further investigation is needed
+    
+    This will END the agent's execution."""
     category = ToolCategory.META
     
     async def execute(

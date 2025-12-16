@@ -17,7 +17,7 @@ class TestFinishTaskTool:
     def test_name_and_category(self):
         """Test tool name and category are set."""
         tool = FinishTaskTool()
-        assert tool.name == "finish_task"
+        assert tool.name == "complete_analysis"
         assert tool.category.value == "meta"
     
     def test_get_schema(self):
@@ -25,7 +25,7 @@ class TestFinishTaskTool:
         tool = FinishTaskTool()
         schema = tool.get_schema().to_openai_format()
         
-        assert schema["function"]["name"] == "finish_task"
+        assert schema["function"]["name"] == "complete_analysis"
         assert "findings" in schema["function"]["parameters"]["properties"]
     
     @pytest.mark.asyncio
