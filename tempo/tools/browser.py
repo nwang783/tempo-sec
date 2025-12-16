@@ -169,6 +169,8 @@ class BrowserTool(Tool):
         screenshot: bool = False,
     ) -> ToolResult:
         """Execute browser commands in the container using playwright."""
+        import base64
+        
         # Build the optional links extraction code
         links_code = ""
         if extract_links:
@@ -176,7 +178,7 @@ class BrowserTool(Tool):
             links = await page.evaluate("""
                 () => Array.from(document.querySelectorAll('a[href]'))
                     .map(a => ({text: a.innerText.trim(), href: a.href}))
-                    .filter(l => l.text && l.href.startswith('http'))
+                    .filter(l => l.text && l.href.startsWith('http'))
                     .slice(0, 20)
             """)
             print()
@@ -224,8 +226,12 @@ async def main():
 asyncio.run(main())
 '''
         
+        # Base64 encode the script to avoid shell escaping issues
+        script_b64 = base64.b64encode(script.encode()).decode()
+        
+        # Execute by decoding and running the script
         exit_code, stdout, stderr = await self.container.exec(
-            f"python3 -c '{script}'",
+            f"python3 -c \"import base64; exec(base64.b64decode('{script_b64}').decode())\"",
             timeout=60,
         )
         
@@ -233,7 +239,7 @@ asyncio.run(main())
             return ToolResult(
                 success=False,
                 output="",
-                error=stderr or stdout,
+                error=stderr or stdout or "Browser execution failed",
             )
         
         return ToolResult(

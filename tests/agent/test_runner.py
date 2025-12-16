@@ -181,3 +181,121 @@ class TestAgent:
         
         # Should have created a new frame
         assert agent.context.current_frame.parent_id == cp_id
+
+
+class TestPhaseFilteredTools:
+    """Tests for phase-gated tool filtering."""
+    
+    def test_complete_analysis_hidden_in_recon(self):
+        """Test that complete_analysis is hidden during RECON phase."""
+        config = AgentConfig()
+        llm = MockLLMClient()
+        tools = ToolRegistry()
+        
+        # Register the complete_analysis tool
+        from tempo.tools.meta import FinishTaskTool
+        tools.register(FinishTaskTool())
+        tools.register(DummyTool())
+        
+        agent = Agent(config, llm, tools)
+        agent.workflow.current_phase = Phase.RECON
+        
+        # Get filtered tools
+        filtered = agent._get_phase_filtered_tools()
+        tool_names = [t.get("function", {}).get("name") for t in filtered]
+        
+        assert "complete_analysis" not in tool_names
+        assert "dummy" in tool_names
+    
+    def test_complete_analysis_hidden_in_hypothesize(self):
+        """Test that complete_analysis is hidden during HYPOTHESIZE phase."""
+        config = AgentConfig()
+        llm = MockLLMClient()
+        tools = ToolRegistry()
+        
+        from tempo.tools.meta import FinishTaskTool
+        tools.register(FinishTaskTool())
+        
+        agent = Agent(config, llm, tools)
+        agent.workflow.current_phase = Phase.HYPOTHESIZE
+        
+        filtered = agent._get_phase_filtered_tools()
+        tool_names = [t.get("function", {}).get("name") for t in filtered]
+        
+        assert "complete_analysis" not in tool_names
+    
+    def test_complete_analysis_hidden_in_test(self):
+        """Test that complete_analysis is hidden during TEST phase."""
+        config = AgentConfig()
+        llm = MockLLMClient()
+        tools = ToolRegistry()
+        
+        from tempo.tools.meta import FinishTaskTool
+        tools.register(FinishTaskTool())
+        
+        agent = Agent(config, llm, tools)
+        agent.workflow.current_phase = Phase.TEST
+        
+        filtered = agent._get_phase_filtered_tools()
+        tool_names = [t.get("function", {}).get("name") for t in filtered]
+        
+        assert "complete_analysis" not in tool_names
+    
+    def test_complete_analysis_visible_in_reflect(self):
+        """Test that complete_analysis IS visible during REFLECT phase."""
+        config = AgentConfig()
+        llm = MockLLMClient()
+        tools = ToolRegistry()
+        
+        from tempo.tools.meta import FinishTaskTool
+        tools.register(FinishTaskTool())
+        tools.register(DummyTool())
+        
+        agent = Agent(config, llm, tools)
+        agent.workflow.current_phase = Phase.REFLECT
+        
+        filtered = agent._get_phase_filtered_tools()
+        tool_names = [t.get("function", {}).get("name") for t in filtered]
+        
+        assert "complete_analysis" in tool_names
+        assert "dummy" in tool_names
+    
+    def test_shared_workflow_updates_phase(self):
+        """Test that a shared workflow manager updates the phase correctly."""
+        from tempo.agent.workflow import WorkflowManager
+        from tempo.tools.meta import TransitionPhaseTool
+        
+        config = AgentConfig()
+        llm = MockLLMClient()
+        
+        # Create shared workflow manager
+        workflow = WorkflowManager(config)
+        
+        # Create tools with shared workflow
+        tools = ToolRegistry()
+        from tempo.tools.meta import FinishTaskTool
+        tools.register(FinishTaskTool())
+        tools.register(TransitionPhaseTool(workflow_manager=workflow))
+        
+        # Create agent with shared workflow
+        agent = Agent(config, llm, tools, workflow=workflow)
+        
+        # Initially in RECON
+        assert agent.workflow.current_phase == Phase.RECON
+        
+        # complete_analysis should be hidden
+        filtered = agent._get_phase_filtered_tools()
+        tool_names = [t.get("function", {}).get("name") for t in filtered]
+        assert "complete_analysis" not in tool_names
+        
+        # Transition through valid phases to REFLECT
+        # RECON -> HYPOTHESIZE -> TEST -> REFLECT
+        workflow.transition(Phase.HYPOTHESIZE)
+        workflow.transition(Phase.TEST)
+        workflow.transition(Phase.REFLECT)
+        
+        # Now complete_analysis should be visible
+        filtered = agent._get_phase_filtered_tools()
+        tool_names = [t.get("function", {}).get("name") for t in filtered]
+        assert "complete_analysis" in tool_names
+
