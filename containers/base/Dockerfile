@@ -39,7 +39,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
 # Playwright for browser automation
-RUN pip3 install playwright && playwright install chromium --with-deps
+# Install to a global path so the agent user can access the browsers
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN pip3 install playwright \
+    && mkdir -p /opt/playwright-browsers \
+    && playwright install chromium --with-deps
 
 # Additional Python security tools
 RUN pip3 install \
