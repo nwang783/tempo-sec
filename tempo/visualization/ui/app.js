@@ -1,59 +1,65 @@
 // Tempo Sec Visualization App
 
 const statusEl = document.getElementById('status');
-const treeContainer = document.getElementById('tree-container');
 const detailsContent = document.getElementById('details-content');
-const agentStateContent = document.getElementById('agent-state-content');
 
 // State
 let socket = null;
 let rootNode = {
     id: "root",
-    name: "Start",
+    name: "ROOT",
     type: "root",
     children: []
 };
-let frames = new Map(); // id -> node
+let frames = new Map();
+let steps = new Map(); // frameId-stepNum -> node
 let currentFrameId = "root";
+// Track current step number from updates
+let currentStepNumber = 0;
+let isConnected = false;
+let updateTimeout = null;
 
 // Add root to map
 frames.set("root", rootNode);
 
-// Tree Layout Config
-const margin = { top: 20, right: 90, bottom: 30, left: 90 };
-let width = treeContainer.clientWidth - margin.left - margin.right;
-let height = treeContainer.clientHeight - margin.top - margin.bottom;
+// DOM Elements & Dimensions
+const container = document.getElementById('tree-container');
+let width = container.clientWidth;
+let height = container.clientHeight;
 
 // D3 Setup
 const svg = d3.select("#tree-container").append("svg")
-    .attr("width", width + margin.left + margin.right)
-    .attr("height", height + margin.top + margin.bottom)
-    .call(d3.zoom().on("zoom", (event) => {
-        g.attr("transform", event.transform);
-    }))
-    .append("g")
-    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    .attr("width", width)
+    .attr("height", height)
+    .call(d3.zoom()
+        .scaleExtent([0.1, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        }))
+    .on("dblclick.zoom", null);
 
-const g = svg.append("g");
+const g = svg.append("g")
+    .attr("transform", `translate(${width / 2}, 50)`);
 
-let i = 0;
-const duration = 750;
+// Tree Layout
+let tree = d3.tree().nodeSize([100, 100]); // Increased spacing
 let root = d3.hierarchy(rootNode, d => d.children);
-root.x0 = height / 2;
-root.y0 = 0;
 
-// Connect via WebSocket
+// Animation duration
+const duration = 400;
+let i = 0;
+
 function connect() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     socket = new WebSocket(`${protocol}//${host}/ws`);
 
     socket.onopen = function () {
-        statusEl.textContent = "Connected";
+        statusEl.textContent = "CONNECTED";
         statusEl.className = "status connected";
+        isConnected = true;
         console.log("WebSocket connected");
-
-        // Request initial state if needed
+        debouncedUpdate();
     };
 
     socket.onmessage = function (event) {
@@ -66,14 +72,10 @@ function connect() {
     };
 
     socket.onclose = function () {
-        statusEl.textContent = "Disconnected";
+        statusEl.textContent = "DISCONNECTED";
         statusEl.className = "status disconnected";
-        console.log("WebSocket disconnected. Reconnecting in 3s...");
+        isConnected = false;
         setTimeout(connect, 3000);
-    };
-
-    socket.onerror = function (err) {
-        console.error("WebSocket error:", err);
     };
 }
 
@@ -81,16 +83,14 @@ function handleEvent(event) {
     if (!event.type) return;
 
     const data = event.data;
-    const frameId = data.frame_id; // May be undefined for internal events
+    const frameId = data.frame_id;
 
-    // Manage Frame Structure
-    // If we see a frame ID we don't know, assume it's a child of the current frame
-    // This is a simplification; ideally we'd get parent_id from backend.
+    // Auto-create frames
     if (frameId && !frames.has(frameId)) {
         const parentFrame = frames.get(currentFrameId) || rootNode;
         const newFrame = {
             id: frameId,
-            name: `Frame ${frameId.substring(0, 4)}`,
+            name: `FRAME`,
             type: "frame",
             children: [],
             parent: parentFrame
@@ -98,13 +98,15 @@ function handleEvent(event) {
         frames.set(frameId, newFrame);
         if (!parentFrame.children) parentFrame.children = [];
         parentFrame.children.push(newFrame);
-
         currentFrameId = frameId;
-        update(root);
+        debouncedUpdate();
     }
 
-    if (frameId) {
-        currentFrameId = frameId;
+    if (frameId) currentFrameId = frameId;
+
+    // Update global step number if present
+    if (data.step_number !== undefined) {
+        currentStepNumber = data.step_number;
     }
 
     switch (event.type) {
@@ -113,20 +115,40 @@ function handleEvent(event) {
             break;
         case "step":
             updateState(data);
-            break;
-        case "phase_transition":
-            // Can add specific marker or update state
-            break;
-        case "start":
-            // Reset tree if desired
+            // Ensure step node exists even if no tools (e.g. for thinking)
+            getOrCreateStepNode(currentFrameId, data.step_number);
+            debouncedUpdate();
             break;
     }
+}
 
-    update(root);
+function getOrCreateStepNode(frameId, stepNum) {
+    const stepKey = `${frameId}-${stepNum}`;
+    if (steps.has(stepKey)) return steps.get(stepKey);
+
+    const frame = frames.get(frameId) || rootNode;
+
+    const stepNode = {
+        id: `step-${stepKey}`,
+        name: `STEP ${stepNum}`,
+        type: "step",
+        data: {},
+        children: []
+    };
+
+    if (!frame.children) frame.children = [];
+    frame.children.push(stepNode);
+    steps.set(stepKey, stepNode);
+    return stepNode;
 }
 
 function addToolNode(toolData) {
-    const frame = frames.get(currentFrameId) || rootNode;
+    // Determine which step this tool belongs to.
+    // If toolData doesn't have step number, use current global step.
+    const stepNum = currentStepNumber;
+
+    const stepNode = getOrCreateStepNode(currentFrameId, stepNum);
+
     const toolNode = {
         id: toolData.id || `tool-${Date.now()}`,
         name: toolData.tool_name,
@@ -135,114 +157,46 @@ function addToolNode(toolData) {
         children: []
     };
 
-    if (!frame.children) frame.children = [];
-    frame.children.push(toolNode);
-
-    // Auto-update view
-    update(root);
-
-    // If auto-scroll lock is on?
+    stepNode.children.push(toolNode);
+    debouncedUpdate();
 }
 
 function updateState(data) {
-    if (data.phase) {
-        document.getElementById("state-phase").textContent = data.phase;
-    }
-    if (data.step_number) {
-        document.getElementById("state-step").textContent = data.step_number;
-    }
-    document.getElementById("state-latest").textContent = new Date().toLocaleTimeString();
+    if (data.phase) document.getElementById("state-phase").textContent = data.phase;
+    if (data.step_number) document.getElementById("state-step").textContent = data.step_number;
 }
 
-function showDetails(d) {
-    const data = d.data.data; // Access raw data from node
-    if (!data) return;
-
-    let html = `<div class="detail-card">`;
-
-    // Header
-    html += `
-        <div class="field-group">
-            <span class="field-label">Type</span>
-            <div class="field-value">${d.data.type.toUpperCase()}</div>
-        </div>
-        <div class="field-group">
-            <span class="field-label">Name</span>
-            <div class="field-value">${d.data.name}</div>
-        </div>
-    `;
-
-    if (d.data.type === 'tool') {
-        const purpose = data.input?.purpose || "No purpose specified";
-        html += `
-            <div class="field-group">
-                <span class="field-label">Purpose</span>
-                <div class="field-value">${purpose}</div>
-            </div>
-            <div class="field-group">
-                <span class="field-label">Duration</span>
-                <div class="field-value">${data.duration_ms} ms</div>
-            </div>
-             <div class="field-group">
-                <span class="field-label">Input</span>
-                <div class="field-value json">${JSON.stringify(data.input, null, 2)}</div>
-            </div>
-             <div class="field-group">
-                <span class="field-label">Output</span>
-                <div class="field-value">${escapeHtml(data.raw_output || data.output || "")}</div>
-            </div>
-        `;
-    } else if (d.data.type === 'frame') {
-        html += `
-             <div class="field-group">
-                <span class="field-label">Frame ID</span>
-                <div class="field-value">${d.data.id}</div>
-            </div>
-        `;
-    }
-
-    html += `</div>`;
-    detailsContent.innerHTML = html;
-
-    // Highlight selected
-    d3.selectAll(".node").classed("selected", false);
-    // Note: 'this' reference depends on caller interaction
+function debouncedUpdate() {
+    if (updateTimeout) clearTimeout(updateTimeout);
+    updateTimeout = setTimeout(() => {
+        update(root);
+    }, 100);
 }
 
-function escapeHtml(text) {
-    if (!text) return "";
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+// Icons
+function getIcon(type, name) {
+    if (type === 'frame') return '⬡';
+    if (type === 'step') return '#';
+    if (name.includes('shell')) return '>';
+    if (name.includes('read') || name.includes('write')) return '📄';
+    if (name.includes('browser')) return '🌐';
+    return '⚙️';
 }
 
-// Update D3 Tree
 function update(source) {
-    // Recompute hierarchy
     root = d3.hierarchy(rootNode, d => d.children);
-    root.x0 = height / 2;
-    root.y0 = 0;
 
-    const treeLayout = d3.tree().size([height, width]);
-    const treeData = treeLayout(root);
-
-    // Compute the new tree layout
+    const treeData = tree(root);
     const nodes = treeData.descendants();
-    const links = treeData.descendants().slice(1);
+    const links = treeData.links();
 
-    // Normalize for fixed-depth
-    nodes.forEach(d => { d.y = d.depth * 180; });
-
-    // Update Nodes
+    // Nodes
     const node = g.selectAll('g.node')
-        .data(nodes, d => d.id || (d.id = ++i));
+        .data(nodes, d => d.data.id || (d.data.id = ++i));
 
     const nodeEnter = node.enter().append('g')
         .attr('class', d => `node ${d.data.type}`)
-        .attr("transform", d => "translate(" + source.y0 + "," + source.x0 + ")")
+        .attr("transform", d => `translate(${source.x0 || 0},${source.y0 || 0})`)
         .on('click', (event, d) => {
             showDetails(d);
             d3.selectAll(".node").classed("selected", false);
@@ -250,50 +204,53 @@ function update(source) {
         });
 
     nodeEnter.append('circle')
-        .attr('r', 10)
-        .style("fill", d => d.data.type === 'tool' ? "#fff" : "#3498db");
+        .attr('r', 20)
+        .style("fill", "#050505");
 
+    // Icon text - adjusted centering
     nodeEnter.append('text')
-        .attr("dy", ".35em")
-        .attr("x", d => d.children || d._children ? -13 : 13)
-        .attr("text-anchor", d => d.children || d._children ? "end" : "start")
-        .text(d => d.data.name);
+        .attr("class", "node-icon")
+        .attr("dy", "5px") // Adjusted from .3em to pixel value for better alignment
+        .style("text-anchor", "middle")
+        .style("font-size", "18px")
+        .text(d => getIcon(d.data.type, d.data.name));
 
-    // UPDATE
-    const nodeUpdate = node.merge(nodeEnter).transition()
-        .duration(duration)
-        .attr("transform", d => "translate(" + d.y + "," + d.x + ")");
+    // Label
+    nodeEnter.append('text')
+        .attr("dy", "35px")
+        .attr("text-anchor", "middle")
+        .style("font-size", "9px")
+        .style("opacity", 0.7)
+        .text(d => d.data.name.toUpperCase());
 
-    // EXIT
-    const nodeExit = node.exit().transition()
-        .duration(duration)
-        .attr("transform", d => "translate(" + source.y + "," + source.x + ")")
+    const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+
+    const nodeExit = node.exit().transition().duration(duration)
+        .attr("transform", d => `translate(${source.x},${source.y})`)
         .remove();
 
-    // Update Links
+    // Links
     const link = g.selectAll('path.link')
-        .data(links, d => d.id);
+        .data(links, d => d.target.data.id);
 
     const linkEnter = link.enter().insert('path', "g")
         .attr("class", "link")
         .attr('d', d => {
-            const o = { x: source.x0, y: source.y0 };
+            const o = { x: source.x0 || 0, y: source.y0 || 0 };
             return diagonal(o, o);
         });
 
-    const linkUpdate = link.merge(linkEnter).transition()
-        .duration(duration)
-        .attr('d', d => diagonal(d, d.parent));
+    const linkUpdate = link.merge(linkEnter).transition().duration(duration)
+        .attr('d', d => diagonal(d.source, d.target));
 
-    const linkExit = link.exit().transition()
-        .duration(duration)
+    const linkExit = link.exit().transition().duration(duration)
         .attr('d', d => {
             const o = { x: source.x, y: source.y };
             return diagonal(o, o);
         })
         .remove();
 
-    // Stash the old positions for transition.
     nodes.forEach(d => {
         d.x0 = d.x;
         d.y0 = d.y;
@@ -301,11 +258,58 @@ function update(source) {
 }
 
 function diagonal(s, d) {
-    return `M ${s.y} ${s.x}
-            C ${(s.y + d.y) / 2} ${s.x},
-              ${(s.y + d.y) / 2} ${d.x},
-              ${d.y} ${d.x}`;
+    return `M ${s.x} ${s.y}
+            C ${s.x} ${(s.y + d.y) / 2},
+              ${d.x} ${(s.y + d.y) / 2},
+              ${d.x} ${d.y}`;
 }
 
-// Initial connect
+function showDetails(d) {
+    const data = d.data.data;
+    if (!data) return;
+
+    let html = `<div class="detail-card">`;
+
+    if (d.data.type === 'tool') {
+        html += `
+            <div class="tool-badge">${d.data.name}</div>
+            <div class="field-group">
+                <span class="field-label">Purpose</span>
+                <div class="field-value">${escapeHtml(data.input?.purpose || "N/A")}</div>
+            </div>
+            <div class="field-group">
+                <span class="field-label">Input</span>
+                <div class="field-value highlight">${escapeHtml(JSON.stringify(data.input, null, 2))}</div>
+            </div>
+            <div class="field-group">
+                <span class="field-label">Output</span>
+                <div class="field-value">${escapeHtml(data.raw_output || data.output || "")}</div>
+            </div>
+        `;
+    } else {
+        html += `<div class="tool-badge" style="border-color:var(--accent-blue)">${d.data.type.toUpperCase()}</div>`;
+        html += `<div class="field-value">ID: ${d.data.id || d.data.name}</div>`;
+    }
+
+    html += `</div>`;
+    detailsContent.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    if (!text) return "";
+    return text.toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+window.addEventListener('resize', () => {
+    width = container.clientWidth;
+    height = container.clientHeight;
+    svg.attr("width", width).attr("height", height);
+    update(root);
+});
+
 connect();
