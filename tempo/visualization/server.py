@@ -1,0 +1,133 @@
+"""
+Visualization Server.
+
+Runs a FastAPI application to serve the visualization UI and handle WebSocket connections.
+"""
+
+import asyncio
+import json
+import logging
+import os
+import threading
+import webbrowser
+from typing import List, Optional
+
+import uvicorn
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger(__name__)
+
+class VisualizationServer:
+    """
+    WebSocket and HTTP server for agent visualization.
+    """
+    
+    def __init__(self, host: str = "127.0.0.1", port: int = 8080, auto_open: bool = True):
+        self.host = host
+        self.port = port
+        self.auto_open = auto_open
+        self.app = FastAPI(title="Tempo Sec Visualization")
+        self.active_connections: List[WebSocket] = []
+        self._server_task: Optional[asyncio.Task] = None
+        self._shutdown_event = asyncio.Event()
+        
+        self._setup_routes()
+        
+        # Determine UI directory path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.ui_dir = os.path.join(current_dir, "ui")
+        
+        # Mount static files if directory exists
+        if os.path.exists(self.ui_dir):
+            self.app.mount("/static", StaticFiles(directory=self.ui_dir), name="static")
+        else:
+            logger.warning(f"UI directory not found at {self.ui_dir}")
+
+    def _setup_routes(self):
+        """Configure FastAPI routes."""
+        
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        
+        @self.app.websocket("/ws")
+        async def websocket_endpoint(websocket: WebSocket):
+            await websocket.accept()
+            self.active_connections.append(websocket)
+            try:
+                # Keep connection open
+                while True:
+                    # We just listen for pings/messages but don't expect much inputs currently
+                    _ = await websocket.receive_text()
+            except Exception:
+                pass
+            finally:
+                if websocket in self.active_connections:
+                    self.active_connections.remove(websocket)
+        
+        @self.app.get("/")
+        async def get_root():
+            index_path = os.path.join(self.ui_dir, "index.html")
+            if os.path.exists(index_path):
+                return FileResponse(index_path)
+            return {"error": "UI not found. Please ensure tempo/visualization/ui/index.html exists."}
+            
+        @self.app.get("/health")
+        async def health():
+            return {"status": "ok", "connections": len(self.active_connections)}
+
+    async def broadcast(self, message: str) -> None:
+        """Send message to all connected clients."""
+        if not self.active_connections:
+            return
+            
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception:
+                disconnected.append(connection)
+                
+        for conn in disconnected:
+            if conn in self.active_connections:
+                self.active_connections.remove(conn)
+
+    async def start(self) -> None:
+        """Start the server in a background task."""
+        config = uvicorn.Config(
+            app=self.app, 
+            host=self.host, 
+            port=self.port, 
+            log_level="warning",
+            loop="asyncio"
+        )
+        server = uvicorn.Server(config)
+        
+        # Create task for server
+        self._server_task = asyncio.create_task(server.serve())
+        
+        if self.auto_open:
+            # wait a bit for server to start
+            asyncio.create_task(self._open_browser())
+            
+        logger.info(f"Visualization server starting at http://{self.host}:{self.port}")
+
+    async def _open_browser(self):
+        """Open browser after a short delay."""
+        await asyncio.sleep(1.0)
+        webbrowser.open(f"http://{self.host}:{self.port}")
+
+    async def stop(self) -> None:
+        """Stop the server."""
+        if self._server_task:
+            self._server_task.cancel()
+            try:
+                await self._server_task
+            except asyncio.CancelledError:
+                pass

@@ -19,6 +19,12 @@ from tempo.context.frame import ToolCall
 from tempo.infra import LiteLLMClient, ContainerManager
 from tempo.infra.container import ContainerConfig
 from tempo.tools.tool_factory import create_sandboxed_tools, create_local_tools
+try:
+    from tempo.visualization import VisualizationCollector, VisualizationServer
+except ImportError:
+    VisualizationServer = None
+    VisualizationCollector = None
+
 
 
 def load_config(config_path: str = "config.toml") -> dict:
@@ -117,6 +123,21 @@ async def main():
     # Create context store
     context = ContextStore(persistence_dir=agent_config.persistence_dir)
     
+    # Initialize visualization if enabled
+    viz_server = None
+    viz_collector = None
+    
+    if agent_config.enable_visualization and VisualizationServer:
+        print(f"Starting visualization server on {agent_config.visualization_host}:{agent_config.visualization_port}...")
+        viz_server = VisualizationServer(
+            host=agent_config.visualization_host,
+            port=agent_config.visualization_port,
+            auto_open=agent_config.auto_open_browser
+        )
+        await viz_server.start()
+        viz_collector = VisualizationCollector(viz_server)
+
+    
     # Determine target from config
     domains = agent_config.allowed_domains
     if not domains:
@@ -168,10 +189,15 @@ async def main():
                 context=context,
                 workflow=workflow,  # Share workflow manager with TransitionPhaseTool
                 on_tool_call=log_tool_call,
+                visualization_collector=viz_collector,
             )
             
             print(f"Starting agent with objective:\n{objective}")
             print("-" * 50)
+            
+            # Notify visualization of agent start
+            if viz_collector:
+                viz_collector.on_agent_start(objective, agent_config.model)
             
             # Run the agent
             result = await agent.run(
@@ -193,10 +219,15 @@ async def main():
             context=context,
             workflow=workflow,  # Share workflow manager with TransitionPhaseTool
             on_tool_call=log_tool_call,
+            visualization_collector=viz_collector,
         )
         
         print(f"Starting agent with objective:\n{objective}")
         print("-" * 50)
+        
+        # Notify visualization of agent start
+        if viz_collector:
+            viz_collector.on_agent_start(objective, agent_config.model)
         
         # Run the agent
         result = await agent.run(
@@ -221,6 +252,16 @@ async def main():
     # Save context
     context_path = context.save()
     print(f"\nContext saved to: {context_path}")
+
+    # Keep visualization server running if enabled
+    if viz_server:
+        print("\nVisualization server is running.")
+        try:
+            input("Press Enter to stop the server and exit...")
+        except (EOFError, KeyboardInterrupt):
+            pass
+        await viz_server.stop()
+
 
 
 if __name__ == "__main__":

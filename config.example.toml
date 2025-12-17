@@ -41,8 +41,14 @@ timeout = 300
 allowed_domains = []
 # Explicitly excluded domains
 excluded_domains = []
-# Whether to allow subdomains of allowed domains
+# Whether to allow subdomains of allowexcluded_ips = ["192.168.1.1"]
 allow_subdomains = true
+
+[visualization]
+enabled = true
+port = 8080
+auto_open_browser = true
+
 
 [logging]
 # Logging level: DEBUG, INFO, WARNING, ERROR

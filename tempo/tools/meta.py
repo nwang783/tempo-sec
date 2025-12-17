@@ -137,6 +137,7 @@ class SummarizeOutputTool(Tool):
             return ToolResult(
                 success=True,
                 output=f"Summarized tool call {tool_call_id}",
+                metadata={"summarized_tool_id": tool_call_id},
             )
         except KeyError as e:
             return ToolResult(
