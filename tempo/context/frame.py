@@ -60,6 +60,7 @@ class ToolCall:
     duration_ms: int = 0
     success: bool = True
     error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)  # Tool-specific metadata
     
     @property
     def output_for_context(self) -> str:
@@ -74,6 +75,32 @@ class ToolCall:
         # Rough estimate: 4 chars per token
         return (len(self.raw_output) - len(self.summary)) // 4
     
+    def get_truncated_output(self, max_chars: int = 10000) -> str:
+        """
+        Get output for context, truncated to max_chars if necessary.
+        
+        Shows first max_chars with range info and instructions for viewing more.
+        
+        Args:
+            max_chars: Maximum characters to include
+            
+        Returns:
+            Truncated output with range indicator, or full output if short enough
+        """
+        output = self.summary if self.summary is not None else self.raw_output
+        total = len(output)
+        
+        if total <= max_chars:
+            return output
+        
+        # Show first max_chars with range info
+        return (
+            f"[Showing chars 0-{max_chars} of {total} total]\n"
+            f"{output[:max_chars]}\n\n"
+            f"[Output truncated. Use view_tool_output(tool_call_id='{self.id}', "
+            f"start_char=N, end_char=M) to view other ranges.]"
+        )
+    
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
@@ -86,6 +113,7 @@ class ToolCall:
             "duration_ms": self.duration_ms,
             "success": self.success,
             "error": self.error,
+            "metadata": self.metadata,
         }
     
     @classmethod
@@ -101,6 +129,7 @@ class ToolCall:
             duration_ms=data["duration_ms"],
             success=data["success"],
             error=data.get("error"),
+            metadata=data.get("metadata", {}),
         )
 
 

@@ -20,6 +20,7 @@ class AgentConfig:
     max_context_tokens: int = 100000        # Trigger summarization near this limit
     auto_summarize: bool = True             # Automatically summarize tool outputs
     summarization_model: str | None = None  # Use cheaper model for summaries (None = same model)
+    max_output_chars: int = 10000           # Chars to show per tool output (LLM can request more)
     
     # Workflow settings
     enforce_phases: bool = True             # Require explicit phase transitions
