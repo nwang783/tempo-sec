@@ -94,7 +94,7 @@ class LiteLLMClient(LLMClient):
         Initialize the LiteLLM client.
         
         Args:
-            model: Model identifier (e.g., "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o")
+            model: Model identifier (e.g., "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o", "gemini/gemini-2.0-flash")
             **default_kwargs: Default arguments for all completions
         """
         self.model = model

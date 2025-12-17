@@ -106,9 +106,9 @@ async def main():
     print(f"{'='*50}\n")
     
     # Verify API key
-    api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("Error: Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env file")
+        print("Error: Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY in .env file")
         return
     
     # Initialize LLM client

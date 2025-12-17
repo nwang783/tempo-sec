@@ -309,16 +309,19 @@ class ContextStore:
         self,
         include_system: bool = True,
         max_tokens: int | None = None,
+        max_output_chars: int = 10000,
     ) -> list[dict[str, str]]:
         """
         Render the context as a list of messages for the LLM.
         
         Walks the frame tree from root to current, assembling messages.
         Uses summaries instead of raw outputs where available.
+        Truncates large outputs to prevent context overflow.
         
         Args:
             include_system: Whether to include system messages
             max_tokens: Optional token limit (triggers truncation strategy)
+            max_output_chars: Max chars per tool output (default 10000)
             
         Returns:
             List of {"role": str, "content": str} dicts
@@ -342,7 +345,7 @@ class ContextStore:
                 })
                 messages.append({
                     "role": "user",
-                    "content": f"[Tool Result: {tc.tool_name}]\n{tc.output_for_context}",
+                    "content": f"[Tool Result: {tc.tool_name}]\n{tc.get_truncated_output(max_output_chars)}",
                 })
         
         # Apply token limit if specified

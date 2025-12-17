@@ -249,8 +249,10 @@ class Agent:
                 f"[System] Automatically transitioned to {forced_phase.value} due to step limit."
             )
         
-        # Get messages for LLM
-        messages = self.context.render_messages()
+        # Get messages for LLM (with output truncation)
+        messages = self.context.render_messages(
+            max_output_chars=self.config.max_output_chars
+        )
         
         # Get phase-filtered tool schemas (REFLECT: only continue_analysis)
         tool_schemas = self._get_phase_filtered_tools()
@@ -283,7 +285,7 @@ class Agent:
                         self.workflow.transition(Phase.RECON)
                         self.context.add_message(
                             MessageRole.SYSTEM,
-                            f"[Continuing analysis] {tool_result.output}\nYou are now back in the RECON phase."
+                            f"[Continuing analysis] {tool_result.raw_output}\nYou are now back in the RECON phase."
                         )
                     elif tool_result.metadata.get("finish"):
                         # Agent is done

@@ -18,6 +18,7 @@ from tempo.tools.meta import (
     BranchToSubtasksTool,
     FinishSubtaskTool,
 )
+from tempo.tools.view_output import ViewToolOutputTool
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
@@ -58,7 +59,7 @@ def create_sandboxed_tools(
     # Meta tools
     tools.register(FinishTaskTool())
     tools.register(SummarizeOutputTool(context_store=context_store))
-    
+    tools.register(ViewToolOutputTool(context_store=context_store))
     if workflow_manager:
         tools.register(TransitionPhaseTool(workflow_manager=workflow_manager))
     
@@ -103,7 +104,7 @@ def create_local_tools(
     # Meta tools
     tools.register(FinishTaskTool())
     tools.register(SummarizeOutputTool(context_store=context_store))
-    
+    tools.register(ViewToolOutputTool(context_store=context_store))
     if workflow_manager:
         tools.register(TransitionPhaseTool(workflow_manager=workflow_manager))
     
