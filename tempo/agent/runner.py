@@ -368,8 +368,8 @@ class Agent:
             if len(result.output) > 500:
                 tool_call.raw_output += (
                     f"\n\n[System: Output captured ({len(result.output)} chars). "
-                    f"Consider calling `summarize_tool_output` with tool_call_id='{tool_call.id}' "
-                    f"to compress this data and save context tokens.]"
+                    f"You MUST call `summarize_tool_output` with tool_call_id='{tool_call.id}' "
+                    f"to compress this data and save context tokens before proceeding.]"
                 )
             
         except Exception as e:
