@@ -16,6 +16,7 @@ let steps = new Map();
 let currentFrameId = "root";
 let currentStepNumber = 0;
 let stepsWithTools = new Set(); // Track which steps have tool calls
+let summarizedTools = new Set(); // Track which tool calls have been summarized
 let isConnected = false;
 let updateTimeout = null;
 
@@ -122,6 +123,13 @@ function handleEvent(event) {
             updateState(data);
             getOrCreateStepNode(currentFrameId, data.step_number);
             debouncedUpdate();
+            break;
+        case "summarized":
+            // Mark a tool as summarized (no longer in full context)
+            if (data.tool_call_id) {
+                summarizedTools.add(data.tool_call_id);
+                debouncedUpdate();
+            }
             break;
     }
 }
@@ -337,7 +345,28 @@ function update() {
     // --- Update Transitions ---
     const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
         .attr("transform", d => `translate(${d.x},${d.y})`)
-        .style("opacity", 1);
+        .style("opacity", d => {
+            // Dim summarized tools
+            if (d.type === 'tool' && summarizedTools.has(d.id)) {
+                return 0.5;
+            }
+            return 1;
+        });
+
+    // Update stroke color based on summarization status (for tool cards)
+    node.merge(nodeEnter).selectAll('rect')
+        .style("stroke", d => {
+            if (d.type === 'tool') {
+                return summarizedTools.has(d.id) ? "#333" : "var(--accent-blue)";
+            }
+            return null; // Keep existing for phases
+        })
+        .style("stroke-width", d => {
+            if (d.type === 'tool') {
+                return summarizedTools.has(d.id) ? "1px" : "2px";
+            }
+            return null;
+        });
 
     // Exit
     node.exit().transition().duration(duration)

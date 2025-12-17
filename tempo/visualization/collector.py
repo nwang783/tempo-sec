@@ -91,6 +91,12 @@ class VisualizationCollector:
             pass
             
         self.emit("tool_call", data)
+        
+        # Check if this is a summarization tool call
+        if tool_call.tool_name == "summarize_tool_output" and tool_call.success:
+            summarized_id = tool_call.metadata.get("summarized_tool_id")
+            if summarized_id:
+                self.emit("summarized", {"tool_call_id": summarized_id})
 
     def emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Send event to server."""
