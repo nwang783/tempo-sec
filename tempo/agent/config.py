@@ -49,6 +49,12 @@ class AgentConfig:
     verbose: bool = False
     log_level: str = "INFO"
     
+    # Visualization
+    enable_visualization: bool = True
+    visualization_port: int = 8080
+    visualization_host: str = "127.0.0.1"
+    auto_open_browser: bool = True
+    
     # Legacy/convenience aliases
     scope: str | None = None  # Optional scope description
     

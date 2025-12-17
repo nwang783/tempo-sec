@@ -16,7 +16,14 @@ from tempo.infra.llm import LLMClient, LLMResponse
 from tempo.prompts.builder import PromptBuilder
 from tempo.prompts.phases import Phase
 from tempo.tools.registry import ToolRegistry
+from tempo.tools.registry import ToolRegistry
 from tempo.tools.base import ToolResult
+
+try:
+    from tempo.visualization.collector import VisualizationCollector
+except ImportError:
+    VisualizationCollector = None
+
 
 
 @dataclass
@@ -61,6 +68,7 @@ class Agent:
         workflow: "WorkflowManager | None" = None,
         on_step: "Callable[[StepResult], None] | None" = None,
         on_tool_call: "Callable[[ToolCall], None] | None" = None,
+        visualization_collector: "VisualizationCollector | None" = None,
     ):
         """
         Initialize the agent.
@@ -84,6 +92,7 @@ class Agent:
         # Logging callbacks
         self._on_step = on_step
         self._on_tool_call = on_tool_call
+        self._viz_collector = visualization_collector
         
         # Use provided workflow manager or create one (share with TransitionPhaseTool!)
         self.workflow = workflow or WorkflowManager(config)
@@ -132,6 +141,7 @@ class Agent:
                 tools=self.tools,  # Note: tools will be filtered in prompt
                 context=context,
                 prompts=self.prompts,
+                visualization_collector=self._viz_collector,
             )
             
             # Run the subtask
@@ -317,6 +327,10 @@ class Agent:
         # Invoke step callback if provided
         if self._on_step:
             self._on_step(step_result)
+
+        # Notify visualization
+        if self._viz_collector:
+            self._viz_collector.on_step(step_result, self.context.current_frame.id)
         
         return step_result
     
@@ -366,6 +380,11 @@ class Agent:
         # Invoke tool call callback if provided
         if self._on_tool_call:
             self._on_tool_call(tool_call)
+        
+        # Notify visualization
+        if self._viz_collector:
+            self._viz_collector.on_tool_call(tool_call, self.context.current_frame.id)
+
         
         return tool_call
     
