@@ -195,6 +195,10 @@ async def main():
             print(f"Starting agent with objective:\n{objective}")
             print("-" * 50)
             
+            # Notify visualization of agent start
+            if viz_collector:
+                viz_collector.on_agent_start(objective, agent_config.model)
+            
             # Run the agent
             result = await agent.run(
                 objective=objective,
@@ -220,6 +224,10 @@ async def main():
         
         print(f"Starting agent with objective:\n{objective}")
         print("-" * 50)
+        
+        # Notify visualization of agent start
+        if viz_collector:
+            viz_collector.on_agent_start(objective, agent_config.model)
         
         # Run the agent
         result = await agent.run(

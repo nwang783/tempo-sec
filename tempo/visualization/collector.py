@@ -99,9 +99,9 @@ class VisualizationCollector:
         # or from a different context.
         asyncio.create_task(self.server.broadcast(event.to_json()))
 
-    def on_agent_start(self, objective: str) -> None:
+    def on_agent_start(self, objective: str, model_name: str = "") -> None:
         """Called when agent starts execution."""
-        self.emit("start", {"objective": objective})
+        self.emit("start", {"objective": objective, "model": model_name})
 
     def on_agent_finish(self, success: bool, output: Any = None) -> None:
         """Called when agent finishes."""

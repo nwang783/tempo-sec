@@ -1,4 +1,4 @@
-// Tempo Sec Visualization App
+// Tempo Sec Visualization App - Linear Stack v4
 
 const statusEl = document.getElementById('status');
 const detailsContent = document.getElementById('details-content');
@@ -12,42 +12,49 @@ let rootNode = {
     children: []
 };
 let frames = new Map();
-let steps = new Map(); // frameId-stepNum -> node
+let steps = new Map();
 let currentFrameId = "root";
-// Track current step number from updates
 let currentStepNumber = 0;
+let stepsWithTools = new Set(); // Track which steps have tool calls
 let isConnected = false;
 let updateTimeout = null;
 
-// Add root to map
 frames.set("root", rootNode);
 
-// DOM Elements & Dimensions
+// DOM
 const container = document.getElementById('tree-container');
 let width = container.clientWidth;
 let height = container.clientHeight;
 
-// D3 Setup
+// D3 Setup - Vertical pan only (no zoom)
 const svg = d3.select("#tree-container").append("svg")
     .attr("width", width)
-    .attr("height", height)
-    .call(d3.zoom()
-        .scaleExtent([0.1, 3])
-        .on("zoom", (event) => {
-            g.attr("transform", event.transform);
-        }))
+    .attr("height", height);
+
+// Create a zoom behavior that only allows vertical panning
+const zoomBehavior = d3.zoom()
+    .scaleExtent([1, 1]) // Disable zoom
+    .on("zoom", (event) => {
+        // Only allow vertical translation
+        const transform = event.transform;
+        g.attr("transform", `translate(${width / 2}, ${transform.y})`);
+    });
+
+svg.call(zoomBehavior)
     .on("dblclick.zoom", null);
 
+// Enable mouse wheel for vertical scrolling
+svg.on("wheel", function (event) {
+    event.preventDefault();
+    const currentTransform = d3.zoomTransform(this);
+    const newY = currentTransform.y - event.deltaY;
+    svg.call(zoomBehavior.transform, d3.zoomIdentity.translate(0, newY));
+});
+
 const g = svg.append("g")
-    .attr("transform", `translate(${width / 2}, 50)`);
+    .attr("transform", `translate(${width / 2}, 20)`);
 
-// Tree Layout
-let tree = d3.tree().nodeSize([100, 100]); // Increased spacing
-let root = d3.hierarchy(rootNode, d => d.children);
-
-// Animation duration
 const duration = 400;
-let i = 0;
 
 function connect() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -58,7 +65,6 @@ function connect() {
         statusEl.textContent = "CONNECTED";
         statusEl.className = "status connected";
         isConnected = true;
-        console.log("WebSocket connected");
         debouncedUpdate();
     };
 
@@ -67,7 +73,7 @@ function connect() {
             const msg = JSON.parse(event.data);
             handleEvent(msg);
         } catch (e) {
-            console.error("Error parsing message:", e);
+            console.error(e);
         }
     };
 
@@ -85,7 +91,6 @@ function handleEvent(event) {
     const data = event.data;
     const frameId = data.frame_id;
 
-    // Auto-create frames
     if (frameId && !frames.has(frameId)) {
         const parentFrame = frames.get(currentFrameId) || rootNode;
         const newFrame = {
@@ -99,23 +104,22 @@ function handleEvent(event) {
         if (!parentFrame.children) parentFrame.children = [];
         parentFrame.children.push(newFrame);
         currentFrameId = frameId;
-        debouncedUpdate();
     }
 
     if (frameId) currentFrameId = frameId;
-
-    // Update global step number if present
-    if (data.step_number !== undefined) {
-        currentStepNumber = data.step_number;
-    }
+    if (data.step_number !== undefined) currentStepNumber = data.step_number;
 
     switch (event.type) {
+        case "start":
+            if (data.model) {
+                document.getElementById("state-model").textContent = data.model;
+            }
+            break;
         case "tool_call":
             addToolNode(data);
             break;
         case "step":
             updateState(data);
-            // Ensure step node exists even if no tools (e.g. for thinking)
             getOrCreateStepNode(currentFrameId, data.step_number);
             debouncedUpdate();
             break;
@@ -132,7 +136,7 @@ function getOrCreateStepNode(frameId, stepNum) {
         id: `step-${stepKey}`,
         name: `STEP ${stepNum}`,
         type: "step",
-        data: {},
+        data: { step_number: stepNum },
         children: []
     };
 
@@ -143,21 +147,27 @@ function getOrCreateStepNode(frameId, stepNum) {
 }
 
 function addToolNode(toolData) {
-    // Determine which step this tool belongs to.
-    // If toolData doesn't have step number, use current global step.
     const stepNum = currentStepNumber;
-
     const stepNode = getOrCreateStepNode(currentFrameId, stepNum);
+
+    const isPhase = toolData.tool_name === 'transition_phase';
 
     const toolNode = {
         id: toolData.id || `tool-${Date.now()}`,
-        name: toolData.tool_name,
-        type: "tool",
-        data: toolData,
+        name: isPhase ? (toolData.input?.phase?.toUpperCase() || "PHASE CHANGE") : toolData.tool_name,
+        type: isPhase ? "phase_marker" : "tool",
+        data: toolData, // Store raw tool data directly
         children: []
     };
 
     stepNode.children.push(toolNode);
+    stepsWithTools.add(currentStepNumber); // Mark this step as having a tool
+
+    // Update "Latest" timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+    document.getElementById("state-latest").textContent = `${toolData.tool_name} @ ${timeStr}`;
+
     debouncedUpdate();
 }
 
@@ -169,147 +179,224 @@ function updateState(data) {
 function debouncedUpdate() {
     if (updateTimeout) clearTimeout(updateTimeout);
     updateTimeout = setTimeout(() => {
-        update(root);
+        update();
     }, 100);
 }
 
-// Icons
 function getIcon(type, name) {
-    if (type === 'frame') return '⬡';
-    if (type === 'step') return '#';
+    if (type === 'phase_marker') return '🚀';
     if (name.includes('shell')) return '>';
-    if (name.includes('read') || name.includes('write')) return '📄';
+    if (name.includes('read') || name.includes('write') || name.includes('view')) return '📄';
     if (name.includes('browser')) return '🌐';
     return '⚙️';
 }
 
-function update(source) {
-    root = d3.hierarchy(rootNode, d => d.children);
+// === Custom Layout Engine ===
+function computeLayout(root) {
+    const nodes = [];
+    let currentY = 20; // Start with some padding
 
-    const treeData = tree(root);
-    const nodes = treeData.descendants();
-    const links = treeData.links();
+    function traverse(node) {
+        // Skip empty steps (steps with no tool children)
+        if (node.type === 'step') {
+            const hasTools = node.children && node.children.length > 0;
+            if (!hasTools) return; // Skip this step entirely
 
-    // Nodes
+            // Render step header
+            node.x = 0;
+            node.y = currentY;
+            node.height = 25;
+            currentY += node.height + 5;
+            nodes.push(node);
+        } else if (node.type === 'tool') {
+            node.x = 0;
+            node.y = currentY;
+            node.height = 60;
+            currentY += node.height + 10;
+            nodes.push(node);
+        } else if (node.type === 'phase_marker') {
+            node.x = 0;
+            node.y = currentY;
+            node.height = 45;
+            currentY += node.height + 15;
+            nodes.push(node);
+        }
+
+        if (node.children) {
+            node.children.forEach(traverse);
+        }
+    }
+
+    traverse(root);
+    return { nodes, totalHeight: currentY };
+}
+
+function update() {
+    const { nodes, totalHeight } = computeLayout(rootNode);
+
+    // --- Nodes ---
     const node = g.selectAll('g.node')
-        .data(nodes, d => d.data.id || (d.data.id = ++i));
+        .data(nodes, d => d.id);
 
     const nodeEnter = node.enter().append('g')
-        .attr('class', d => `node ${d.data.type}`)
-        .attr("transform", d => `translate(${source.x0 || 0},${source.y0 || 0})`)
+        .attr('class', d => `node ${d.type}`)
+        .attr("transform", d => `translate(0,${d.y + 30})`)
+        .style("opacity", 0)
         .on('click', (event, d) => {
             showDetails(d);
             d3.selectAll(".node").classed("selected", false);
             d3.select(event.currentTarget).classed("selected", true);
         });
 
-    nodeEnter.append('circle')
-        .attr('r', 20)
-        .style("fill", "#050505");
+    // --- STEP Header ---
+    nodeEnter.filter(d => d.type === 'step')
+        .append('text')
+        .attr("class", "step-label")
+        .attr("x", -150)
+        .attr("text-anchor", "start")
+        .attr("dy", "0.5em")
+        .style("font-family", "monospace")
+        .style("font-size", "11px")
+        .style("fill", "#555")
+        .text(d => `STEP ${d.data.step_number || '?'}`);
 
-    // Icon text - adjusted centering
-    nodeEnter.append('text')
-        .attr("class", "node-icon")
-        .attr("dy", "5px") // Adjusted from .3em to pixel value for better alignment
-        .style("text-anchor", "middle")
-        .style("font-size", "18px")
-        .text(d => getIcon(d.data.type, d.data.name));
+    // --- TOOL Card ---
+    const cardWidth = 320;
+    const cardHeight = 60;
 
-    // Label
-    nodeEnter.append('text')
-        .attr("dy", "35px")
+    const toolGroup = nodeEnter.filter(d => d.type === 'tool');
+
+    toolGroup.append('rect')
+        .attr('x', -cardWidth / 2)
+        .attr('y', 0)
+        .attr('width', cardWidth)
+        .attr('height', cardHeight)
+        .attr('rx', 6)
+        .style("fill", "#0d0d0d")
+        .style("stroke", "#2a2a2a")
+        .style("stroke-width", "1px");
+
+    toolGroup.append('circle')
+        .attr('cx', -cardWidth / 2 + 32)
+        .attr('cy', cardHeight / 2)
+        .attr('r', 22)
+        .style("fill", "#111")
+        .style("stroke", "#444");
+
+    toolGroup.append('text')
+        .attr('x', -cardWidth / 2 + 32)
+        .attr('y', cardHeight / 2)
+        .attr("dy", "7px")
         .attr("text-anchor", "middle")
-        .style("font-size", "9px")
-        .style("opacity", 0.7)
-        .text(d => d.data.name.toUpperCase());
+        .style("font-size", "24px")
+        .style("fill", "#fff")
+        .text(d => getIcon(d.type, d.name));
 
-    const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
-        .attr("transform", d => `translate(${d.x},${d.y})`);
+    toolGroup.append('text')
+        .attr('x', -cardWidth / 2 + 70)
+        .attr('y', cardHeight / 3 + 3)
+        .style("font-size", "13px")
+        .style("font-weight", "bold")
+        .style("fill", "#eee")
+        .text(d => d.name.toUpperCase());
 
-    const nodeExit = node.exit().transition().duration(duration)
-        .attr("transform", d => `translate(${source.x},${source.y})`)
-        .remove();
-
-    // Links
-    const link = g.selectAll('path.link')
-        .data(links, d => d.target.data.id);
-
-    const linkEnter = link.enter().insert('path', "g")
-        .attr("class", "link")
-        .attr('d', d => {
-            const o = { x: source.x0 || 0, y: source.y0 || 0 };
-            return diagonal(o, o);
+    toolGroup.append('text')
+        .attr('x', -cardWidth / 2 + 70)
+        .attr('y', cardHeight * 0.72)
+        .style("font-size", "10px")
+        .style("fill", "#777")
+        .text(d => {
+            const p = d.data.input?.purpose || "";
+            return p.length > 40 ? p.substring(0, 37) + "..." : p;
         });
 
-    const linkUpdate = link.merge(linkEnter).transition().duration(duration)
-        .attr('d', d => diagonal(d.source, d.target));
+    // --- PHASE Banner ---
+    const phaseGroup = nodeEnter.filter(d => d.type === 'phase_marker');
 
-    const linkExit = link.exit().transition().duration(duration)
-        .attr('d', d => {
-            const o = { x: source.x, y: source.y };
-            return diagonal(o, o);
-        })
+    phaseGroup.append('rect')
+        .attr('x', -cardWidth / 2)
+        .attr('y', 0)
+        .attr('width', cardWidth)
+        .attr('height', 45)
+        .attr('rx', 22)
+        .style("fill", "#050505")
+        .style("stroke", "var(--accent-green)")
+        .style("stroke-width", "2px")
+        .style("filter", "drop-shadow(0 0 8px var(--accent-green))");
+
+    phaseGroup.append('text')
+        .attr('x', 0)
+        .attr('y', 28)
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .style("font-weight", "bold")
+        .style("fill", "var(--accent-green)")
+        .style("text-transform", "uppercase")
+        .text(d => `>>> ${d.name} <<<`);
+
+    // --- Update Transitions ---
+    const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
+        .attr("transform", d => `translate(${d.x},${d.y})`)
+        .style("opacity", 1);
+
+    // Exit
+    node.exit().transition().duration(duration)
+        .style("opacity", 0)
         .remove();
 
-    nodes.forEach(d => {
-        d.x0 = d.x;
-        d.y0 = d.y;
-    });
-}
-
-function diagonal(s, d) {
-    return `M ${s.x} ${s.y}
-            C ${s.x} ${(s.y + d.y) / 2},
-              ${d.x} ${(s.y + d.y) / 2},
-              ${d.x} ${d.y}`;
+    // --- Auto-scroll to bottom ---
+    if (totalHeight > height - 100) {
+        const targetY = -(totalHeight - height + 100);
+        svg.transition().duration(duration)
+            .call(zoomBehavior.transform, d3.zoomIdentity.translate(0, targetY));
+    }
 }
 
 function showDetails(d) {
-    const data = d.data.data;
-    if (!data) return;
+    // Access data correctly: d.data holds the raw toolData
+    const toolData = d.data;
 
     let html = `<div class="detail-card">`;
 
-    if (d.data.type === 'tool') {
+    if (d.type === 'tool' || d.type === 'phase_marker') {
+        html += `<div class="tool-badge">${d.name}</div>`;
         html += `
-            <div class="tool-badge">${d.data.name}</div>
             <div class="field-group">
                 <span class="field-label">Purpose</span>
-                <div class="field-value">${escapeHtml(data.input?.purpose || "N/A")}</div>
+                <div class="field-value">${escapeHtml(toolData.input?.purpose || "N/A")}</div>
             </div>
             <div class="field-group">
                 <span class="field-label">Input</span>
-                <div class="field-value highlight">${escapeHtml(JSON.stringify(data.input, null, 2))}</div>
+                <div class="field-value highlight">${escapeHtml(JSON.stringify(toolData.input, null, 2))}</div>
             </div>
             <div class="field-group">
                 <span class="field-label">Output</span>
-                <div class="field-value">${escapeHtml(data.raw_output || data.output || "")}</div>
+                <div class="field-value">${escapeHtml(toolData.raw_output || toolData.output || "(no output)")}</div>
             </div>
         `;
-    } else {
-        html += `<div class="tool-badge" style="border-color:var(--accent-blue)">${d.data.type.toUpperCase()}</div>`;
-        html += `<div class="field-value">ID: ${d.data.id || d.data.name}</div>`;
+    } else if (d.type === 'step') {
+        html += `<div class="tool-badge" style="background:#222">STEP ${toolData.step_number}</div>`;
+        html += `<p style="color:#888">Agent execution step container.</p>`;
     }
 
     html += `</div>`;
     detailsContent.innerHTML = html;
 }
 
-function escapeHtml(text) {
-    if (!text) return "";
-    return text.toString()
+function escapeHtml(t) {
+    if (!t) return "";
+    return t.toString()
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replace(/"/g, "&quot;");
 }
 
 window.addEventListener('resize', () => {
     width = container.clientWidth;
     height = container.clientHeight;
     svg.attr("width", width).attr("height", height);
-    update(root);
+    update();
 });
 
 connect();

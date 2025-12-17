@@ -217,14 +217,37 @@ h1 {
     transition: all 0.3s ease;
 }
 
+/* Hide Root Node */
+.node.root {
+    display: none;
+}
+
 .node circle {
     fill: var(--bg-color);
+    stroke: var(--text-muted);
     stroke-width: 2px;
 }
 
 .node.frame circle {
     stroke: var(--accent-blue);
-    fill: rgba(0, 170, 255, 0.1);
+    stroke-width: 1px;
+    fill: rgba(0, 170, 255, 0.05);
+    /* Less distinct */
+}
+
+/* Step Node */
+.node.step circle {
+    stroke: #333;
+    stroke-dasharray: 4 2;
+}
+
+/* Phase Marker */
+.node.phase_marker rect {
+    filter: drop-shadow(0 0 10px var(--accent-green));
+}
+
+.node.phase_marker:hover rect {
+    fill: rgba(57, 255, 20, 0.1);
 }
 
 .node.tool circle {

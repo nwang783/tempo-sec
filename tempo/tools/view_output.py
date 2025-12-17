@@ -55,8 +55,8 @@ class ViewToolOutputTool(Tool):
                 error=f"Tool call not found: {tool_call_id}",
             )
         
-        # Get the output (use summary if available, else raw)
-        output = tool_call.summary if tool_call.summary is not None else tool_call.raw_output
+        # Get the RAW output (not summary - the purpose is to view original large output)
+        output = tool_call.raw_output or ""
         total = len(output)
         
         # Validate range
