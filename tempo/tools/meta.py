@@ -167,41 +167,58 @@ class SummarizeOutputTool(Tool):
         )
 
 
-class FinishTaskTool(Tool):
-    """Signal completion of the agent's ENTIRE security analysis."""
+class ContinueAnalysisTool(Tool):
+    """Decide whether to continue or finish the security analysis."""
     
-    name = "complete_analysis"
-    description = """Signal that the ENTIRE security analysis is complete and all phases are done.
+    name = "continue_analysis"
+    description = """Decide whether to continue or finish the security analysis.
     
-    DO NOT use this to finish a single phase - use transition_phase instead.
-    Only call this when you have:
-    1. Completed all relevant phases (recon, hypothesize, test, reflect)
-    2. Documented all findings
-    3. No further investigation is needed
+    You MUST call this tool after entering the REFLECT phase.
+    Analyze your findings, then decide:
     
-    This will END the agent's execution."""
+    - should_continue=true: More investigation is needed → transitions back to RECON
+    - should_continue=false: Analysis is complete → ends execution with findings
+    
+    This is the ONLY tool available in the REFLECT phase."""
     category = ToolCategory.META
     
     async def execute(
         self,
-        findings: str,
+        should_continue: bool,
+        reasoning: str,
+        findings: str = "",
         purpose: str = "",
     ) -> ToolResult:
         """
-        Signal task completion.
+        Decide whether to continue or finish analysis.
         
         Args:
-            findings: A summary of the findings or answer to the objective
+            should_continue: True to continue with more investigation, False to finish
+            reasoning: Explanation of why you are continuing or finishing
+            findings: Summary of findings (required if finishing)
             purpose: A one-sentence summary of why this tool is being called
             
         Returns:
-            ToolResult with finish flag in metadata
+            ToolResult with continue or finish flag in metadata
         """
-        return ToolResult(
-            success=True,
-            output=f"Task finished. Findings: {findings}",
-            metadata={"finish": True, "findings": findings},
-        )
+        if should_continue:
+            return ToolResult(
+                success=True,
+                output=f"Continuing analysis. Reason: {reasoning}",
+                metadata={"continue": True, "reasoning": reasoning},
+            )
+        else:
+            if not findings:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="When finishing analysis (should_continue=false), you must provide findings.",
+                )
+            return ToolResult(
+                success=True,
+                output=f"Analysis complete. Findings: {findings}",
+                metadata={"finish": True, "findings": findings, "reasoning": reasoning},
+            )
             
     def get_schema(self) -> ToolSchema:
         """Return the JSON schema for this tool's parameters."""
@@ -211,14 +228,26 @@ class FinishTaskTool(Tool):
             parameters={
                 "type": "object",
                 "properties": {
+                    "should_continue": {
+                        "type": "boolean",
+                        "description": "True to continue investigating, False to finish and report findings.",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Explanation of why you are continuing or finishing.",
+                    },
                     "findings": {
                         "type": "string",
-                        "description": "A summary of the findings or answer to the objective.",
+                        "description": "Summary of findings. Required when should_continue is false.",
                     },
                 },
-                "required": ["findings"],
+                "required": ["should_continue", "reasoning"],
             },
         )
+
+
+# Keep FinishTaskTool as an alias for backward compatibility
+FinishTaskTool = ContinueAnalysisTool
 
 
 class BranchToSubtasksTool(Tool):

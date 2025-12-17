@@ -102,21 +102,25 @@ class Agent:
         """
         Get tool schemas filtered by current phase.
         
-        The complete_analysis tool is only available in the REFLECT phase
-        to prevent premature task completion.
+        In REFLECT phase: only continue_analysis is available
+        In other phases: continue_analysis is hidden
         """
         from tempo.prompts.phases import Phase
         
         all_schemas = self.tools.get_schemas()
         
-        # Only show complete_analysis in reflect phase
-        if self.workflow.current_phase != Phase.REFLECT:
+        if self.workflow.current_phase == Phase.REFLECT:
+            # REFLECT: Only continue_analysis tool to force decision
             return [
                 s for s in all_schemas 
-                if s.get("function", {}).get("name") != "complete_analysis"
+                if s.get("function", {}).get("name") == "continue_analysis"
             ]
-        
-        return all_schemas
+        else:
+            # Other phases: Hide continue_analysis
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") != "continue_analysis"
+            ]
     
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
@@ -248,7 +252,7 @@ class Agent:
         # Get messages for LLM
         messages = self.context.render_messages()
         
-        # Get phase-filtered tool schemas (hide complete_analysis until reflect)
+        # Get phase-filtered tool schemas (REFLECT: only continue_analysis)
         tool_schemas = self._get_phase_filtered_tools()
         
         # Call LLM
@@ -273,11 +277,20 @@ class Agent:
                 step_result.tool_calls.append(tool_result)
                 
                 # Handle special tools
-                if tc.name == "complete_analysis":
-                    step_result.should_continue = False
-                    if tool_result.metadata.get("findings"):
+                if tc.name == "continue_analysis":
+                    if tool_result.metadata.get("continue"):
+                        # Agent wants to continue - transition back to RECON
+                        self.workflow.transition(Phase.RECON)
+                        self.context.add_message(
+                            MessageRole.SYSTEM,
+                            f"[Continuing analysis] {tool_result.output}\nYou are now back in the RECON phase."
+                        )
+                    elif tool_result.metadata.get("finish"):
+                        # Agent is done
+                        step_result.should_continue = False
                         self._findings.append({
-                            "description": tool_result.metadata["findings"],
+                            "description": tool_result.metadata.get("findings", ""),
+                            "reasoning": tool_result.metadata.get("reasoning", ""),
                             "step": self._step_count,
                         })
                 

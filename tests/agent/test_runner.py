@@ -186,15 +186,15 @@ class TestAgent:
 class TestPhaseFilteredTools:
     """Tests for phase-gated tool filtering."""
     
-    def test_complete_analysis_hidden_in_recon(self):
-        """Test that complete_analysis is hidden during RECON phase."""
+    def test_continue_analysis_hidden_in_recon(self):
+        """Test that continue_analysis is hidden during RECON phase."""
         config = AgentConfig()
         llm = MockLLMClient()
         tools = ToolRegistry()
         
-        # Register the complete_analysis tool
-        from tempo.tools.meta import FinishTaskTool
-        tools.register(FinishTaskTool())
+        # Register the continue_analysis tool
+        from tempo.tools.meta import ContinueAnalysisTool
+        tools.register(ContinueAnalysisTool())
         tools.register(DummyTool())
         
         agent = Agent(config, llm, tools)
@@ -204,17 +204,17 @@ class TestPhaseFilteredTools:
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         
-        assert "complete_analysis" not in tool_names
+        assert "continue_analysis" not in tool_names
         assert "dummy" in tool_names
     
-    def test_complete_analysis_hidden_in_hypothesize(self):
-        """Test that complete_analysis is hidden during HYPOTHESIZE phase."""
+    def test_continue_analysis_hidden_in_hypothesize(self):
+        """Test that continue_analysis is hidden during HYPOTHESIZE phase."""
         config = AgentConfig()
         llm = MockLLMClient()
         tools = ToolRegistry()
         
-        from tempo.tools.meta import FinishTaskTool
-        tools.register(FinishTaskTool())
+        from tempo.tools.meta import ContinueAnalysisTool
+        tools.register(ContinueAnalysisTool())
         
         agent = Agent(config, llm, tools)
         agent.workflow.current_phase = Phase.HYPOTHESIZE
@@ -222,16 +222,16 @@ class TestPhaseFilteredTools:
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         
-        assert "complete_analysis" not in tool_names
+        assert "continue_analysis" not in tool_names
     
-    def test_complete_analysis_hidden_in_test(self):
-        """Test that complete_analysis is hidden during TEST phase."""
+    def test_continue_analysis_hidden_in_test(self):
+        """Test that continue_analysis is hidden during TEST phase."""
         config = AgentConfig()
         llm = MockLLMClient()
         tools = ToolRegistry()
         
-        from tempo.tools.meta import FinishTaskTool
-        tools.register(FinishTaskTool())
+        from tempo.tools.meta import ContinueAnalysisTool
+        tools.register(ContinueAnalysisTool())
         
         agent = Agent(config, llm, tools)
         agent.workflow.current_phase = Phase.TEST
@@ -239,16 +239,16 @@ class TestPhaseFilteredTools:
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         
-        assert "complete_analysis" not in tool_names
+        assert "continue_analysis" not in tool_names
     
-    def test_complete_analysis_visible_in_reflect(self):
-        """Test that complete_analysis IS visible during REFLECT phase."""
+    def test_only_continue_analysis_visible_in_reflect(self):
+        """Test that ONLY continue_analysis is visible during REFLECT phase."""
         config = AgentConfig()
         llm = MockLLMClient()
         tools = ToolRegistry()
         
-        from tempo.tools.meta import FinishTaskTool
-        tools.register(FinishTaskTool())
+        from tempo.tools.meta import ContinueAnalysisTool
+        tools.register(ContinueAnalysisTool())
         tools.register(DummyTool())
         
         agent = Agent(config, llm, tools)
@@ -257,13 +257,15 @@ class TestPhaseFilteredTools:
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         
-        assert "complete_analysis" in tool_names
-        assert "dummy" in tool_names
+        # ONLY continue_analysis should be visible
+        assert "continue_analysis" in tool_names
+        assert "dummy" not in tool_names  # Other tools hidden in reflect
+        assert len(tool_names) == 1
     
     def test_shared_workflow_updates_phase(self):
         """Test that a shared workflow manager updates the phase correctly."""
         from tempo.agent.workflow import WorkflowManager
-        from tempo.tools.meta import TransitionPhaseTool
+        from tempo.tools.meta import TransitionPhaseTool, ContinueAnalysisTool
         
         config = AgentConfig()
         llm = MockLLMClient()
@@ -273,8 +275,7 @@ class TestPhaseFilteredTools:
         
         # Create tools with shared workflow
         tools = ToolRegistry()
-        from tempo.tools.meta import FinishTaskTool
-        tools.register(FinishTaskTool())
+        tools.register(ContinueAnalysisTool())
         tools.register(TransitionPhaseTool(workflow_manager=workflow))
         
         # Create agent with shared workflow
@@ -283,10 +284,10 @@ class TestPhaseFilteredTools:
         # Initially in RECON
         assert agent.workflow.current_phase == Phase.RECON
         
-        # complete_analysis should be hidden
+        # continue_analysis should be hidden
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
-        assert "complete_analysis" not in tool_names
+        assert "continue_analysis" not in tool_names
         
         # Transition through valid phases to REFLECT
         # RECON -> HYPOTHESIZE -> TEST -> REFLECT
@@ -294,8 +295,9 @@ class TestPhaseFilteredTools:
         workflow.transition(Phase.TEST)
         workflow.transition(Phase.REFLECT)
         
-        # Now complete_analysis should be visible
+        # Now ONLY continue_analysis should be visible
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
-        assert "complete_analysis" in tool_names
+        assert "continue_analysis" in tool_names
+        assert len(tool_names) == 1  # Only continue_analysis
 
