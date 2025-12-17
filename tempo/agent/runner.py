@@ -4,7 +4,7 @@ Agent runner - main loop and step execution.
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from tempo.agent.config import AgentConfig
 from tempo.agent.workflow import WorkflowManager, WorkflowError
@@ -58,6 +58,9 @@ class Agent:
         tools: ToolRegistry,
         context: ContextStore | None = None,
         prompts: PromptBuilder | None = None,
+        workflow: "WorkflowManager | None" = None,
+        on_step: "Callable[[StepResult], None] | None" = None,
+        on_tool_call: "Callable[[ToolCall], None] | None" = None,
     ):
         """
         Initialize the agent.
@@ -68,6 +71,9 @@ class Agent:
             tools: Tool registry
             context: Context store (created if not provided)
             prompts: Prompt builder (created if not provided)
+            workflow: Workflow manager (created if not provided, pass to share with tools)
+            on_step: Callback invoked after each step completes
+            on_tool_call: Callback invoked after each tool execution
         """
         self.config = config
         self.llm = llm
@@ -75,7 +81,12 @@ class Agent:
         self.context = context or ContextStore()
         self.prompts = prompts or PromptBuilder()
         
-        self.workflow = WorkflowManager(config)
+        # Logging callbacks
+        self._on_step = on_step
+        self._on_tool_call = on_tool_call
+        
+        # Use provided workflow manager or create one (share with TransitionPhaseTool!)
+        self.workflow = workflow or WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
         self.branch_coordinator = BranchCoordinator(
             self.context,
@@ -86,6 +97,30 @@ class Agent:
         self._step_count: int = 0
         self._findings: list[dict] = []
         self._hypotheses: list[dict] = []
+    
+    def _get_phase_filtered_tools(self) -> list[dict]:
+        """
+        Get tool schemas filtered by current phase.
+        
+        In REFLECT phase: only continue_analysis is available
+        In other phases: continue_analysis is hidden
+        """
+        from tempo.prompts.phases import Phase
+        
+        all_schemas = self.tools.get_schemas()
+        
+        if self.workflow.current_phase == Phase.REFLECT:
+            # REFLECT: Only continue_analysis tool to force decision
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") == "continue_analysis"
+            ]
+        else:
+            # Other phases: Hide continue_analysis
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") != "continue_analysis"
+            ]
     
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
@@ -217,10 +252,13 @@ class Agent:
         # Get messages for LLM
         messages = self.context.render_messages()
         
+        # Get phase-filtered tool schemas (REFLECT: only continue_analysis)
+        tool_schemas = self._get_phase_filtered_tools()
+        
         # Call LLM
         response = await self.llm.complete(
             messages=messages,
-            tools=self.tools.get_schemas(),
+            tools=tool_schemas,
         )
         
         # Add assistant response to context
@@ -239,11 +277,20 @@ class Agent:
                 step_result.tool_calls.append(tool_result)
                 
                 # Handle special tools
-                if tc.name == "finish_task":
-                    step_result.should_continue = False
-                    if tool_result.metadata.get("findings"):
+                if tc.name == "continue_analysis":
+                    if tool_result.metadata.get("continue"):
+                        # Agent wants to continue - transition back to RECON
+                        self.workflow.transition(Phase.RECON)
+                        self.context.add_message(
+                            MessageRole.SYSTEM,
+                            f"[Continuing analysis] {tool_result.output}\nYou are now back in the RECON phase."
+                        )
+                    elif tool_result.metadata.get("finish"):
+                        # Agent is done
+                        step_result.should_continue = False
                         self._findings.append({
-                            "description": tool_result.metadata["findings"],
+                            "description": tool_result.metadata.get("findings", ""),
+                            "reasoning": tool_result.metadata.get("reasoning", ""),
                             "step": self._step_count,
                         })
                 
@@ -264,6 +311,10 @@ class Agent:
                             MessageRole.SYSTEM,
                             f"[Branching Complete]\n{merged}"
                         )
+        
+        # Invoke step callback if provided
+        if self._on_step:
+            self._on_step(step_result)
         
         return step_result
     
@@ -309,6 +360,11 @@ class Agent:
             tool_call.raw_output = f"Error executing tool: {str(e)}"
         
         self.context.add_tool_call(tool_call)
+        
+        # Invoke tool call callback if provided
+        if self._on_tool_call:
+            self._on_tool_call(tool_call)
+        
         return tool_call
     
     def checkpoint(self, label: str = "") -> str:
