@@ -20,10 +20,11 @@ from tempo.infra import LiteLLMClient, ContainerManager
 from tempo.infra.container import ContainerConfig
 from tempo.tools.tool_factory import create_sandboxed_tools, create_local_tools
 try:
-    from tempo.visualization import VisualizationCollector, VisualizationServer
+    from tempo.visualization import VisualizationCollector, VisualizationServer, UserPromptManager
 except ImportError:
     VisualizationServer = None
     VisualizationCollector = None
+    UserPromptManager = None
 
 
 
@@ -126,13 +127,20 @@ async def main():
     # Initialize visualization if enabled
     viz_server = None
     viz_collector = None
+    prompt_manager = None
     
     if agent_config.enable_visualization and VisualizationServer:
         print(f"Starting visualization server on {agent_config.visualization_host}:{agent_config.visualization_port}...")
+        
+        # Create prompt manager for mid-run user prompts
+        if UserPromptManager:
+            prompt_manager = UserPromptManager()
+        
         viz_server = VisualizationServer(
             host=agent_config.visualization_host,
             port=agent_config.visualization_port,
-            auto_open=agent_config.auto_open_browser
+            auto_open=agent_config.auto_open_browser,
+            prompt_manager=prompt_manager,
         )
         await viz_server.start()
         viz_collector = VisualizationCollector(viz_server)
@@ -190,6 +198,7 @@ async def main():
                 workflow=workflow,  # Share workflow manager with TransitionPhaseTool
                 on_tool_call=log_tool_call,
                 visualization_collector=viz_collector,
+                prompt_manager=prompt_manager,
             )
             
             print(f"Starting agent with objective:\n{objective}")
@@ -220,6 +229,7 @@ async def main():
             workflow=workflow,  # Share workflow manager with TransitionPhaseTool
             on_tool_call=log_tool_call,
             visualization_collector=viz_collector,
+            prompt_manager=prompt_manager,
         )
         
         print(f"Starting agent with objective:\n{objective}")
