@@ -10,7 +10,10 @@ import logging
 import os
 import threading
 import webbrowser
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tempo.visualization.prompt_manager import UserPromptManager
 
 import uvicorn
 from fastapi import FastAPI, WebSocket
@@ -25,10 +28,17 @@ class VisualizationServer:
     WebSocket and HTTP server for agent visualization.
     """
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 8080, auto_open: bool = True):
+    def __init__(
+        self, 
+        host: str = "127.0.0.1", 
+        port: int = 8080, 
+        auto_open: bool = True,
+        prompt_manager: "UserPromptManager | None" = None,
+    ):
         self.host = host
         self.port = port
         self.auto_open = auto_open
+        self.prompt_manager = prompt_manager
         self.app = FastAPI(title="Tempo Sec Visualization")
         self.active_connections: List[WebSocket] = []
         self._server_task: Optional[asyncio.Task] = None
@@ -61,10 +71,10 @@ class VisualizationServer:
             await websocket.accept()
             self.active_connections.append(websocket)
             try:
-                # Keep connection open
+                # Keep connection open and process incoming messages
                 while True:
-                    # We just listen for pings/messages but don't expect much inputs currently
-                    _ = await websocket.receive_text()
+                    raw = await websocket.receive_text()
+                    await self._handle_incoming_message(raw)
             except Exception:
                 pass
             finally:
@@ -97,6 +107,31 @@ class VisualizationServer:
         for conn in disconnected:
             if conn in self.active_connections:
                 self.active_connections.remove(conn)
+
+    async def _handle_incoming_message(self, raw: str) -> None:
+        """
+        Process incoming WebSocket messages from clients.
+        
+        Handles 'user_prompt' messages by enqueuing them for the agent.
+        """
+        try:
+            msg = json.loads(raw)
+            msg_type = msg.get("type")
+            
+            if msg_type == "user_prompt" and self.prompt_manager:
+                content = msg.get("content", "")
+                if content.strip():
+                    await self.prompt_manager.enqueue(content)
+                    logger.info(f"User prompt enqueued: {content[:50]}...")
+            
+            # Future: handle other message types (e.g., "pause", "resume")
+            elif msg_type == "ping":
+                pass  # Keep-alive, no action needed
+                
+        except json.JSONDecodeError:
+            logger.debug("Received non-JSON WebSocket message, ignoring")
+        except Exception as e:
+            logger.warning(f"Error handling WebSocket message: {e}")
 
     async def start(self) -> None:
         """Start the server in a background task."""

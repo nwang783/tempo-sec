@@ -131,6 +131,28 @@ function handleEvent(event) {
                 debouncedUpdate();
             }
             break;
+        case "paused":
+            // Agent is paused, waiting for user input
+            statusEl.textContent = "PAUSED";
+            statusEl.className = "status paused";
+            document.getElementById("prompt-status").textContent =
+                data.reason || "Agent paused. Send a prompt to continue.";
+            break;
+        case "resumed":
+            // Agent resumed from pause
+            statusEl.textContent = "CONNECTED";
+            statusEl.className = "status connected";
+            document.getElementById("prompt-status").textContent = "";
+            break;
+        case "user_prompt_injected":
+            // User prompt was received and injected
+            document.getElementById("prompt-status").textContent =
+                "✓ Prompt injected: " + (data.content_preview || "").substring(0, 50) + "...";
+            break;
+        case "finish":
+            statusEl.textContent = data.success ? "FINISHED" : "FAILED";
+            statusEl.className = "status " + (data.success ? "connected" : "disconnected");
+            break;
     }
 }
 
@@ -426,6 +448,64 @@ window.addEventListener('resize', () => {
     height = container.clientHeight;
     svg.attr("width", width).attr("height", height);
     update();
+});
+
+// === Prompt Input Handling ===
+const promptInput = document.getElementById('prompt-input');
+const sendPromptBtn = document.getElementById('send-prompt-btn');
+const promptStatus = document.getElementById('prompt-status');
+
+function sendPrompt() {
+    const content = promptInput.value.trim();
+
+    if (!content) {
+        promptStatus.textContent = "Please enter a prompt.";
+        promptStatus.style.color = "#ff9800";
+        setTimeout(() => {
+            promptStatus.textContent = "";
+            promptStatus.style.color = "";
+        }, 3000);
+        return;
+    }
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        promptStatus.textContent = "Not connected. Please wait...";
+        promptStatus.style.color = "#ff3232";
+        setTimeout(() => {
+            promptStatus.textContent = "";
+            promptStatus.style.color = "";
+        }, 3000);
+        return;
+    }
+
+    // Send the prompt via WebSocket
+    socket.send(JSON.stringify({
+        type: 'user_prompt',
+        content: content
+    }));
+
+    // Clear input and show confirmation
+    promptInput.value = '';
+    promptStatus.textContent = "✓ Prompt sent!";
+    promptStatus.style.color = "";  // Use default green
+
+    // Clear status after a delay
+    setTimeout(() => {
+        if (promptStatus.textContent === "✓ Prompt sent!") {
+            promptStatus.textContent = "";
+        }
+    }, 5000);
+}
+
+// Button click handler
+sendPromptBtn.addEventListener('click', sendPrompt);
+
+// Enter key handler (Ctrl+Enter or Cmd+Enter to send)
+promptInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        sendPrompt();
+    }
 });
 
 connect();

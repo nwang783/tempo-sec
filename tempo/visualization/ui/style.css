@@ -74,6 +74,26 @@ h1 {
     border: 1px solid rgba(255, 50, 50, 0.3);
 }
 
+.status.paused {
+    background-color: rgba(255, 152, 0, 0.1);
+    color: #ff9800;
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    box-shadow: 0 0 10px rgba(255, 152, 0, 0.1);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
 .main-content {
     display: flex;
     flex: 1;
@@ -308,4 +328,79 @@ h1 {
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.4);
+}
+
+/* Prompt Input Section */
+.prompt-section {
+    border-top: var(--panel-border);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.prompt-form {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.prompt-form textarea {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
+    padding: 12px;
+    border-radius: 6px;
+    resize: vertical;
+    min-height: 80px;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    transition: border-color 0.2s ease;
+}
+
+.prompt-form textarea:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 10px rgba(0, 170, 255, 0.1);
+}
+
+.prompt-form textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.prompt-form button {
+    background: linear-gradient(135deg, var(--accent-blue) 0%, #0088cc 100%);
+    color: #fff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+.prompt-form button:hover {
+    filter: brightness(1.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(0, 170, 255, 0.3);
+}
+
+.prompt-form button:active {
+    transform: translateY(0);
+}
+
+.prompt-form button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+}
+
+.prompt-status {
+    padding: 0 20px 15px;
+    font-size: 0.8rem;
+    color: var(--accent-green);
+    font-family: var(--font-mono);
 }

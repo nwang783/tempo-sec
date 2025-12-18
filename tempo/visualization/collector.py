@@ -115,3 +115,20 @@ class VisualizationCollector:
             "success": success, 
             "output": str(output) if output else None
         })
+
+    def on_agent_paused(self, reason: str = "") -> None:
+        """Called when agent enters pause state (e.g., awaiting user input)."""
+        self.emit("paused", {"reason": reason})
+
+    def on_agent_resumed(self, prompt_preview: str = "") -> None:
+        """Called when agent resumes from pause state."""
+        self.emit("resumed", {
+            "prompt_preview": prompt_preview[:100] if prompt_preview else ""
+        })
+
+    def on_user_prompt_received(self, content: str) -> None:
+        """Called when a user prompt is injected into the agent context."""
+        self.emit("user_prompt_injected", {
+            "content_preview": content[:200] if content else ""
+        })
+
