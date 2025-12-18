@@ -145,7 +145,8 @@ function handleEvent(event) {
             document.getElementById("prompt-status").textContent = "";
             break;
         case "user_prompt_injected":
-            // User prompt was received and injected
+            // User prompt was received and injected - add visual node
+            addUserPromptNode(data);
             document.getElementById("prompt-status").textContent =
                 "✓ Prompt injected: " + (data.content_preview || "").substring(0, 50) + "...";
             break;
@@ -201,6 +202,32 @@ function addToolNode(toolData) {
     debouncedUpdate();
 }
 
+function addUserPromptNode(promptData) {
+    const stepNum = currentStepNumber;
+    const stepNode = getOrCreateStepNode(currentFrameId, stepNum);
+
+    const promptNode = {
+        id: `user-prompt-${Date.now()}`,
+        name: "USER PROMPT",
+        type: "user_prompt",
+        data: {
+            content: promptData.content_preview || "User intervention",
+            timestamp: new Date().toISOString()
+        },
+        children: []
+    };
+
+    stepNode.children.push(promptNode);
+    stepsWithTools.add(currentStepNumber);
+
+    // Update "Latest" timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+    document.getElementById("state-latest").textContent = `User Prompt @ ${timeStr}`;
+
+    debouncedUpdate();
+}
+
 function updateState(data) {
     if (data.phase) document.getElementById("state-phase").textContent = data.phase;
     if (data.step_number) document.getElementById("state-step").textContent = data.step_number;
@@ -215,6 +242,7 @@ function debouncedUpdate() {
 
 function getIcon(type, name) {
     if (type === 'phase_marker') return '🚀';
+    if (type === 'user_prompt') return '💬';
     if (name.includes('shell')) return '>';
     if (name.includes('read') || name.includes('write') || name.includes('view')) return '📄';
     if (name.includes('browser')) return '🌐';
@@ -243,6 +271,12 @@ function computeLayout(root) {
             node.y = currentY;
             node.height = 60;
             currentY += node.height + 10;
+            nodes.push(node);
+        } else if (node.type === 'user_prompt') {
+            node.x = 0;
+            node.y = currentY;
+            node.height = 50;
+            currentY += node.height + 15;
             nodes.push(node);
         } else if (node.type === 'phase_marker') {
             node.x = 0;
@@ -364,6 +398,55 @@ function update() {
         .style("text-transform", "uppercase")
         .text(d => `>>> ${d.name} <<<`);
 
+    // --- USER PROMPT Banner ---
+    const userPromptGroup = nodeEnter.filter(d => d.type === 'user_prompt');
+
+    userPromptGroup.append('rect')
+        .attr('x', -cardWidth / 2)
+        .attr('y', 0)
+        .attr('width', cardWidth)
+        .attr('height', 50)
+        .attr('rx', 8)
+        .style("fill", "rgba(156, 39, 176, 0.1)")
+        .style("stroke", "#9c27b0")
+        .style("stroke-width", "2px")
+        .style("filter", "drop-shadow(0 0 8px rgba(156, 39, 176, 0.5))");
+
+    userPromptGroup.append('circle')
+        .attr('cx', -cardWidth / 2 + 30)
+        .attr('cy', 25)
+        .attr('r', 18)
+        .style("fill", "rgba(156, 39, 176, 0.2)")
+        .style("stroke", "#9c27b0");
+
+    userPromptGroup.append('text')
+        .attr('x', -cardWidth / 2 + 30)
+        .attr('y', 25)
+        .attr("dy", "6px")
+        .attr("text-anchor", "middle")
+        .style("font-size", "20px")
+        .style("fill", "#fff")
+        .text('💬');
+
+    userPromptGroup.append('text')
+        .attr('x', -cardWidth / 2 + 60)
+        .attr('y', 18)
+        .style("font-size", "11px")
+        .style("font-weight", "bold")
+        .style("fill", "#9c27b0")
+        .style("text-transform", "uppercase")
+        .text("User Intervention");
+
+    userPromptGroup.append('text')
+        .attr('x', -cardWidth / 2 + 60)
+        .attr('y', 36)
+        .style("font-size", "10px")
+        .style("fill", "#ccc")
+        .text(d => {
+            const content = d.data.content || "";
+            return content.length > 45 ? content.substring(0, 42) + "..." : content;
+        });
+
     // --- Update Transitions ---
     const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
         .attr("transform", d => `translate(${d.x},${d.y})`)
@@ -424,6 +507,21 @@ function showDetails(d) {
                 <span class="field-label">Output</span>
                 <div class="field-value">${escapeHtml(toolData.raw_output || toolData.output || "(no output)")}</div>
             </div>
+        `;
+    } else if (d.type === 'user_prompt') {
+        html += `<div class="tool-badge" style="border-left-color:#9c27b0;background:rgba(156,39,176,0.1)">💬 USER PROMPT</div>`;
+        html += `
+            <div class="field-group">
+                <span class="field-label">Prompt Content</span>
+                <div class="field-value" style="color:#9c27b0">${escapeHtml(toolData.content || "User intervention")}</div>
+            </div>
+            <div class="field-group">
+                <span class="field-label">Timestamp</span>
+                <div class="field-value">${escapeHtml(toolData.timestamp || "N/A")}</div>
+            </div>
+            <p style="color:#888;font-size:12px;margin-top:15px">
+                This prompt was injected into the agent's context by the user during execution.
+            </p>
         `;
     } else if (d.type === 'step') {
         html += `<div class="tool-badge" style="background:#222">STEP ${toolData.step_number}</div>`;
