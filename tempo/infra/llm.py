@@ -16,10 +16,15 @@ T = TypeVar("T", bound=BaseModel)
 
 @dataclass
 class TokenUsage:
-    """Token usage statistics."""
+    """Token usage statistics with caching and cost info."""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    # Prompt caching fields (supported by Anthropic, OpenAI, DeepSeek, Bedrock)
+    cached_tokens: int = 0          # Cache hit tokens (prompt_tokens_details.cached_tokens)
+    cache_creation_tokens: int = 0  # Anthropic only: tokens written to cache
+    # Cost tracking
+    cost: float = 0.0               # USD cost for this call
 
 
 @dataclass
@@ -156,15 +161,42 @@ class LiteLLMClient(LLMClient):
                     arguments=json.loads(tc.function.arguments),
                 ))
         
+        # Extract caching info from usage
+        usage = response.usage
+        cached_tokens = 0
+        cache_creation_tokens = 0
+        
+        # prompt_tokens_details contains cached_tokens for OpenAI/Anthropic/DeepSeek
+        if hasattr(usage, 'prompt_tokens_details') and usage.prompt_tokens_details:
+            details = usage.prompt_tokens_details
+            if hasattr(details, 'cached_tokens'):
+                cached_tokens = details.cached_tokens or 0
+        
+        # Anthropic-specific: cache_creation_input_tokens
+        if hasattr(usage, 'cache_creation_input_tokens'):
+            cache_creation_tokens = usage.cache_creation_input_tokens or 0
+        
+        # Calculate cost using LiteLLM's built-in function
+        cost = 0.0
+        try:
+            cost = self._litellm.completion_cost(completion_response=response)
+        except Exception:
+            # Cost calculation may fail for some models, ignore
+            pass
+        
         return LLMResponse(
             content=message.content,
             tool_calls=tool_calls,
             usage=TokenUsage(
-                prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens,
-                total_tokens=response.usage.total_tokens,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
+                cached_tokens=cached_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                cost=cost,
             ),
             model=response.model,
             finish_reason=choice.finish_reason,
             raw_response=response,
         )
+

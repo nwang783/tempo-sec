@@ -157,6 +157,9 @@ function handleEvent(event) {
             statusEl.textContent = data.success ? "FINISHED" : "FAILED";
             statusEl.className = "status " + (data.success ? "connected" : "disconnected");
             break;
+        case "cost_update":
+            updateCostPanel(data);
+            break;
     }
 }
 
@@ -714,4 +717,38 @@ promptInput.addEventListener('keydown', (e) => {
     }
 });
 
+// === Cost Panel Updates ===
+function updateCostPanel(data) {
+    const totalCostEl = document.getElementById('cost-total');
+    const cachedEl = document.getElementById('cost-cached');
+    const promptEl = document.getElementById('cost-prompt');
+    const completionEl = document.getElementById('cost-completion');
+
+    if (!totalCostEl) return;
+
+    // Format cost with 4 decimal places for precision
+    const costFormatted = `$${data.total_cost.toFixed(4)}`;
+    totalCostEl.textContent = costFormatted;
+
+    // Add flash animation
+    totalCostEl.classList.remove('cost-updated');
+    void totalCostEl.offsetWidth; // Force reflow
+    totalCostEl.classList.add('cost-updated');
+
+    // Update token counts
+    if (cachedEl) {
+        const cached = data.total_cached_tokens || 0;
+        cachedEl.textContent = `${cached.toLocaleString()} tokens`;
+    }
+
+    if (promptEl) {
+        promptEl.textContent = (data.total_prompt_tokens || 0).toLocaleString();
+    }
+
+    if (completionEl) {
+        completionEl.textContent = (data.total_completion_tokens || 0).toLocaleString();
+    }
+}
+
 connect();
+

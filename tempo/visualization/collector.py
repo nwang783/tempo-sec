@@ -6,6 +6,7 @@ Captures agent execution events and forwards them to the visualization server.
 
 import asyncio
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -13,6 +14,8 @@ from typing import Any, Dict, Optional
 from tempo.context.frame import ToolCall
 from tempo.infra.llm import LLMResponse
 from tempo.visualization.server import VisualizationServer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -42,6 +45,11 @@ class VisualizationCollector:
     def __init__(self, server: VisualizationServer):
         self.server = server
         self._loop = asyncio.get_event_loop()
+        # Cost tracking state
+        self._total_cost: float = 0.0
+        self._total_prompt_tokens: int = 0
+        self._total_completion_tokens: int = 0
+        self._total_cached_tokens: int = 0
     
     def on_step(self, step_result: Any, frame_id: str) -> None:
         """
@@ -66,6 +74,22 @@ class VisualizationCollector:
         }
         
         self.emit("step", data)
+        
+        # Update cumulative cost tracking and emit cost update
+        usage = data.get("usage", {})
+        
+        self._total_cost += usage.get("cost", 0.0)
+        self._total_prompt_tokens += usage.get("prompt_tokens", 0)
+        self._total_completion_tokens += usage.get("completion_tokens", 0)
+        self._total_cached_tokens += usage.get("cached_tokens", 0)
+        
+        self.emit("cost_update", {
+            "total_cost": self._total_cost,
+            "total_prompt_tokens": self._total_prompt_tokens,
+            "total_completion_tokens": self._total_completion_tokens,
+            "total_cached_tokens": self._total_cached_tokens,
+            "step_cost": usage.get("cost", 0.0),
+        })
         
         # If there was a phase transition, emit that too
         if data["phase"]:
