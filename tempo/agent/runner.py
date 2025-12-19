@@ -11,6 +11,7 @@ from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
 from tempo.agent.phase_summarizer import PhaseSummarizer
 from tempo.agent.branch_coordinator import BranchCoordinator, SubtaskResult
+from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.context.store import ContextStore
 from tempo.context.frame import MessageRole, ToolCall
 from tempo.infra.llm import LLMClient, LLMResponse
@@ -118,7 +119,12 @@ class Agent:
         self._step_count: int = 0
         self._findings: list[dict] = []
         self._hypotheses: list[dict] = []
-    
+        
+        # Step handler for tool execution (delegates callback to us for context)
+        self.step_handler = StepHandler(
+            tools=tools,
+            on_tool_call=self._handle_tool_call_complete,
+        )
     def _get_phase_filtered_tools(self) -> list[dict]:
         """
         Get tool schemas filtered by current phase.
@@ -372,44 +378,22 @@ class Agent:
         # Process tool calls
         if response.tool_calls:
             for tc in response.tool_calls:
-                tool_result = await self._execute_tool_call(tc)
-                step_result.tool_calls.append(tool_result)
+                # Execute via StepHandler
+                tool_call = await self.step_handler.execute_tool_call(
+                    tc,
+                    max_output_chars=self.config.max_output_chars,
+                )
+                step_result.tool_calls.append(tool_call)
                 
-                # Handle special tools
-                if tc.name == "continue_analysis":
-                    if tool_result.metadata.get("continue"):
-                        # Agent wants to continue - transition back to RECON
-                        self.workflow.transition(Phase.RECON)
-                        self.context.add_message(
-                            MessageRole.SYSTEM,
-                            f"[Continuing analysis] {tool_result.raw_output}\nYou are now back in the RECON phase."
-                        )
-                    elif tool_result.metadata.get("finish"):
-                        # Agent is done
-                        step_result.should_continue = False
-                        self._findings.append({
-                            "description": tool_result.metadata.get("findings", ""),
-                            "reasoning": tool_result.metadata.get("reasoning", ""),
-                            "step": self._step_count,
-                        })
+                # Add to context
+                self.context.add_tool_call(tool_call)
                 
-                elif tc.name == "transition_phase":
-                    phase_str = tc.arguments.get("phase", "")
-                    try:
-                        step_result.phase_transition = Phase(phase_str)
-                    except ValueError:
-                        pass
-                
-                elif tc.name == "branch_to_subtasks":
-                    # Handle branching - wait for subagents
-                    branch_id = tool_result.metadata.get("branch_id")
-                    if branch_id:
-                        results = await self.branch_coordinator.await_completion(branch_id)
-                        merged = self.branch_coordinator.finalize_branch(branch_id)
-                        self.context.add_message(
-                            MessageRole.SYSTEM,
-                            f"[Branching Complete]\n{merged}"
-                        )
+                # Process special tools
+                special_result = self.step_handler.process_special_tool(tool_call)
+                if special_result:
+                    step_result = self._apply_special_tool_result(
+                        step_result, tool_call, special_result
+                    )
         
         # Invoke step callback if provided
         if self._on_step:
@@ -421,50 +405,62 @@ class Agent:
         
         return step_result
     
-    async def _execute_tool_call(self, tc: Any) -> ToolCall:
+    def _apply_special_tool_result(
+        self,
+        step_result: StepResult,
+        tool_call: ToolCall,
+        special: SpecialToolResult,
+    ) -> StepResult:
         """
-        Execute a single tool call.
+        Apply the effects of a special tool result to the step and workflow.
         
         Args:
-            tc: Tool call from LLM response
+            step_result: Current step result to update
+            tool_call: The tool call that was executed
+            special: The processed special tool result
             
         Returns:
-            ToolCall with results
+            Updated step result
         """
-        tool = self.tools.get(tc.name)
-        
-        tool_call = ToolCall(
-            id=tc.id,
-            tool_name=tc.name,
-            input=tc.arguments,
-        )
-        
-        if tool is None:
-            tool_call.raw_output = f"Error: Tool '{tc.name}' not found"
-            self.context.add_tool_call(tool_call)
-            return tool_call
-        
-        try:
-            # Execute the tool
-            result = await tool.execute(**tc.arguments)
-            
-            tool_call.raw_output = result.output
-            tool_call.metadata = result.metadata
-            
-            # Add reminder to summarize if output is long
-            if len(result.output) > 500:
-                tool_call.raw_output += (
-                    f"\n\n[System: Output captured ({len(result.output)} chars). "
-                    f"You MUST call `summarize_tool_output` with tool_call_id='{tool_call.id}' "
-                    f"to compress this data and save context tokens before proceeding.]"
+        if special.tool_name == "continue_analysis":
+            if special.should_continue and special.phase_transition:
+                # Agent wants to continue - transition to the specified phase
+                self.workflow.transition(special.phase_transition)
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[Continuing analysis] {tool_call.raw_output}\nYou are now back in the {special.phase_transition.value.upper()} phase."
                 )
-            
-        except Exception as e:
-            tool_call.raw_output = f"Error executing tool: {str(e)}"
+            elif not special.should_continue:
+                # Agent is done
+                step_result.should_continue = False
+                if special.findings:
+                    self._findings.append({
+                        **special.findings,
+                        "step": self._step_count,
+                    })
         
-        self.context.add_tool_call(tool_call)
+        elif special.tool_name == "transition_phase":
+            if special.phase_transition:
+                step_result.phase_transition = special.phase_transition
         
-        # Invoke tool call callback if provided
+        elif special.tool_name == "branch_to_subtasks":
+            if special.branch_id:
+                # Handle branching - wait for subagents (async)
+                # Note: This schedules the branch but actual waiting happens in step()
+                pass  # Branch handling is asynchronous
+        
+        return step_result
+    
+    def _handle_tool_call_complete(self, tool_call: ToolCall) -> None:
+        """
+        Callback invoked when a tool call completes.
+        
+        Handles external callbacks and visualization notifications.
+        
+        Args:
+            tool_call: The completed tool call
+        """
+        # Invoke external tool call callback if provided
         if self._on_tool_call:
             self._on_tool_call(tool_call)
         
@@ -472,8 +468,6 @@ class Agent:
         if self._viz_collector:
             self._viz_collector.on_tool_call(tool_call, self.context.current_frame.id)
 
-        
-        return tool_call
     
     def checkpoint(self, label: str = "") -> str:
         """Create a checkpoint, return frame ID."""

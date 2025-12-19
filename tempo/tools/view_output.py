@@ -7,6 +7,7 @@ without overwhelming the context window.
 """
 
 from tempo.tools.base import Tool, ToolResult, ToolSchema, ToolCategory
+from tempo.infra.protocols import ToolOutputViewer
 
 
 class ViewToolOutputTool(Tool):
@@ -16,15 +17,15 @@ class ViewToolOutputTool(Tool):
     description = "View a specific character range of a previous tool's output. Use this when a tool output was truncated and you need to see more."
     category = ToolCategory.META
     
-    def __init__(self, context_store: "ContextStore"):
+    def __init__(self, context_store: ToolOutputViewer):
         """
         Initialize the tool.
         
         Args:
-            context_store: Context store for accessing tool call history
+            context_store: Any component implementing ToolOutputViewer protocol
         """
-        from tempo.context.store import ContextStore
         self.context_store = context_store
+
     
     async def execute(
         self,
