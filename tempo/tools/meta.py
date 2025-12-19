@@ -5,11 +5,11 @@ Meta tools for agent control, phase transitions, and branching.
 from typing import TYPE_CHECKING
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
-
-if TYPE_CHECKING:
-    from tempo.agent.workflow import WorkflowManager
-    from tempo.agent.branch_coordinator import BranchCoordinator
-    from tempo.context.store import ContextStore
+from tempo.infra.protocols import (
+    PhaseTransitioner,
+    ContextSummarizer,
+    BranchSpawner,
+)
 
 
 class TransitionPhaseTool(Tool):
@@ -24,12 +24,12 @@ class TransitionPhaseTool(Tool):
     Call this BEFORE calling complete_analysis."""
     category = ToolCategory.META
     
-    def __init__(self, workflow_manager: "WorkflowManager"):
+    def __init__(self, workflow_manager: PhaseTransitioner):
         """
         Initialize the transition phase tool.
         
         Args:
-            workflow_manager: Workflow manager for phase transitions
+            workflow_manager: Any component implementing PhaseTransitioner protocol
         """
         self.workflow = workflow_manager
         
@@ -106,12 +106,12 @@ class SummarizeOutputTool(Tool):
     description = "Summarize a previous tool output to save context tokens"
     category = ToolCategory.META
     
-    def __init__(self, context_store: "ContextStore"):
+    def __init__(self, context_store: ContextSummarizer):
         """
         Initialize the summarize output tool.
         
         Args:
-            context_store: Context store for summarizing tool calls
+            context_store: Any component implementing ContextSummarizer protocol
         """
         self.context = context_store
         
@@ -264,12 +264,12 @@ class BranchToSubtasksTool(Tool):
     their summaries will be merged and returned to you."""
     category = ToolCategory.META
     
-    def __init__(self, branch_coordinator: "BranchCoordinator"):
+    def __init__(self, branch_coordinator: BranchSpawner):
         """
         Initialize the branch tool.
         
         Args:
-            branch_coordinator: Coordinator for spawning subagents
+            branch_coordinator: Any component implementing BranchSpawner protocol
         """
         self.coordinator = branch_coordinator
         

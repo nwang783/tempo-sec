@@ -66,3 +66,131 @@ class AgentConfig:
         """Alias for max_total_steps."""
         return self.max_total_steps
 
+    @classmethod
+    def from_toml(cls, path: str) -> "AgentConfig":
+        """
+        Load configuration from a TOML file.
+        
+        The TOML file sections are mapped to AgentConfig fields:
+        - [model].provider → model
+        - [context].* → max_context_tokens, auto_summarize, persistence_dir, etc.
+        - [workflow].* → enforce_phases, max_steps_per_phase, max_total_steps
+        - [branching].* → max_branches, max_branch_depth, branch_step_limit
+        - [container].* → container_image, container_timeout
+        - [scope].* → allowed_domains, excluded_domains, allow_subdomains
+        - [visualization].* → enable_visualization, visualization_port, auto_open_browser
+        - [logging].* → log_level, verbose
+        
+        Args:
+            path: Path to the TOML configuration file
+            
+        Returns:
+            AgentConfig with values loaded from the file
+            
+        Raises:
+            FileNotFoundError: If the TOML file doesn't exist
+        """
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+        
+        from pathlib import Path
+        
+        config_path = Path(path)
+        if not config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {path}")
+        
+        with open(config_path, "rb") as f:
+            data = tomllib.load(f)
+        
+        return cls.from_dict(data)
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "AgentConfig":
+        """
+        Create AgentConfig from a dictionary (typically loaded from TOML).
+        
+        Args:
+            data: Configuration dictionary with section keys
+            
+        Returns:
+            AgentConfig with mapped values
+        """
+        kwargs = {}
+        
+        # [model] section
+        if "model" in data:
+            model_data = data["model"]
+            if "provider" in model_data:
+                kwargs["model"] = model_data["provider"]
+        
+        # [context] section
+        if "context" in data:
+            ctx = data["context"]
+            if "max_tokens" in ctx:
+                kwargs["max_context_tokens"] = ctx["max_tokens"]
+            if "auto_summarize" in ctx:
+                kwargs["auto_summarize"] = ctx["auto_summarize"]
+            if "persistence_dir" in ctx:
+                kwargs["persistence_dir"] = ctx["persistence_dir"]
+            if "max_output_chars" in ctx:
+                kwargs["max_output_chars"] = ctx["max_output_chars"]
+        
+        # [workflow] section
+        if "workflow" in data:
+            wf = data["workflow"]
+            if "enforce_phases" in wf:
+                kwargs["enforce_phases"] = wf["enforce_phases"]
+            if "max_steps_per_phase" in wf:
+                kwargs["max_steps_per_phase"] = wf["max_steps_per_phase"]
+            if "max_total_steps" in wf:
+                kwargs["max_total_steps"] = wf["max_total_steps"]
+        
+        # [branching] section
+        if "branching" in data:
+            br = data["branching"]
+            if "max_branches" in br:
+                kwargs["max_branches"] = br["max_branches"]
+            if "max_branch_depth" in br:
+                kwargs["max_branch_depth"] = br["max_branch_depth"]
+            if "branch_step_limit" in br:
+                kwargs["branch_step_limit"] = br["branch_step_limit"]
+        
+        # [container] section
+        if "container" in data:
+            cont = data["container"]
+            if "image" in cont:
+                kwargs["container_image"] = cont["image"]
+            if "timeout" in cont:
+                kwargs["container_timeout"] = cont["timeout"]
+        
+        # [scope] section
+        if "scope" in data:
+            sc = data["scope"]
+            if "allowed_domains" in sc:
+                kwargs["allowed_domains"] = sc["allowed_domains"]
+            if "excluded_domains" in sc:
+                kwargs["excluded_domains"] = sc["excluded_domains"]
+            if "allow_subdomains" in sc:
+                kwargs["allow_subdomains"] = sc["allow_subdomains"]
+        
+        # [visualization] section
+        if "visualization" in data:
+            vis = data["visualization"]
+            if "enabled" in vis:
+                kwargs["enable_visualization"] = vis["enabled"]
+            if "port" in vis:
+                kwargs["visualization_port"] = vis["port"]
+            if "auto_open_browser" in vis:
+                kwargs["auto_open_browser"] = vis["auto_open_browser"]
+        
+        # [logging] section
+        if "logging" in data:
+            log = data["logging"]
+            if "level" in log:
+                kwargs["log_level"] = log["level"]
+            if "verbose" in log:
+                kwargs["verbose"] = log["verbose"]
+        
+        return cls(**kwargs)
