@@ -171,4 +171,4 @@ class WorkflowManager:
         self.current_phase = initial_phase
         self.phase_step_counts = {p: 0 for p in Phase}
         self.transition_history = []
-        self._on_transition_callbacks = []
+        # Note: don't clear _on_transition_callbacks - they are configuration, not state

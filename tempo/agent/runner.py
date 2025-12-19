@@ -110,6 +110,8 @@ class Agent:
         
         # Register phase transition callback for summarization
         self._pending_transition: tuple[Phase, Phase] | None = None
+        self._pending_cycle_replacement: bool = False
+        self._cycle_start_message_index: int = 0  # Track where current cycle started
         self.workflow.on_transition(self._on_phase_transition)
         
         self._objective: str = ""
@@ -146,8 +148,13 @@ class Agent:
         Handle phase transition - mark that we need to generate a summary.
         
         The summary will be generated asynchronously in the next step.
+        If transitioning FROM reflect, also mark for context replacement.
         """
         self._pending_transition = (from_phase, to_phase)
+        
+        # If transitioning FROM reflect, this completes a cycle - mark for replacement
+        if from_phase == Phase.REFLECT and self.config.replace_context_after_reflect:
+            self._pending_cycle_replacement = True
     
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
@@ -290,11 +297,39 @@ class Agent:
                     objective=self._objective,
                 )
                 
-                # Inject summary into context
-                self.context.add_message(
-                    MessageRole.SYSTEM,
-                    f"[Phase Summary: {from_phase.value} → {to_phase.value}]\n{summary}"
-                )
+                # If this is a cycle replacement (from REFLECT), replace previous messages
+                if self._pending_cycle_replacement:
+                    self._pending_cycle_replacement = False
+                    
+                    # Get current message count before adding summary
+                    current_msg_count = len(self.context.current_frame.messages)
+                    
+                    # Replace messages from cycle start to now with summary
+                    # Keep at least the system prompt (index 0) and user objective (index 1)
+                    start_idx = max(2, self._cycle_start_message_index)
+                    if start_idx < current_msg_count:
+                        self.context.replace_messages_with_summary(
+                            start_index=start_idx,
+                            end_index=current_msg_count,
+                            summary=summary,
+                        )
+                    
+                    # Mark new cycle start
+                    self._cycle_start_message_index = len(self.context.current_frame.messages)
+                else:
+                    # Normal phase summary - just inject as message
+                    self.context.add_message(
+                        MessageRole.SYSTEM,
+                        f"[Phase Summary: {from_phase.value} → {to_phase.value}]\n{summary}"
+                    )
+                
+                # Notify visualization
+                if self._viz_collector:
+                    self._viz_collector.on_phase_summary(
+                        from_phase=from_phase.value,
+                        to_phase=to_phase.value,
+                        summary=summary,
+                    )
             except Exception as e:
                 # Log but don't fail if summarization fails
                 self.context.add_message(
