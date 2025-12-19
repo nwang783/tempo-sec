@@ -6,5 +6,6 @@ Provides real-time visualization of the agent's execution tree via WebSocket.
 
 from tempo.visualization.collector import VisualizationCollector
 from tempo.visualization.server import VisualizationServer
+from tempo.visualization.prompt_manager import UserPromptManager
 
-__all__ = ["VisualizationCollector", "VisualizationServer"]
+__all__ = ["VisualizationCollector", "VisualizationServer", "UserPromptManager"]

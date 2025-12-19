@@ -4,7 +4,7 @@ Agent runner - main loop and step execution.
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
 from tempo.agent.config import AgentConfig
 from tempo.agent.workflow import WorkflowManager, WorkflowError
@@ -17,8 +17,10 @@ from tempo.infra.llm import LLMClient, LLMResponse
 from tempo.prompts.builder import PromptBuilder
 from tempo.prompts.phases import Phase
 from tempo.tools.registry import ToolRegistry
-from tempo.tools.registry import ToolRegistry
 from tempo.tools.base import ToolResult
+
+if TYPE_CHECKING:
+    from tempo.visualization.prompt_manager import UserPromptManager
 
 try:
     from tempo.visualization.collector import VisualizationCollector
@@ -70,6 +72,7 @@ class Agent:
         on_step: "Callable[[StepResult], None] | None" = None,
         on_tool_call: "Callable[[ToolCall], None] | None" = None,
         visualization_collector: "VisualizationCollector | None" = None,
+        prompt_manager: "UserPromptManager | None" = None,
     ):
         """
         Initialize the agent.
@@ -94,6 +97,7 @@ class Agent:
         self._on_step = on_step
         self._on_tool_call = on_tool_call
         self._viz_collector = visualization_collector
+        self._prompt_manager = prompt_manager
         
         # Use provided workflow manager or create one (share with TransitionPhaseTool!)
         self.workflow = workflow or WorkflowManager(config)
@@ -214,7 +218,17 @@ class Agent:
             while self._step_count < max_steps:
                 step_result = await self.step()
                 
+                # Check for user prompts between steps
+                await self._check_for_user_prompts()
+                
                 if not step_result.should_continue:
+                    # If agent is finishing and prompt manager exists, offer pause opportunity
+                    if self._prompt_manager:
+                        paused = await self._handle_reflect_pause()
+                        if paused:
+                            # User sent a prompt during pause, continue execution
+                            step_result.should_continue = True
+                            continue
                     break
                 
                 if step_result.error:
@@ -433,3 +447,80 @@ class Agent:
     def revert(self, frame_id: str) -> None:
         """Revert to a checkpoint."""
         self.context.revert(frame_id)
+    
+    async def _check_for_user_prompts(self) -> None:
+        """
+        Check for and inject any pending user prompts into context.
+        
+        Called between agent steps to allow user intervention.
+        """
+        if not self._prompt_manager:
+            return
+        
+        prompt = await self._prompt_manager.get_pending_prompt()
+        if prompt:
+            # Inject as USER message with clear marker
+            self.context.add_message(
+                MessageRole.USER,
+                f"[User Intervention] {prompt.content}"
+            )
+            
+            # Notify visualization
+            if self._viz_collector:
+                self._viz_collector.on_user_prompt_received(prompt.content)
+    
+    async def _handle_reflect_pause(self, timeout: float = 60.0) -> bool:
+        """
+        Handle pause opportunity when agent is about to finish.
+        
+        When the agent decides to stop (continue_analysis with continue=false),
+        this method pauses execution and waits for user input. If the user
+        sends a prompt within the timeout, execution continues.
+        
+        Args:
+            timeout: Seconds to wait for user input before finishing
+            
+        Returns:
+            True if user sent a prompt and execution should continue,
+            False if timed out and agent should finish
+        """
+        if not self._prompt_manager:
+            return False
+        
+        # Notify UI that agent is pausing
+        if self._viz_collector:
+            self._viz_collector.on_agent_paused(
+                reason="Agent finished analysis. Send a prompt to continue or wait to finalize."
+            )
+        
+        # Add system message so agent knows it's paused
+        self.context.add_message(
+            MessageRole.SYSTEM,
+            f"[System] Agent paused. Waiting up to {timeout}s for user input. "
+            "If you receive a user message, incorporate it and continue analysis."
+        )
+        
+        # Pause and wait for user input
+        self._prompt_manager.pause(reason="Awaiting user decision")
+        resumed = await self._prompt_manager.wait_for_resume(timeout=timeout)
+        
+        if resumed and self._prompt_manager.has_pending:
+            # User sent a prompt, inject it and continue
+            await self._check_for_user_prompts()
+            
+            # Notify UI that agent is resuming
+            if self._viz_collector:
+                self._viz_collector.on_agent_resumed()
+            
+            # Transition back to RECON to continue work
+            self.workflow.transition(Phase.RECON)
+            self.context.add_message(
+                MessageRole.SYSTEM,
+                "[System] Resuming analysis based on user input. You are now in RECON phase."
+            )
+            
+            return True
+        
+        # Timed out, agent will finish
+        self._prompt_manager.resume()  # Clear pause state
+        return False
