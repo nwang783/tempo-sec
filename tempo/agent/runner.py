@@ -9,6 +9,7 @@ from typing import Any, Callable
 from tempo.agent.config import AgentConfig
 from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
+from tempo.agent.phase_summarizer import PhaseSummarizer
 from tempo.agent.branch_coordinator import BranchCoordinator, SubtaskResult
 from tempo.context.store import ContextStore
 from tempo.context.frame import MessageRole, ToolCall
@@ -97,10 +98,15 @@ class Agent:
         # Use provided workflow manager or create one (share with TransitionPhaseTool!)
         self.workflow = workflow or WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
+        self.phase_summarizer = PhaseSummarizer(config, self.prompts, self.context)
         self.branch_coordinator = BranchCoordinator(
             self.context,
             agent_factory=self._create_subagent_executor(),
         )
+        
+        # Register phase transition callback for summarization
+        self._pending_transition: tuple[Phase, Phase] | None = None
+        self.workflow.on_transition(self._on_phase_transition)
         
         self._objective: str = ""
         self._step_count: int = 0
@@ -130,6 +136,14 @@ class Agent:
                 s for s in all_schemas 
                 if s.get("function", {}).get("name") != "continue_analysis"
             ]
+    
+    def _on_phase_transition(self, from_phase: Phase, to_phase: Phase) -> None:
+        """
+        Handle phase transition - mark that we need to generate a summary.
+        
+        The summary will be generated asynchronously in the next step.
+        """
+        self._pending_transition = (from_phase, to_phase)
     
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
@@ -249,6 +263,30 @@ class Agent:
         """
         self._step_count += 1
         self.workflow.record_step()
+        
+        # Generate phase summary if we have a pending transition
+        if self._pending_transition and self.config.auto_phase_summary:
+            from_phase, to_phase = self._pending_transition
+            self._pending_transition = None
+            
+            try:
+                summary = await self.phase_summarizer.summarize_phase_transition(
+                    from_phase=from_phase,
+                    to_phase=to_phase,
+                    objective=self._objective,
+                )
+                
+                # Inject summary into context
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[Phase Summary: {from_phase.value} → {to_phase.value}]\n{summary}"
+                )
+            except Exception as e:
+                # Log but don't fail if summarization fails
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[Phase transition: {from_phase.value} → {to_phase.value}] (summary unavailable: {e})"
+                )
         
         # Check for forced transitions
         forced_phase = self.workflow.should_force_transition()

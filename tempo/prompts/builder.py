@@ -237,3 +237,43 @@ class PromptBuilder:
         phase_prompt = self.build_phase_prompt(current_phase)
         
         return f"{system_prompt}\n\n---\n\n{phase_prompt}"
+    
+    def build_phase_transition_prompt(
+        self,
+        from_phase: Phase,
+        to_phase: Phase,
+        objective: str,
+        phase_context: dict,
+    ) -> str:
+        """
+        Build a prompt for summarizing a phase transition.
+        
+        Includes the prompts for both the source and target phases so the
+        summarizer understands what was expected and what comes next.
+        
+        Args:
+            from_phase: The phase we're leaving
+            to_phase: The phase we're entering
+            objective: Current agent objective
+            phase_context: Extracted context from the phase (tool calls, messages, state)
+            
+        Returns:
+            Formatted transition summarization prompt
+        """
+        template = self._load_template("phase_transition_summary")
+        
+        # Load the phase prompts for context
+        from_phase_prompt = self.build_phase_prompt(from_phase)
+        to_phase_prompt = self.build_phase_prompt(to_phase)
+        
+        import json
+        context_str = json.dumps(phase_context, indent=2, default=str)
+        
+        return template.format(
+            from_phase=from_phase.value,
+            to_phase=to_phase.value,
+            objective=objective,
+            from_phase_prompt=from_phase_prompt,
+            to_phase_prompt=to_phase_prompt,
+            phase_context=context_str,
+        )
