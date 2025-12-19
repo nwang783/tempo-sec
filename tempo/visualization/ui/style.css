@@ -154,6 +154,76 @@ h1 {
     background-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Cost Panel */
+.cost-section {
+    border-top: var(--panel-border);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+#cost-content {
+    padding: 15px 20px;
+}
+
+.cost-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.cost-item .label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.cost-item .value {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: #ccc;
+}
+
+.cost-item.cost-total-row {
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 10px;
+}
+
+.cost-value {
+    font-size: 1.2rem !important;
+    font-weight: 700;
+    color: var(--accent-green) !important;
+}
+
+.cost-breakdown {
+    margin-top: 8px;
+    padding-left: 10px;
+}
+
+.cost-item.small .label,
+.cost-item.small .value {
+    font-size: 0.7rem;
+}
+
+.cost-item.small .value {
+    color: var(--text-muted);
+}
+
+/* Animation for cost updates */
+@keyframes cost-flash {
+    0% {
+        color: #fff;
+    }
+
+    100% {
+        color: var(--accent-green);
+    }
+}
+
+.cost-updated {
+    animation: cost-flash 0.5s ease-out;
+}
+
 #agent-state-content {
     padding: 20px;
     display: grid;

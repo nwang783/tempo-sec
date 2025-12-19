@@ -49,10 +49,35 @@
                     </div>
                 </div>
 
+                <div class="cost-section">
+                    <div class="panel-header">Run Cost</div>
+                    <div id="cost-content">
+                        <div class="cost-item cost-total-row">
+                            <span class="label">Total Cost:</span>
+                            <span id="cost-total" class="value cost-value">$0.0000</span>
+                        </div>
+                        <div class="cost-item">
+                            <span class="label">Cached:</span>
+                            <span id="cost-cached" class="value">0 tokens</span>
+                        </div>
+                        <div class="cost-breakdown">
+                            <div class="cost-item small">
+                                <span class="label">Prompt:</span>
+                                <span id="cost-prompt" class="value">0</span>
+                            </div>
+                            <div class="cost-item small">
+                                <span class="label">Completion:</span>
+                                <span id="cost-completion" class="value">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="prompt-section">
                     <div class="panel-header">Send Prompt to Agent</div>
                     <div class="prompt-form">
-                        <textarea id="prompt-input" placeholder="Enter a prompt to inject into the agent's context..."></textarea>
+                        <textarea id="prompt-input"
+                            placeholder="Enter a prompt to inject into the agent's context..."></textarea>
                         <button id="send-prompt-btn">Send Prompt</button>
                     </div>
                     <div id="prompt-status" class="prompt-status"></div>
