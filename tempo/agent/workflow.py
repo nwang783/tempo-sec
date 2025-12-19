@@ -3,6 +3,7 @@ Workflow manager for phase transitions and workflow rules.
 """
 
 from datetime import datetime
+from typing import Callable
 
 from tempo.agent.config import AgentConfig
 from tempo.prompts.phases import Phase, PHASE_CONFIGS
@@ -33,6 +34,7 @@ class WorkflowManager:
         self.current_phase = initial_phase
         self.phase_step_counts: dict[Phase, int] = {p: 0 for p in Phase}
         self.transition_history: list[tuple[Phase, Phase, datetime]] = []
+        self._on_transition_callbacks: list[Callable[[Phase, Phase], None]] = []
     
     def can_transition(self, to_phase: Phase) -> bool:
         """
@@ -66,8 +68,22 @@ class WorkflowManager:
             )
         
         # Record transition
-        self.transition_history.append((self.current_phase, to_phase, datetime.utcnow()))
+        from_phase = self.current_phase
+        self.transition_history.append((from_phase, to_phase, datetime.utcnow()))
         self.current_phase = to_phase
+        
+        # Invoke registered callbacks
+        for callback in self._on_transition_callbacks:
+            callback(from_phase, to_phase)
+    
+    def on_transition(self, callback: Callable[[Phase, Phase], None]) -> None:
+        """
+        Register a callback to be invoked on phase transitions.
+        
+        Args:
+            callback: Function that takes (from_phase, to_phase)
+        """
+        self._on_transition_callbacks.append(callback)
     
     def record_step(self) -> None:
         """Record that a step was taken in the current phase."""
@@ -155,3 +171,4 @@ class WorkflowManager:
         self.current_phase = initial_phase
         self.phase_step_counts = {p: 0 for p in Phase}
         self.transition_history = []
+        # Note: don't clear _on_transition_callbacks - they are configuration, not state

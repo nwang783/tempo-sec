@@ -9,6 +9,7 @@ from typing import Any, Callable, TYPE_CHECKING
 from tempo.agent.config import AgentConfig
 from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
+from tempo.agent.phase_summarizer import PhaseSummarizer
 from tempo.agent.branch_coordinator import BranchCoordinator, SubtaskResult
 from tempo.context.store import ContextStore
 from tempo.context.frame import MessageRole, ToolCall
@@ -101,10 +102,17 @@ class Agent:
         # Use provided workflow manager or create one (share with TransitionPhaseTool!)
         self.workflow = workflow or WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
+        self.phase_summarizer = PhaseSummarizer(config, self.prompts, self.context)
         self.branch_coordinator = BranchCoordinator(
             self.context,
             agent_factory=self._create_subagent_executor(),
         )
+        
+        # Register phase transition callback for summarization
+        self._pending_transition: tuple[Phase, Phase] | None = None
+        self._pending_cycle_replacement: bool = False
+        self._cycle_start_message_index: int = 0  # Track where current cycle started
+        self.workflow.on_transition(self._on_phase_transition)
         
         self._objective: str = ""
         self._step_count: int = 0
@@ -134,6 +142,19 @@ class Agent:
                 s for s in all_schemas 
                 if s.get("function", {}).get("name") != "continue_analysis"
             ]
+    
+    def _on_phase_transition(self, from_phase: Phase, to_phase: Phase) -> None:
+        """
+        Handle phase transition - mark that we need to generate a summary.
+        
+        The summary will be generated asynchronously in the next step.
+        If transitioning FROM reflect, also mark for context replacement.
+        """
+        self._pending_transition = (from_phase, to_phase)
+        
+        # If transitioning FROM reflect, this completes a cycle - mark for replacement
+        if from_phase == Phase.REFLECT and self.config.replace_context_after_reflect:
+            self._pending_cycle_replacement = True
     
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
@@ -263,6 +284,58 @@ class Agent:
         """
         self._step_count += 1
         self.workflow.record_step()
+        
+        # Generate phase summary if we have a pending transition
+        if self._pending_transition and self.config.auto_phase_summary:
+            from_phase, to_phase = self._pending_transition
+            self._pending_transition = None
+            
+            try:
+                summary = await self.phase_summarizer.summarize_phase_transition(
+                    from_phase=from_phase,
+                    to_phase=to_phase,
+                    objective=self._objective,
+                )
+                
+                # If this is a cycle replacement (from REFLECT), replace previous messages
+                if self._pending_cycle_replacement:
+                    self._pending_cycle_replacement = False
+                    
+                    # Get current message count before adding summary
+                    current_msg_count = len(self.context.current_frame.messages)
+                    
+                    # Replace messages from cycle start to now with summary
+                    # Keep at least the system prompt (index 0) and user objective (index 1)
+                    start_idx = max(2, self._cycle_start_message_index)
+                    if start_idx < current_msg_count:
+                        self.context.replace_messages_with_summary(
+                            start_index=start_idx,
+                            end_index=current_msg_count,
+                            summary=summary,
+                        )
+                    
+                    # Mark new cycle start
+                    self._cycle_start_message_index = len(self.context.current_frame.messages)
+                else:
+                    # Normal phase summary - just inject as message
+                    self.context.add_message(
+                        MessageRole.SYSTEM,
+                        f"[Phase Summary: {from_phase.value} → {to_phase.value}]\n{summary}"
+                    )
+                
+                # Notify visualization
+                if self._viz_collector:
+                    self._viz_collector.on_phase_summary(
+                        from_phase=from_phase.value,
+                        to_phase=to_phase.value,
+                        summary=summary,
+                    )
+            except Exception as e:
+                # Log but don't fail if summarization fails
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[Phase transition: {from_phase.value} → {to_phase.value}] (summary unavailable: {e})"
+                )
         
         # Check for forced transitions
         forced_phase = self.workflow.should_force_transition()

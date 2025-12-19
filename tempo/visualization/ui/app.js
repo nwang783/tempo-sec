@@ -116,6 +116,9 @@ function handleEvent(event) {
                 document.getElementById("state-model").textContent = data.model;
             }
             break;
+        case "phase_summary":
+            addPhaseSummaryNode(data);
+            break;
         case "tool_call":
             addToolNode(data);
             break;
@@ -228,6 +231,36 @@ function addUserPromptNode(promptData) {
     debouncedUpdate();
 }
 
+function addPhaseSummaryNode(summaryData) {
+    const stepNum = currentStepNumber;
+    const stepNode = getOrCreateStepNode(currentFrameId, stepNum);
+
+    const summaryNode = {
+        id: `phase-summary-${Date.now()}`,
+        name: "PHASE SUMMARY",
+        type: "phase_summary",
+        data: {
+            from_phase: summaryData.from_phase,
+            to_phase: summaryData.to_phase,
+            summary: summaryData.summary,
+            summary_preview: summaryData.summary_preview,
+            timestamp: new Date().toISOString()
+        },
+        children: []
+    };
+
+    stepNode.children.push(summaryNode);
+    stepsWithTools.add(currentStepNumber);
+
+    // Update "Latest" timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+    document.getElementById("state-latest").textContent =
+        `Phase Summary (${summaryData.from_phase} → ${summaryData.to_phase}) @ ${timeStr}`;
+
+    debouncedUpdate();
+}
+
 function updateState(data) {
     if (data.phase) document.getElementById("state-phase").textContent = data.phase;
     if (data.step_number) document.getElementById("state-step").textContent = data.step_number;
@@ -242,6 +275,7 @@ function debouncedUpdate() {
 
 function getIcon(type, name) {
     if (type === 'phase_marker') return '🚀';
+    if (type === 'phase_summary') return '📋';
     if (type === 'user_prompt') return '💬';
     if (name.includes('shell')) return '>';
     if (name.includes('read') || name.includes('write') || name.includes('view')) return '📄';
@@ -282,6 +316,12 @@ function computeLayout(root) {
             node.x = 0;
             node.y = currentY;
             node.height = 45;
+            currentY += node.height + 15;
+            nodes.push(node);
+        } else if (node.type === 'phase_summary') {
+            node.x = 0;
+            node.y = currentY;
+            node.height = 55;
             currentY += node.height + 15;
             nodes.push(node);
         }
@@ -447,6 +487,55 @@ function update() {
             return content.length > 45 ? content.substring(0, 42) + "..." : content;
         });
 
+    // --- PHASE SUMMARY Card ---
+    const phaseSummaryGroup = nodeEnter.filter(d => d.type === 'phase_summary');
+
+    phaseSummaryGroup.append('rect')
+        .attr('x', -cardWidth / 2)
+        .attr('y', 0)
+        .attr('width', cardWidth)
+        .attr('height', 55)
+        .attr('rx', 8)
+        .style("fill", "rgba(255, 193, 7, 0.05)")
+        .style("stroke", "#ffc107")
+        .style("stroke-width", "2px")
+        .style("filter", "drop-shadow(0 0 8px rgba(255, 193, 7, 0.3))");
+
+    phaseSummaryGroup.append('circle')
+        .attr('cx', -cardWidth / 2 + 30)
+        .attr('cy', 27)
+        .attr('r', 18)
+        .style("fill", "rgba(255, 193, 7, 0.15)")
+        .style("stroke", "#ffc107");
+
+    phaseSummaryGroup.append('text')
+        .attr('x', -cardWidth / 2 + 30)
+        .attr('y', 27)
+        .attr("dy", "6px")
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .style("fill", "#fff")
+        .text('📋');
+
+    phaseSummaryGroup.append('text')
+        .attr('x', -cardWidth / 2 + 60)
+        .attr('y', 18)
+        .style("font-size", "11px")
+        .style("font-weight", "bold")
+        .style("fill", "#ffc107")
+        .style("text-transform", "uppercase")
+        .text(d => `${d.data.from_phase} → ${d.data.to_phase}`);
+
+    phaseSummaryGroup.append('text')
+        .attr('x', -cardWidth / 2 + 60)
+        .attr('y', 38)
+        .style("font-size", "10px")
+        .style("fill", "#ccc")
+        .text(d => {
+            const preview = d.data.summary_preview || "";
+            return preview.length > 45 ? preview.substring(0, 42) + "..." : preview;
+        });
+
     // --- Update Transitions ---
     const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
         .attr("transform", d => `translate(${d.x},${d.y})`)
@@ -521,6 +610,25 @@ function showDetails(d) {
             </div>
             <p style="color:#888;font-size:12px;margin-top:15px">
                 This prompt was injected into the agent's context by the user during execution.
+            </p>
+        `;
+    } else if (d.type === 'phase_summary') {
+        html += `<div class="tool-badge" style="border-left-color:#ffc107;background:rgba(255,193,7,0.1)">📋 PHASE SUMMARY</div>`;
+        html += `
+            <div class="field-group">
+                <span class="field-label">Transition</span>
+                <div class="field-value" style="color:#ffc107">${escapeHtml(toolData.from_phase)} → ${escapeHtml(toolData.to_phase)}</div>
+            </div>
+            <div class="field-group">
+                <span class="field-label">Summary</span>
+                <div class="field-value">${escapeHtml(toolData.summary || "No summary available")}</div>
+            </div>
+            <div class="field-group">
+                <span class="field-label">Generated</span>
+                <div class="field-value">${escapeHtml(toolData.timestamp || "N/A")}</div>
+            </div>
+            <p style="color:#888;font-size:12px;margin-top:15px">
+                This summary was generated by an LLM when transitioning between phases to capture key context.
             </p>
         `;
     } else if (d.type === 'step') {

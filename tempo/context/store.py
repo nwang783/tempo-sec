@@ -111,6 +111,49 @@ class ContextStore:
         
         raise KeyError(f"Tool call not found: {tool_call_id}")
     
+    def replace_messages_with_summary(
+        self,
+        start_index: int,
+        end_index: int,
+        summary: str,
+    ) -> None:
+        """
+        Replace a range of messages with a single summary message.
+        
+        Used after REFLECT phase to replace the previous cycle's context
+        with a concise summary, saving tokens for long runs.
+        
+        Args:
+            start_index: First message index to replace (inclusive)
+            end_index: Last message index to replace (exclusive)
+            summary: The summary text to insert
+        """
+        messages = self.current_frame.messages
+        
+        # Validate indices
+        if start_index < 0 or end_index > len(messages) or start_index >= end_index:
+            return  # Nothing to replace
+        
+        # Keep messages before start_index
+        before = messages[:start_index]
+        # Keep messages after end_index
+        after = messages[end_index:]
+        
+        # Create summary message
+        summary_msg = Message(
+            role=MessageRole.SYSTEM,
+            content=f"[Previous Cycle Summary]\n{summary}",
+        )
+        
+        # Rebuild message list
+        self.current_frame.messages = list(before) + [summary_msg] + list(after)
+        
+        # Also clear tool calls from the replaced range (they're summarized now)
+        # We keep tool calls as they may be referenced, but mark them as summarized
+        for tc in self.current_frame.tool_calls:
+            if tc.summary is None:
+                tc.summary = "[Included in cycle summary]"
+    
     # === State Management ===
     
     def update_state(self, **kwargs) -> None:

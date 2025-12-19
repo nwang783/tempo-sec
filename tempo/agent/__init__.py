@@ -8,6 +8,7 @@ Exports:
     - WorkflowManager: Phase transition management
     - WorkflowError: Workflow rule violation
     - OutputSummarizer: Tool output summarization
+    - PhaseSummarizer: Phase transition summarization
     - Agent: Main agent runner
     - AgentResult: Final result of an agent run
     - StepResult: Result of a single step
@@ -21,6 +22,7 @@ from tempo.agent.branch_coordinator import (
 )
 from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
+from tempo.agent.phase_summarizer import PhaseSummarizer
 from tempo.agent.runner import Agent, AgentResult, StepResult
 
 __all__ = [
@@ -31,7 +33,9 @@ __all__ = [
     "WorkflowManager",
     "WorkflowError",
     "OutputSummarizer",
+    "PhaseSummarizer",
     "Agent",
     "AgentResult",
     "StepResult",
 ]
+

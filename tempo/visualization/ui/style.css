@@ -270,6 +270,15 @@ h1 {
     fill: rgba(57, 255, 20, 0.1);
 }
 
+/* Phase Summary */
+.node.phase_summary rect {
+    filter: drop-shadow(0 0 6px rgba(255, 193, 7, 0.4));
+}
+
+.node.phase_summary:hover rect {
+    fill: rgba(255, 193, 7, 0.1);
+}
+
 .node.tool circle {
     stroke: var(--accent-green);
     fill: rgba(57, 255, 20, 0.1);

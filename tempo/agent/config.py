@@ -14,6 +14,7 @@ class AgentConfig:
     
     # Model settings
     model: str = "anthropic/claude-sonnet-4-20250514"
+    phase_summarization_model: str = "gemini/gemini-3-flash-preview"  # Fast model for phase summaries
     # temperature and max_tokens are managed by the model/provider defaults or per-request logic
     
     # Context management
@@ -21,6 +22,8 @@ class AgentConfig:
     auto_summarize: bool = True             # Automatically summarize tool outputs
     summarization_model: str | None = None  # Use cheaper model for summaries (None = same model)
     max_output_chars: int = 10000           # Chars to show per tool output (LLM can request more)
+    auto_phase_summary: bool = True         # Generate summaries on phase transitions
+    replace_context_after_reflect: bool = True  # Replace cycle context with summary after REFLECT
     
     # Workflow settings
     enforce_phases: bool = True             # Require explicit phase transitions
