@@ -396,85 +396,61 @@ svg:active {
     color: var(--ghidra-yellow);
 }
 
-/* Console */
-.console-wrapper {
+/* Prompt Input Area */
+.prompt-container {
     height: 100%;
     display: flex;
     flex-direction: column;
-    font-family: var(--font-code);
-    padding: 5px;
-    background-color: #1e1e1e;
-}
-
-.console-output {
-    padding: 5px 10px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    flex: 1;
-    overflow-y: auto;
-}
-
-.console-input-line {
-    display: flex;
-    align-items: center;
-    padding: 5px;
-    background-color: rgba(255, 255, 255, 0.05);
-    border-top: 1px solid var(--border-color);
-}
-
-.prompt-char {
-    color: var(--ghidra-green);
-    margin-right: 8px;
-    font-weight: bold;
+    padding: 10px;
+    background-color: var(--pane-bg);
 }
 
 #prompt-input {
     flex: 1;
-    background: transparent;
-    border: none;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
     color: var(--text-primary);
     font-family: var(--font-code);
     font-size: 12px;
+    padding: 10px;
     resize: none;
     outline: none;
-    height: 20px;
-    line-height: 20px;
+    border-radius: 2px;
+    margin-bottom: 8px;
+}
+
+#prompt-input:focus {
+    border-color: var(--accent-color);
+}
+
+.prompt-controls {
+    display: flex;
+    align-items: center;
+    height: 24px;
 }
 
 #send-prompt-btn {
     background-color: var(--accent-color);
     border: none;
     color: white;
-    padding: 4px 12px;
+    padding: 0 15px;
+    height: 24px;
     font-size: 11px;
+    font-weight: 600;
     border-radius: 2px;
     cursor: pointer;
-    margin-left: 10px;
+    text-transform: uppercase;
 }
 
 #send-prompt-btn:hover {
     background-color: var(--accent-hover);
 }
 
-/* Status Bar */
-.status-bar {
-    height: 22px;
-    background-color: var(--status-bar-bg);
-    color: var(--status-bar-fg);
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
+.prompt-feedback {
+    margin-left: 10px;
     font-size: 11px;
-    flex-shrink: 0;
-    gap: 15px;
-}
-
-.status-item {
-    opacity: 0.9;
-}
-
-.status-item.grow {
-    flex-grow: 1;
+    color: var(--ghidra-green);
+    font-weight: bold;
 }
 
 /* Scrollbars */

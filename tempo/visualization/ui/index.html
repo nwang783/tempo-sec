@@ -86,30 +86,21 @@
             </div>
         </div>
 
-        <!-- Bottom Pane: Console -->
+        <!-- Bottom Pane: Prompt Input -->
         <div class="bottom-pane">
             <div class="pane-header">
-                <span class="pane-title">CONSOLE</span>
+                <span class="pane-title">INJECT PROMPT</span>
             </div>
             <div class="pane-content">
-                <div class="console-wrapper">
-                    <div id="prompt-status" class="console-output">Tempo Security Agent initialized. System ready.</div>
-                    <div class="console-input-line">
-                        <span class="prompt-char">>>></span>
-                        <textarea id="prompt-input" placeholder="Inject prompt..."></textarea>
-                        <button id="send-prompt-btn">EXECUTE</button>
+                <div class="prompt-container">
+                    <textarea id="prompt-input"
+                        placeholder="Type a message to inject into the agent's context..."></textarea>
+                    <div class="prompt-controls">
+                        <button id="send-prompt-btn">SEND MESSAGE</button>
+                        <span id="prompt-status" class="prompt-feedback"></span>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Status Bar -->
-        <div class="status-bar">
-            <div class="status-item">Ln 1, Col 1</div>
-            <div class="status-item">UTF-8</div>
-            <div class="status-item">Tempo Sec v2.0</div>
-            <div class="status-item grow"></div>
-            <div class="status-item">Ready</div>
         </div>
     </div>
 
