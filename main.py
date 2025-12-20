@@ -2,17 +2,25 @@
 """
 Tempo Sec - Main Entry Point
 
-Redirects to the CLI implementation in tempo.cli.
-Run with: python3 main.py [options]
+Usage:
+    Recon:  python -m tempo.scripts.recon --target example.com
+    Test:   python -m tempo.scripts.test_cycle --manifest ./manifests/example.json
 """
 
 import sys
-import asyncio
-from tempo.cli import main
+
+
+def main():
+    print("Tempo Sec - Security Testing Agent")
+    print()
+    print("Usage:")
+    print("  Recon:  python -m tempo.scripts.recon --target <domain>")
+    print("  Test:   python -m tempo.scripts.test_cycle --manifest <path>")
+    print()
+    print("Or use the installed commands:")
+    print("  tempo-recon --target <domain>")
+    print("  tempo-test --manifest <path>")
+
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nOperation cancelled by user.")
-        sys.exit(0)
+    main()
