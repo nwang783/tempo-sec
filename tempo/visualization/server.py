@@ -33,12 +33,15 @@ class VisualizationServer:
         host: str = "127.0.0.1", 
         port: int = 8080, 
         auto_open: bool = True,
+
         prompt_manager: "UserPromptManager | None" = None,
+        stop_event: "asyncio.Event | None" = None,
     ):
         self.host = host
         self.port = port
         self.auto_open = auto_open
         self.prompt_manager = prompt_manager
+        self.stop_event = stop_event
         self.app = FastAPI(title="Tempo Sec Visualization")
         self.active_connections: List[WebSocket] = []
         self._server_task: Optional[asyncio.Task] = None
@@ -125,6 +128,16 @@ class VisualizationServer:
                     logger.info(f"User prompt enqueued: {content[:50]}...")
             
             # Future: handle other message types (e.g., "pause", "resume")
+            elif msg_type == "stop_agent":
+                logger.warning("Received stop_agent signal from UI")
+                if self.stop_event:
+                    self.stop_event.set()
+                    await self.broadcast(json.dumps({
+                        "type": "finish",
+                        "success": False,
+                        "error": "Stopped by user"
+                    }))
+            
             elif msg_type == "ping":
                 pass  # Keep-alive, no action needed
                 

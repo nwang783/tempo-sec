@@ -706,6 +706,25 @@ function sendPrompt() {
     }, 5000);
 }
 
+const stopBtn = document.getElementById('stop-btn');
+
+function sendStopSignal() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+    // Confirm first
+    if (!confirm("Are you sure you want to stop the agent?")) return;
+
+    socket.send(JSON.stringify({
+        type: 'stop_agent'
+    }));
+
+    stopBtn.textContent = "STOPPING...";
+    stopBtn.disabled = true;
+    statusEl.textContent = "STOPPING";
+}
+
+stopBtn.addEventListener('click', sendStopSignal);
+
 // Button click handler
 sendPromptBtn.addEventListener('click', sendPrompt);
 
