@@ -74,6 +74,7 @@ class Agent:
         on_tool_call: "Callable[[ToolCall], None] | None" = None,
         visualization_collector: "VisualizationCollector | None" = None,
         prompt_manager: "UserPromptManager | None" = None,
+        stop_event: "asyncio.Event | None" = None,
     ):
         """
         Initialize the agent.
@@ -87,6 +88,7 @@ class Agent:
             workflow: Workflow manager (created if not provided, pass to share with tools)
             on_step: Callback invoked after each step completes
             on_tool_call: Callback invoked after each tool execution
+            stop_event: Event to signal forced stop
         """
         self.config = config
         self.llm = llm
@@ -99,6 +101,7 @@ class Agent:
         self._on_tool_call = on_tool_call
         self._viz_collector = visualization_collector
         self._prompt_manager = prompt_manager
+        self.stop_event = stop_event
         
         # Use provided workflow manager or create one (share with TransitionPhaseTool!)
         self.workflow = workflow or WorkflowManager(config)
@@ -197,6 +200,7 @@ class Agent:
         objective: str,
         initial_phase: Phase = Phase.RECON,
         max_steps: int | None = None,
+        start_step: int = 0,
     ) -> AgentResult:
         """
         Run the agent on an objective.
@@ -205,31 +209,60 @@ class Agent:
             objective: What the agent should accomplish
             initial_phase: Starting phase (default: RECON)
             max_steps: Override max steps from config
+            start_step: Starting step number (for resumed sessions)
             
         Returns:
             AgentResult with findings, final state, etc.
         """
         self._objective = objective
-        self._step_count = 0
-        self.workflow.reset(initial_phase)
+        self._step_count = start_step
         
-        # Add initial system message
-        system_prompt = self.prompts.build_full_prompt(
-            objective=objective,
-            current_phase=initial_phase,
-            tool_schemas=self.tools.get_schemas(),
-            scope_description=self.config.scope or "No specific scope defined.",
-        )
-        self.context.add_message(MessageRole.SYSTEM, system_prompt)
+        # Only reset workflow if starting fresh
+        if start_step == 0:
+            self.workflow.reset(initial_phase)
         
-        # Add user objective
-        self.context.add_message(MessageRole.USER, f"Objective: {objective}")
+        # If we are effectively starting from scratch (step_count == 0), add initial prompts
+        # If resuming (step_count > 0), assume context is already primed
+        is_resuming = start_step > 0
+        
+        if not is_resuming:
+            # Add initial system message
+            system_prompt = self.prompts.build_full_prompt(
+                objective=objective,
+                current_phase=initial_phase,
+                tool_schemas=self.tools.get_schemas(),
+                scope_description=self.config.scope or "No specific scope defined.",
+            )
+            self.context.add_message(MessageRole.SYSTEM, system_prompt)
+            
+            # Add user objective
+            self.context.add_message(MessageRole.USER, f"Objective: {objective}")
         
         max_steps = max_steps or self.config.max_steps or 50
         
         try:
             while self._step_count < max_steps:
+                # Check for forced stop
+                if self.stop_event and self.stop_event.is_set():
+                    self.context.add_message(MessageRole.SYSTEM, "[System] Agent execution stopped by user request.")
+                    return AgentResult(
+                        success=False,
+                        objective=objective,
+                        steps_taken=self._step_count,
+                        final_phase=self.workflow.current_phase,
+                        findings=self._findings,
+                        hypotheses=self._hypotheses,
+                        context_id=self.context.current_frame.id,
+                        error="Stopped by user",
+                    )
+
                 step_result = await self.step()
+                
+                # Checkpoint after step if enabled
+                if self.config.auto_checkpoint:
+                    self.checkpoint(
+                        label=f"Step {self._step_count}: {self.workflow.current_phase.value}"
+                    )
                 
                 # Check for user prompts between steps
                 await self._check_for_user_prompts()

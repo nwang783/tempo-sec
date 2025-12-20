@@ -55,6 +55,32 @@ Note on security: All of the agents actions should be run in a container with no
 
 For reasons mentioned above, it would be best to use more than a single agent. However, sometimes instead of creating subagents, it's better to create clones of the original agent to complete tasks in parallel. This way, the subtlities of the previous context is not lost, but the context is not cluttered with single use info. For example, if the agent identifies three separate attack surfaces, it could create three clones of itself to explore each path in parallel, then a summary of each path's actions and findings could be presented back to the agent in the very next "context frame" immediately after delegating each task. 
 
+## Usage
+
+### Running the Agent
+
+You can run the agent using the provided `main.py` script:
+
+```bash
+# Basic run (uses config.toml)
+python main.py
+
+# Specify a different config
+python main.py --config my_config.toml
+```
+
+### Restarting / Resuming
+
+To restart from a specific step or phase, provide the context file from a previous run:
+
+```bash
+# Restart from step 5
+python main.py --context contexts/uuid.json --restart-step 5
+
+# Restart from 'TEST' phase
+python main.py --context contexts/uuid.json --restart-phase test
+```
+
 ## Contributing
 
-Contributing is highly encouraged and welcome. This README will be updated with any new findings from building the agent. 
+Contributing is highly encouraged and welcome. This README will be updated with any new findings from building the agent.
