@@ -43,6 +43,10 @@ dev = [
     "mypy>=1.8.0",
 ]
 
+[project.scripts]
+tempo-recon = "tempo.scripts.recon:main_sync"
+tempo-test = "tempo.scripts.test_cycle:main_sync"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

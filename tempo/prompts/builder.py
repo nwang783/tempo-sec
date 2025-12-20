@@ -180,6 +180,34 @@ class PromptBuilder:
         
         return "\n".join(lines)
     
+    def build_recon_prompt(
+        self,
+        objective: str,
+        tool_schemas: list[dict],
+        scope_description: str = "No specific scope defined.",
+    ) -> str:
+        """
+        Build the system prompt for standalone recon agent.
+        
+        This prompt does NOT include phase transition instructions.
+        
+        Args:
+            objective: The target/objective for recon
+            tool_schemas: List of tool schemas
+            scope_description: Scope/limits for testing
+            
+        Returns:
+            Formatted recon system prompt
+        """
+        tool_descriptions = self.format_tool_descriptions(tool_schemas)
+        template = self._load_template("recon_system")
+        
+        return template.format(
+            objective=objective,
+            tool_descriptions=tool_descriptions,
+            scope_description=scope_description,
+        )
+    
     def filter_schemas_for_subagent(self, schemas: list[dict]) -> list[dict]:
         """
         Filter tool schemas for subagent use.

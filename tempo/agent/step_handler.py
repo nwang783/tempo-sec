@@ -171,4 +171,17 @@ class StepHandler:
                     branch_id=branch_id,
                 )
         
+        elif tool_call.tool_name == "complete_recon":
+            # Recon is complete - stop the agent
+            if tool_call.metadata.get("recon_complete"):
+                return SpecialToolResult(
+                    tool_name="complete_recon",
+                    should_continue=False,
+                    findings={
+                        "manifest_path": tool_call.metadata.get("manifest_path", ""),
+                        "endpoint_count": tool_call.metadata.get("endpoint_count", 0),
+                        "surface_count": tool_call.metadata.get("surface_count", 0),
+                    },
+                )
+        
         return None

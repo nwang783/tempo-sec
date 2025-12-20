@@ -212,3 +212,5 @@ logs/
 
 # Config
 config.toml
+
+manifests/

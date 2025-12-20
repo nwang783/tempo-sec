@@ -482,6 +482,15 @@ class Agent:
                 # Note: This schedules the branch but actual waiting happens in step()
                 pass  # Branch handling is asynchronous
         
+        elif special.tool_name == "complete_recon":
+            # Recon is complete - stop the agent
+            step_result.should_continue = False
+            if special.findings:
+                self._findings.append({
+                    **special.findings,
+                    "step": self._step_count,
+                })
+        
         return step_result
     
     def _handle_tool_call_complete(self, tool_call: ToolCall) -> None:

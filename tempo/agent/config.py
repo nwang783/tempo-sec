@@ -42,6 +42,10 @@ class AgentConfig:
     # Persistence
     persistence_dir: str = "./contexts"
     auto_checkpoint: bool = True            # Checkpoint after each tool call
+    
+    # Manifest settings (for recon/testing split workflow)
+    manifest_path: str | None = None        # Path to load manifest (for test_cycle.py)
+    manifest_output_dir: str = "./manifests" # Directory to save manifests (for recon.py)
 
     # Scope
     allowed_domains: list[str] = field(default_factory=list)
@@ -192,5 +196,13 @@ class AgentConfig:
                 kwargs["log_level"] = log["level"]
             if "verbose" in log:
                 kwargs["verbose"] = log["verbose"]
+        
+        # [manifest] section
+        if "manifest" in data:
+            m = data["manifest"]
+            if "path" in m:
+                kwargs["manifest_path"] = m["path"]
+            if "output_dir" in m:
+                kwargs["manifest_output_dir"] = m["output_dir"]
         
         return cls(**kwargs)
