@@ -750,5 +750,28 @@ function updateCostPanel(data) {
     }
 }
 
-connect();
 
+// === UI Interactions ===
+// Collapsible Tree Sections
+document.querySelectorAll('.section-header').forEach(header => {
+    header.addEventListener('click', () => {
+        const section = header.parentElement;
+        const content = section.querySelector('.tree-content');
+
+        // Toggle expanded class
+        section.classList.toggle('expanded');
+        section.classList.toggle('collapsed');
+
+        // Toggle arrow text
+        const text = header.childNodes[0]; // Assuming text node is first or arrow is in text
+        if (section.classList.contains('collapsed')) {
+            content.style.display = 'none';
+            header.innerHTML = header.innerHTML.replace('▼', '▶');
+        } else {
+            content.style.display = 'block';
+            header.innerHTML = header.innerHTML.replace('▶', '▼');
+        }
+    });
+});
+
+connect();

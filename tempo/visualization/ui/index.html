@@ -4,83 +4,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tempo Sec - Agent Execution</title>
+    <title>Tempo Sec - Ghidra View</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;600&display=swap"
+        rel="stylesheet">
 </head>
 
 <body>
-    <div class="container">
-        <header>
-            <h1>Tempo Sec Execution Tree</h1>
-            <div id="status" class="status disconnected">Disconnected</div>
-        </header>
+    <div class="ide-container">
+        <!-- Top Menu Bar -->
+        <div class="menu-bar">
+            <!-- Functional items only -->
+            <div class="menu-item">Tempo Security Agent</div>
+            <div class="spacer"></div>
+            <div id="status" class="status disconnected">DISCONNECTED</div>
+        </div>
 
-        <div class="main-content">
-            <div class="left-panel">
-                <div id="tree-container"></div>
+        <!-- Main Workspace (3 Columns) -->
+        <div class="workspace">
+            <!-- Left Pane: Symbol Tree / Program Trees -->
+            <div class="pane left-pane">
+                <div class="pane-header">
+                    <span class="pane-title">SYMBOL TREE</span>
+                </div>
+                <div class="pane-content scrollable">
+                    <div class="tree-section expanded">
+                        <div class="section-header">▼ Agent State</div>
+                        <div id="agent-state-content" class="tree-content">
+                            <div class="tree-item"><span class="icon">M</span> <span class="label">Model:</span> <span
+                                    id="state-model" class="value">-</span></div>
+                            <div class="tree-item"><span class="icon">P</span> <span class="label">Phase:</span> <span
+                                    id="state-phase" class="value">-</span></div>
+                            <div class="tree-item"><span class="icon">S</span> <span class="label">Step:</span> <span
+                                    id="state-step" class="value">-</span></div>
+                            <div class="tree-item"><span class="icon">L</span> <span class="label">Latest:</span> <span
+                                    id="state-latest" class="value">-</span></div>
+                        </div>
+                    </div>
+
+                    <div class="tree-section expanded">
+                        <div class="section-header">▼ Run Cost</div>
+                        <div id="cost-content" class="tree-content">
+                            <div class="tree-item highlight-row">
+                                <span class="icon">$</span> <span class="label">Total:</span>
+                                <span id="cost-total" class="value cost-value">$0.0000</span>
+                            </div>
+                            <div class="tree-item"><span class="icon">C</span> <span class="label">Cached:</span> <span
+                                    id="cost-cached" class="value">0</span></div>
+                            <div class="tree-sub-group">
+                                <div class="tree-item small"><span class="label">Prompt:</span> <span id="cost-prompt"
+                                        class="value">0</span></div>
+                                <div class="tree-item small"><span class="label">Compl:</span> <span
+                                        id="cost-completion" class="value">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="right-panel">
-                <div class="panel-header">Node Details</div>
-                <div id="details-content" class="details-content">
-                    <div class="placeholder-text">Select a node to view details</div>
+            <!-- Center Pane: Graph View -->
+            <div class="pane center-pane">
+                <div class="pane-tabs">
+                    <div class="tab active">Graph View</div>
                 </div>
+                <div class="pane-content no-padding">
+                    <div id="tree-container"></div>
+                </div>
+            </div>
 
-                <div class="state-section">
-                    <div class="panel-header">Agent State</div>
-                    <div id="agent-state-content">
-                        <div class="state-item">
-                            <span class="label">Model:</span>
-                            <span id="state-model" class="value">-</span>
-                        </div>
-                        <div class="state-item">
-                            <span class="label">Phase:</span>
-                            <span id="state-phase" class="value">-</span>
-                        </div>
-                        <div class="state-item">
-                            <span class="label">Step:</span>
-                            <span id="state-step" class="value">-</span>
-                        </div>
-                        <div class="state-item">
-                            <span class="label">Latest:</span>
-                            <span id="state-latest" class="value">-</span>
-                        </div>
+            <!-- Right Pane: Data Display -->
+            <div class="pane right-pane">
+                <div class="pane-header">
+                    <span class="pane-title">DATA DISPLAY</span>
+                </div>
+                <div class="pane-content scrollable">
+                    <div id="details-content" class="details-content">
+                        <div class="placeholder-text">// Select a node to inspect memory...</div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="cost-section">
-                    <div class="panel-header">Run Cost</div>
-                    <div id="cost-content">
-                        <div class="cost-item cost-total-row">
-                            <span class="label">Total Cost:</span>
-                            <span id="cost-total" class="value cost-value">$0.0000</span>
-                        </div>
-                        <div class="cost-item">
-                            <span class="label">Cached:</span>
-                            <span id="cost-cached" class="value">0 tokens</span>
-                        </div>
-                        <div class="cost-breakdown">
-                            <div class="cost-item small">
-                                <span class="label">Prompt:</span>
-                                <span id="cost-prompt" class="value">0</span>
-                            </div>
-                            <div class="cost-item small">
-                                <span class="label">Completion:</span>
-                                <span id="cost-completion" class="value">0</span>
-                            </div>
-                        </div>
+        <!-- Bottom Pane: Prompt Input -->
+        <div class="bottom-pane">
+            <div class="pane-header">
+                <span class="pane-title">INJECT PROMPT</span>
+            </div>
+            <div class="pane-content">
+                <div class="prompt-container">
+                    <textarea id="prompt-input"
+                        placeholder="Type a message to inject into the agent's context..."></textarea>
+                    <div class="prompt-controls">
+                        <button id="send-prompt-btn">SEND MESSAGE</button>
+                        <span id="prompt-status" class="prompt-feedback"></span>
                     </div>
-                </div>
-
-                <div class="prompt-section">
-                    <div class="panel-header">Send Prompt to Agent</div>
-                    <div class="prompt-form">
-                        <textarea id="prompt-input"
-                            placeholder="Enter a prompt to inject into the agent's context..."></textarea>
-                        <button id="send-prompt-btn">Send Prompt</button>
-                    </div>
-                    <div id="prompt-status" class="prompt-status"></div>
                 </div>
             </div>
         </div>
