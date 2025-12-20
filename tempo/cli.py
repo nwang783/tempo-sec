@@ -168,7 +168,71 @@ def restore_context(
         # Just resuming from end
         pass
         
+            
     return context, current_step
+
+
+async def replay_history(context: ContextStore, viz_collector: "VisualizationCollector") -> None:
+    """
+    Replay events from context history to the visualization collector.
+    """
+    print("Replaying history to visualization...")
+    
+    # Manually traverse history from root
+    path = []
+    frame_id = context._current_frame_id
+    frames_map = context._frames
+    
+    while frame_id is not None:
+        if frame_id in frames_map:
+            frame = frames_map[frame_id]
+            path.append(frame)
+            frame_id = frame.parent_id
+        else:
+            break
+            
+    # Reverse to get chronological order
+    path.reverse()
+    
+    last_phase = "recon"
+    current_step_num = 0
+    
+    # Emit start event
+    viz_collector.on_agent_start("Resumed Session", model_name="Resumed")
+
+    for frame in path:
+        # Try to infer step number from label "Step N: ..."
+        if frame.label and frame.label.startswith("Step "):
+            try:
+                parts = frame.label.split(":")
+                step_str = parts[0].replace("Step ", "")
+                current_step_num = int(step_str)
+            except ValueError:
+                pass
+                
+        # Emit step event
+        # We perform a sort of "virtual step" for each frame to ensure UI has a container
+        # Use frame's state phase
+        current_phase = frame.state.current_phase or last_phase
+        
+        step_data = {
+            "step_number": current_step_num,
+            "phase": current_phase if current_phase != last_phase else None,
+            "error": None,
+            "should_continue": True,
+            "llm_content": None,
+            "frame_id": frame.id
+        }
+        viz_collector.emit("step", step_data)
+        
+        last_phase = current_phase
+        
+        # Emit tool calls
+        for tool_call in frame.tool_calls:
+            viz_collector.on_tool_call(tool_call, frame.id)
+            
+    print(f"Replayed {len(path)} frames.")
+
 
 
 async def main():
@@ -214,7 +278,6 @@ async def main():
     llm = LiteLLMClient(model=config.model)
     
     # Setup Visualization
-
     viz_server = None
     viz_collector = None
     prompt_manager = None
@@ -234,6 +297,15 @@ async def main():
         )
         await viz_server.start()
         viz_collector = VisualizationCollector(viz_server)
+        
+        # Replay history if context exists
+        if args.context and context and context._current_frame_id:
+            print("Waiting for visualization client to connect...")
+            connected = await viz_server.wait_for_connection(timeout=15.0)
+            if connected:
+                await replay_history(context, viz_collector)
+            else:
+                print("No visualization client connected, skipping history replay.")
     
     # Determine Objective
     objective = args.prompt

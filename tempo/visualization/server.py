@@ -166,6 +166,25 @@ class VisualizationServer:
             
         logger.info(f"Visualization server starting at http://{self.host}:{self.port}")
 
+    async def wait_for_connection(self, timeout: float = 10.0) -> bool:
+        """
+        Wait for at least one WebSocket client to connect.
+        
+        Args:
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            True if a connection was established, False if timeout
+        """
+        elapsed = 0.0
+        interval = 0.1
+        while elapsed < timeout:
+            if self.active_connections:
+                return True
+            await asyncio.sleep(interval)
+            elapsed += interval
+        return False
+
     async def _open_browser(self):
         """Open browser after a short delay."""
         await asyncio.sleep(1.0)
