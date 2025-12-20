@@ -332,31 +332,13 @@ async def main():
             stop_event=stop_event,
         )
         
-        # If restarting, manually set the step count
-        # Accessing protected member for restart logic
         if step_count > 0:
-            agent._step_count = step_count
             print(f"Resuming agent execution from step {step_count}")
-        
-        # Run
-        # If we have an existing context, we might not need to pass objective if it's already in history?
-        # But run() expects an objective.
-        # If context is loaded, agent.run() normally resets workflow.
-        # We need to be careful not to wipe state.
-        # Agent.run calls workflow.reset(). 
-        # If we are resuming, we should probably modify Agent.run to handle resumption better,
-        # or use a new method `resume()`.
-        # For now, let's call run() but rely on it not clearing context if we pass it in.
-        # Check Agent.run implementation:
-        #   self.workflow.reset(initial_phase) -> Resets phase to RECON or whatever passed.
-        #   self.context.add_message... -> Adds system prompt again.
-        
-        # WE NEED TO FIX Agent.run FOR RESUMPTION or use a different entry point.
-        # Let's adjust Agent.run in the next step to support resumption/skip initialization.
         
         return await agent.run(
             objective=objective if objective else "Resume execution",
             max_steps=config.max_total_steps,
+            start_step=step_count,
         )
 
     # Resource Management

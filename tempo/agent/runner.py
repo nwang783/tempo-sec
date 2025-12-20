@@ -200,6 +200,7 @@ class Agent:
         objective: str,
         initial_phase: Phase = Phase.RECON,
         max_steps: int | None = None,
+        start_step: int = 0,
     ) -> AgentResult:
         """
         Run the agent on an objective.
@@ -208,17 +209,21 @@ class Agent:
             objective: What the agent should accomplish
             initial_phase: Starting phase (default: RECON)
             max_steps: Override max steps from config
+            start_step: Starting step number (for resumed sessions)
             
         Returns:
             AgentResult with findings, final state, etc.
         """
         self._objective = objective
-        self._step_count = 0
-        self.workflow.reset(initial_phase)
+        self._step_count = start_step
+        
+        # Only reset workflow if starting fresh
+        if start_step == 0:
+            self.workflow.reset(initial_phase)
         
         # If we are effectively starting from scratch (step_count == 0), add initial prompts
         # If resuming (step_count > 0), assume context is already primed
-        is_resuming = self._step_count > 0
+        is_resuming = start_step > 0
         
         if not is_resuming:
             # Add initial system message
