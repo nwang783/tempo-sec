@@ -30,7 +30,7 @@ For each test:
 
 ### Important Reminders
 - Summarize verbose tool outputs with `summarize_tool_output`
-- Stay within scope - don't test unauthorized targets
+- Be thorough - test with real payloads, create accounts, query databases
 - Document your methodology
 
 ### When to Transition
