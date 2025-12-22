@@ -345,10 +345,10 @@ asyncio.run(main())
 
 
 class BrowserSnapshotTool(Tool):
-    """Capture accessibility snapshot of the current page."""
+    """Capture snapshot of the current page for element interaction."""
     
     name = "browser_snapshot"
-    description = "Capture accessibility snapshot of the current page. This provides element refs for interaction."
+    description = "Capture a snapshot of the current page with element refs for interaction. Returns interactive elements like links, buttons, inputs, and their refs."
     category = ToolCategory.BROWSING
     
     def __init__(self, session: BrowserSession):
@@ -360,14 +360,14 @@ class BrowserSnapshotTool(Tool):
         purpose: str = "",
     ) -> ToolResult:
         """
-        Capture accessibility snapshot.
+        Capture page snapshot with element refs.
         
         Args:
             filename: Optional file to save snapshot to
             purpose: Why this snapshot is being taken
             
         Returns:
-            ToolResult with accessibility tree and element refs
+            ToolResult with element tree and refs for interaction
         """
         try:
             await self.session.ensure_browser()
@@ -375,50 +375,77 @@ class BrowserSnapshotTool(Tool):
             if self.session.container is not None:
                 return await self._execute_in_container(filename)
             
-            # Get accessibility tree
+            # Wait for page to be more stable
+            try:
+                await self.session.page.wait_for_load_state("domcontentloaded", timeout=5000)
+            except Exception:
+                pass  # Continue even if timeout
+            
+            # Try accessibility tree first
             snapshot = await self.session.page.accessibility.snapshot()
             
-            if snapshot is None:
+            refs = {}
+            output_lines = []
+            
+            if snapshot and snapshot.get("children"):
+                # Use accessibility tree
+                ref_counter = [0]
+                
+                def process_node(node: dict, depth: int = 0) -> list[str]:
+                    """Process accessibility node and assign refs."""
+                    lines = []
+                    ref = f"ref_{ref_counter[0]}"
+                    ref_counter[0] += 1
+                    
+                    role = node.get("role", "unknown")
+                    name = node.get("name", "")
+                    
+                    # Store ref mapping
+                    refs[ref] = {
+                        "role": role,
+                        "name": name,
+                        "node": node,
+                    }
+                    
+                    # Format output line
+                    indent = "  " * depth
+                    line = f"{indent}[{ref}] {role}"
+                    if name:
+                        line += f': "{name[:50]}"' if len(name) > 50 else f': "{name}"'
+                    lines.append(line)
+                    
+                    # Process children
+                    for child in node.get("children", []):
+                        lines.extend(process_node(child, depth + 1))
+                    
+                    return lines
+                
+                output_lines = process_node(snapshot)
+            else:
+                # Fallback: Extract interactive elements from DOM
+                output_lines.append("# Fallback: Accessibility tree unavailable, using DOM extraction")
+                output_lines.append("")
+                
+                elements = await self._extract_interactive_elements()
+                
+                for i, elem in enumerate(elements):
+                    ref = f"ref_{i}"
+                    refs[ref] = {
+                        "role": elem["type"],
+                        "name": elem["text"],
+                        "selector": elem.get("selector", ""),
+                    }
+                    output_lines.append(f"[{ref}] {elem['type']}: \"{elem['text'][:50]}\"")
+                    if elem.get("href"):
+                        output_lines.append(f"        href: {elem['href']}")
+            
+            if not refs:
                 return ToolResult(
                     success=False,
                     output="",
-                    error="Failed to capture accessibility snapshot",
+                    error="No interactive elements found on page. The page may still be loading or is empty.",
                 )
             
-            # Build ref mapping from snapshot
-            refs = {}
-            ref_counter = [0]
-            
-            def process_node(node: dict, depth: int = 0) -> list[str]:
-                """Process accessibility node and assign refs."""
-                lines = []
-                ref = f"ref_{ref_counter[0]}"
-                ref_counter[0] += 1
-                
-                role = node.get("role", "unknown")
-                name = node.get("name", "")
-                
-                # Store ref mapping
-                refs[ref] = {
-                    "role": role,
-                    "name": name,
-                    "node": node,
-                }
-                
-                # Format output line
-                indent = "  " * depth
-                line = f"{indent}[{ref}] {role}"
-                if name:
-                    line += f': "{name[:50]}"' if len(name) > 50 else f': "{name}"'
-                lines.append(line)
-                
-                # Process children
-                for child in node.get("children", []):
-                    lines.extend(process_node(child, depth + 1))
-                
-                return lines
-            
-            output_lines = process_node(snapshot)
             output = "\n".join(output_lines)
             
             # Store refs for later use
@@ -438,6 +465,73 @@ class BrowserSnapshotTool(Tool):
             
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
+    
+    async def _extract_interactive_elements(self) -> list[dict]:
+        """Extract interactive elements from DOM as fallback."""
+        return await self.session.page.evaluate("""
+            () => {
+                const elements = [];
+                
+                // Links
+                document.querySelectorAll('a[href]').forEach((el, i) => {
+                    if (i < 20) {
+                        elements.push({
+                            type: 'link',
+                            text: el.innerText?.trim() || el.getAttribute('aria-label') || 'unnamed',
+                            href: el.href,
+                            selector: `a[href="${el.getAttribute('href')}"]`
+                        });
+                    }
+                });
+                
+                // Buttons
+                document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach((el, i) => {
+                    if (i < 15) {
+                        elements.push({
+                            type: 'button',
+                            text: el.innerText?.trim() || el.value || el.getAttribute('aria-label') || 'unnamed',
+                            selector: el.id ? `#${el.id}` : null
+                        });
+                    }
+                });
+                
+                // Text inputs
+                document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="search"], textarea').forEach((el, i) => {
+                    if (i < 15) {
+                        elements.push({
+                            type: 'textbox',
+                            text: el.placeholder || el.name || el.id || 'input',
+                            selector: el.id ? `#${el.id}` : (el.name ? `[name="${el.name}"]` : null)
+                        });
+                    }
+                });
+                
+                // Checkboxes and radios
+                document.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach((el, i) => {
+                    if (i < 10) {
+                        const label = el.labels?.[0]?.innerText || el.name || 'option';
+                        elements.push({
+                            type: el.type,
+                            text: label,
+                            selector: el.id ? `#${el.id}` : null
+                        });
+                    }
+                });
+                
+                // Select dropdowns
+                document.querySelectorAll('select').forEach((el, i) => {
+                    if (i < 10) {
+                        elements.push({
+                            type: 'combobox',
+                            text: el.name || el.id || 'dropdown',
+                            selector: el.id ? `#${el.id}` : null
+                        });
+                    }
+                });
+                
+                return elements.filter(e => e.text && e.text.length < 100);
+            }
+        """)
     
     async def _execute_in_container(self, filename: str | None) -> ToolResult:
         """Execute snapshot in container."""
@@ -463,6 +557,7 @@ class BrowserSnapshotTool(Tool):
                 "required": [],
             },
         )
+
 
 
 class BrowserClickTool(Tool):
