@@ -116,7 +116,8 @@ class ToolRegistry:
             - shell: Execute shell commands
             - file_read: Read file contents
             - file_write: Write file contents
-            - browser: Browse web pages
+            - browser_navigate, browser_snapshot, browser_click, 
+              browser_type, browser_fill_form: Web browsing tools
             
         Args:
             container_manager: Optional container manager for sandboxed execution
@@ -126,7 +127,14 @@ class ToolRegistry:
         """
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.browser import BrowserTool
+        from tempo.tools.browser_tools import (
+            BrowserSession,
+            BrowserNavigateTool,
+            BrowserSnapshotTool,
+            BrowserClickTool,
+            BrowserTypeTool,
+            BrowserFillFormTool,
+        )
         
         registry = cls()
         
@@ -134,6 +142,13 @@ class ToolRegistry:
         registry.register(ShellTool(container_manager))
         registry.register(FileReadTool(container_manager))
         registry.register(FileWriteTool(container_manager))
-        registry.register(BrowserTool())
+        
+        # Playwright-style browser tools
+        browser_session = BrowserSession(container_manager=container_manager)
+        registry.register(BrowserNavigateTool(browser_session))
+        registry.register(BrowserSnapshotTool(browser_session))
+        registry.register(BrowserClickTool(browser_session))
+        registry.register(BrowserTypeTool(browser_session))
+        registry.register(BrowserFillFormTool(browser_session))
         
         return registry

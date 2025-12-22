@@ -10,7 +10,14 @@ from typing import TYPE_CHECKING
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.shell import ShellTool
 from tempo.tools.filesystem import FileReadTool, FileWriteTool
-from tempo.tools.browser import BrowserTool
+from tempo.tools.browser_tools import (
+    BrowserSession,
+    BrowserNavigateTool,
+    BrowserSnapshotTool,
+    BrowserClickTool,
+    BrowserTypeTool,
+    BrowserFillFormTool,
+)
 from tempo.tools.meta import (
     TransitionPhaseTool,
     SummarizeOutputTool,
@@ -54,7 +61,14 @@ def create_sandboxed_tools(
     tools.register(ShellTool(container_manager=container))
     tools.register(FileReadTool(container_manager=container))
     tools.register(FileWriteTool(container_manager=container))
-    tools.register(BrowserTool(container_manager=container))
+    
+    # Playwright-style browser tools with shared session
+    browser_session = BrowserSession(container_manager=container)
+    tools.register(BrowserNavigateTool(browser_session))
+    tools.register(BrowserSnapshotTool(browser_session))
+    tools.register(BrowserClickTool(browser_session))
+    tools.register(BrowserTypeTool(browser_session))
+    tools.register(BrowserFillFormTool(browser_session))
     
     # Meta tools
     tools.register(FinishTaskTool())
@@ -99,7 +113,14 @@ def create_local_tools(
     tools.register(ShellTool())
     tools.register(FileReadTool())
     tools.register(FileWriteTool())
-    tools.register(BrowserTool())
+    
+    # Playwright-style browser tools with shared session (local)
+    browser_session = BrowserSession()
+    tools.register(BrowserNavigateTool(browser_session))
+    tools.register(BrowserSnapshotTool(browser_session))
+    tools.register(BrowserClickTool(browser_session))
+    tools.register(BrowserTypeTool(browser_session))
+    tools.register(BrowserFillFormTool(browser_session))
     
     # Meta tools
     tools.register(FinishTaskTool())
