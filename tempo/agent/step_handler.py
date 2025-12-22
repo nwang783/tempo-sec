@@ -91,19 +91,9 @@ class StepHandler:
             tool_call.metadata = result.metadata
             tool_call.success = result.success
             
-            # Add reminder to summarize if output is long
-            if len(result.output) > max_output_chars:
-                tool_call.raw_output += (
-                    f"\n\n"
-                    f"╔══════════════════════════════════════════════════════════════╗\n"
-                    f"║ ⚠️  REQUIRED ACTION: SUMMARIZE THIS OUTPUT                    ║\n"
-                    f"╠══════════════════════════════════════════════════════════════╣\n"
-                    f"║ This output is {len(result.output):,} characters. To save context tokens,     ║\n"
-                    f"║ you MUST call `summarize_tool_output` IMMEDIATELY.           ║\n"
-                    f"║                                                              ║\n"
-                    f"║ tool_call_id: {tool_call.id}                      ║\n"
-                    f"╚══════════════════════════════════════════════════════════════╝"
-                )
+            # Note: Truncation instructions are added by get_truncated_output()
+            # when the output exceeds max_chars during context rendering.
+            # This ensures the AI sees the instruction within the char limit.
             
         except Exception as e:
             tool_call.raw_output = f"Error executing tool: {str(e)}"

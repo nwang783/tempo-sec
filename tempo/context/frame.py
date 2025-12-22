@@ -79,7 +79,9 @@ class ToolCall:
         """
         Get output for context, truncated to max_chars if necessary.
         
-        Shows first max_chars with range info and instructions for viewing more.
+        Shows first (max_chars - instruction_size) chars with range info,
+        instructions for viewing more, and a reminder to summarize.
+        The instruction is included WITHIN the limit so the AI sees it.
         
         Args:
             max_chars: Maximum characters to include
@@ -93,13 +95,28 @@ class ToolCall:
         if total <= max_chars:
             return output
         
-        # Show first max_chars with range info
-        return (
-            f"[Showing chars 0-{max_chars} of {total} total]\n"
-            f"{output[:max_chars]}\n\n"
-            f"[Output truncated. Use view_tool_output(tool_call_id='{self.id}', "
-            f"start_char=N, end_char=M) to view other ranges.]"
+        # Build instruction message first to know its length
+        instruction = (
+            f"\n\n[OUTPUT TRUNCATED - Showing {{content_chars:,}} of {total:,} chars]\n"
+            f"Tool call ID: {self.id}\n"
+            f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
+            f"IMPORTANT: You MUST call summarize_tool_output for this tool call."
         )
+        
+        # Calculate how much space we have for content
+        # Use a placeholder length estimate, then recalculate
+        estimated_instruction_len = len(instruction.format(content_chars=max_chars))
+        content_chars = max_chars - estimated_instruction_len
+        
+        # Format with actual content_chars value
+        final_instruction = (
+            f"\n\n[OUTPUT TRUNCATED - Showing {content_chars:,} of {total:,} chars]\n"
+            f"Tool call ID: {self.id}\n"
+            f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
+            f"IMPORTANT: You MUST call summarize_tool_output for this tool call."
+        )
+        
+        return f"{output[:content_chars]}{final_instruction}"
     
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
