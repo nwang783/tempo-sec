@@ -141,6 +141,31 @@ class TestToolCall:
         assert restored.input == original.input
         assert restored.raw_output == original.raw_output
         assert restored.summary == original.summary
+    
+    def test_truncated_output_includes_instruction_within_limit(self):
+        """Test that truncated output includes summarization instruction within limit."""
+        long_output = "A" * 20000
+        tc = ToolCall(tool_name="test", raw_output=long_output)
+        
+        result = tc.get_truncated_output(max_chars=10000)
+        
+        # Verify total length doesn't exceed limit
+        assert len(result) <= 10000, f"Result length {len(result)} exceeds limit 10000"
+        # Verify instruction is included
+        assert "OUTPUT TRUNCATED" in result
+        assert "MUST call summarize_tool_output" in result
+        assert tc.id in result
+        assert "view_tool_output" in result
+    
+    def test_short_output_not_truncated(self):
+        """Test that short outputs are not modified."""
+        short_output = "Short output"
+        tc = ToolCall(tool_name="test", raw_output=short_output)
+        
+        result = tc.get_truncated_output(max_chars=10000)
+        
+        assert result == short_output
+        assert "TRUNCATED" not in result
 
 
 class TestAgentState:
