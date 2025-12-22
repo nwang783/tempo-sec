@@ -184,4 +184,12 @@ class StepHandler:
                     },
                 )
         
+        elif tool_call.tool_name == "create_test_plan":
+            # Test plan created - auto-transition to TEST phase
+            if tool_call.metadata.get("plan_created"):
+                return SpecialToolResult(
+                    tool_name="create_test_plan",
+                    phase_transition=Phase.TEST,
+                )
+        
         return None

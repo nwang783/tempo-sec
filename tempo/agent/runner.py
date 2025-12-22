@@ -128,24 +128,46 @@ class Agent:
         """
         Get tool schemas filtered by current phase.
         
-        In REFLECT phase: only continue_analysis is available
-        In other phases: continue_analysis is hidden
+        Phase tool restrictions:
+        - RECON: Standard tools, hide meta tools
+        - HYPOTHESIZE: Only create_test_plan (forces structured output)
+        - TEST: All tools + add_todo/complete_todo, hide continue_analysis
+        - REFLECT: Only continue_analysis + add_todo
         """
         from tempo.prompts.phases import Phase
         
         all_schemas = self.tools.get_schemas()
+        phase = self.workflow.current_phase
         
-        if self.workflow.current_phase == Phase.REFLECT:
-            # REFLECT: Only continue_analysis tool to force decision
+        if phase == Phase.REFLECT:
+            # REFLECT: Only continue_analysis and add_todo
+            allowed = {"continue_analysis", "add_todo"}
             return [
                 s for s in all_schemas 
-                if s.get("function", {}).get("name") == "continue_analysis"
+                if s.get("function", {}).get("name") in allowed
             ]
-        else:
-            # Other phases: Hide continue_analysis
+        
+        elif phase == Phase.HYPOTHESIZE:
+            # HYPOTHESIZE: Only create_test_plan to force structured output
             return [
                 s for s in all_schemas 
-                if s.get("function", {}).get("name") != "continue_analysis"
+                if s.get("function", {}).get("name") == "create_test_plan"
+            ]
+        
+        elif phase == Phase.TEST:
+            # TEST: All tools except continue_analysis and create_test_plan
+            hidden = {"continue_analysis", "create_test_plan"}
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") not in hidden
+            ]
+        
+        else:
+            # RECON: Hide checklist tools and continue_analysis
+            hidden = {"continue_analysis", "create_test_plan", "add_todo", "complete_todo"}
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") not in hidden
             ]
     
 
@@ -415,6 +437,17 @@ class Agent:
                 # Handle branching - wait for subagents (async)
                 # Note: This schedules the branch but actual waiting happens in step()
                 pass  # Branch handling is asynchronous
+        
+        elif special.tool_name == "create_test_plan":
+            # Auto-transition to TEST phase
+            if special.phase_transition:
+                step_result.phase_transition = special.phase_transition
+                self.workflow.transition(special.phase_transition)
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[System] Test plan created. Transitioned to {special.phase_transition.value.upper()} phase. "
+                    "Work through your test plan items by priority."
+                )
         
         elif special.tool_name == "complete_recon":
             # Recon is complete - stop the agent

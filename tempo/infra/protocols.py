@@ -87,3 +87,51 @@ class ToolOutputViewer(Protocol):
             The requested output range, or None if not found
         """
         ...
+
+
+class TestPlanManager(Protocol):
+    """Protocol for components that can manage the test plan checklist."""
+    
+    def add_test_plan_item(
+        self,
+        description: str,
+        priority: str = "medium",
+    ) -> str:
+        """
+        Add a new item to the test plan.
+        
+        Args:
+            description: What to investigate
+            priority: high/medium/low
+            
+        Returns:
+            ID of the created item
+        """
+        ...
+    
+    def complete_test_plan_item(
+        self,
+        item_id: str,
+        status: str,
+        reason: str,
+    ) -> bool:
+        """
+        Mark a test plan item as completed or skipped.
+        
+        Args:
+            item_id: ID of the item
+            status: "completed" or "skipped"
+            reason: Explanation of findings or why skipped
+            
+        Returns:
+            True if item was found and updated
+        """
+        ...
+    
+    def get_test_plan(self) -> list[dict]:
+        """Get the current test plan items."""
+        ...
+    
+    def set_test_plan(self, items: list[dict]) -> None:
+        """Replace the entire test plan."""
+        ...

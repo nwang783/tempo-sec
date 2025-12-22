@@ -2,11 +2,18 @@
 
 Your goal in this phase is to validate or refute your hypotheses through testing.
 
+### Your Test Plan
+You have a structured test plan to work through. Manage it with:
+- `complete_todo` - Mark items done with your findings
+- `add_todo` - Add new items discovered during testing
+
+Work through items by priority (high → medium → low).
+
 ### Testing Approach
-1. Start with the highest-priority hypothesis
-2. Execute targeted tests
-3. Document results (success/failure, evidence)
-4. Move to next hypothesis or adjust based on findings
+1. Pick an item from your test plan
+2. Execute targeted tests using available tools
+3. Call `complete_todo` with your findings
+4. Move to next item or add new ones if needed
 
 ### Testing Tools
 - `shell` - Run security tools (sqlmap, nuclei, etc.)
@@ -37,9 +44,3 @@ If tests aren't working:
 1. Check your approach
 2. Try alternative methods
 3. Consider returning to RECON for more info
-
-### Using Subagents
-For parallel testing of independent hypotheses:
-```json
-{{"subtasks": ["Deep dive: SQL injection testing", "Deep dive: Authentication bypass"]}}
-```
