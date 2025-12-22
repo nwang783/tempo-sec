@@ -1,39 +1,32 @@
 ## HYPOTHESIZE Phase
 
-Your goal in this phase is to form testable security hypotheses based on your recon findings.
+Create a high-level test plan based on your recon findings.
 
-### Hypothesis Format
-For each hypothesis, specify:
-1. **What** - The potential vulnerability type
-2. **Where** - The specific location/endpoint
-3. **Why** - Evidence from recon that suggests this
-4. **How** - How you would test it
+### Important: High-Level Guidance
+Your recon report provides an overview of the target. Your test plan should define 
+**investigation areas**, NOT specific vulnerability tests. You will refine these 
+into specific tests during the TEST phase.
 
-### Common Hypotheses
-- SQL Injection in form parameters
-- XSS in user-controllable output
-- Authentication bypass via parameter manipulation
-- IDOR in resource identifiers
-- SSRF in URL parameters
-- File upload vulnerabilities
-- API authorization flaws
+### Required Action
+Call `create_test_plan` with a list of investigation areas. Each item needs:
+- **description**: High-level area to investigate (e.g., "Investigate authentication mechanisms")
+- **priority**: "high", "medium", or "low"
 
-### Prioritization
-Rank hypotheses by:
-1. Likelihood of exploit
-2. Potential impact
-3. Ease of testing
+### Prioritization Criteria
+1. **High**: Authentication, authorization, data handling, API security
+2. **Medium**: Input validation, session management, error handling
+3. **Low**: Configuration review, information disclosure, hardening
 
-### When to Transition
-Call `transition_phase` with phase="test" when you have:
-- Formulated at least one testable hypothesis
-- Documented the evidence supporting each hypothesis
-- Planned how to test them
-
-### Parallel Hypothesis Testing
-If you have multiple independent hypotheses, use `branch_to_subtasks`:
+### Example
 ```json
-{{"subtasks": ["Test SQL injection in login form", "Test XSS in search parameter", "Test IDOR in user profile"]}}
+{
+  "items": [
+    {"description": "Investigate authentication mechanisms for bypass vulnerabilities", "priority": "high"},
+    {"description": "Examine API endpoints for authorization flaws", "priority": "high"},
+    {"description": "Review input handling across forms and parameters", "priority": "medium"},
+    {"description": "Check error handling for information disclosure", "priority": "low"}
+  ]
+}
 ```
 
-Each subagent will test one hypothesis and report findings.
+After creating your plan, you will automatically transition to the TEST phase.

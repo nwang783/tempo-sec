@@ -169,3 +169,179 @@ class TestSummarizeOutputTool:
         
         assert result.success is False
         assert "not found" in result.error.lower()
+
+
+class TestCreateTestPlanTool:
+    """Tests for CreateTestPlanTool class."""
+    
+    def test_name_and_category(self):
+        """Test tool name and category are set."""
+        store = ContextStore()
+        from tempo.tools.meta import CreateTestPlanTool
+        tool = CreateTestPlanTool(test_plan_manager=store)
+        
+        assert tool.name == "create_test_plan"
+        assert tool.category.value == "meta"
+    
+    @pytest.mark.asyncio
+    async def test_create_plan_adds_items_to_state(self):
+        """Test that creating a plan populates test_plan in state."""
+        store = ContextStore()
+        from tempo.tools.meta import CreateTestPlanTool
+        tool = CreateTestPlanTool(test_plan_manager=store)
+        
+        result = await tool.execute(
+            items=[
+                {"description": "Test auth bypass", "priority": "high"},
+                {"description": "Check input validation", "priority": "medium"},
+            ],
+            purpose="Create initial plan",
+        )
+        
+        assert result.success is True
+        assert result.metadata["plan_created"] is True
+        assert result.metadata["item_count"] == 2
+        
+        # Check items were added to state
+        plan = store.get_test_plan()
+        assert len(plan) == 2
+        assert plan[0]["description"] == "Test auth bypass"
+        assert plan[0]["priority"] == "high"
+        assert plan[0]["status"] == "pending"
+        assert plan[1]["priority"] == "medium"
+    
+    @pytest.mark.asyncio
+    async def test_create_plan_requires_items(self):
+        """Test that empty items list fails."""
+        store = ContextStore()
+        from tempo.tools.meta import CreateTestPlanTool
+        tool = CreateTestPlanTool(test_plan_manager=store)
+        
+        result = await tool.execute(items=[], purpose="Test")
+        
+        assert result.success is False
+        assert "at least one item" in result.error.lower()
+
+
+class TestAddTodoTool:
+    """Tests for AddTodoTool class."""
+    
+    def test_name_and_category(self):
+        """Test tool name and category are set."""
+        store = ContextStore()
+        from tempo.tools.meta import AddTodoTool
+        tool = AddTodoTool(test_plan_manager=store)
+        
+        assert tool.name == "add_todo"
+        assert tool.category.value == "meta"
+    
+    @pytest.mark.asyncio
+    async def test_add_todo_creates_item(self):
+        """Test that adding a todo creates an item in state."""
+        store = ContextStore()
+        from tempo.tools.meta import AddTodoTool
+        tool = AddTodoTool(test_plan_manager=store)
+        
+        result = await tool.execute(
+            description="New investigation area",
+            priority="high",
+            purpose="Add followup",
+        )
+        
+        assert result.success is True
+        assert "item_id" in result.metadata
+        
+        plan = store.get_test_plan()
+        assert len(plan) == 1
+        assert plan[0]["description"] == "New investigation area"
+        assert plan[0]["priority"] == "high"
+    
+    @pytest.mark.asyncio
+    async def test_add_todo_defaults_to_medium_priority(self):
+        """Test that priority defaults to medium."""
+        store = ContextStore()
+        from tempo.tools.meta import AddTodoTool
+        tool = AddTodoTool(test_plan_manager=store)
+        
+        await tool.execute(description="Test item", purpose="Test")
+        
+        plan = store.get_test_plan()
+        assert plan[0]["priority"] == "medium"
+
+
+class TestCompleteTodoTool:
+    """Tests for CompleteTodoTool class."""
+    
+    def test_name_and_category(self):
+        """Test tool name and category are set."""
+        store = ContextStore()
+        from tempo.tools.meta import CompleteTodoTool
+        tool = CompleteTodoTool(test_plan_manager=store)
+        
+        assert tool.name == "complete_todo"
+        assert tool.category.value == "meta"
+    
+    @pytest.mark.asyncio
+    async def test_complete_todo_updates_status(self):
+        """Test that completing a todo updates its status."""
+        store = ContextStore()
+        from tempo.tools.meta import AddTodoTool, CompleteTodoTool
+        
+        # Add an item first
+        add_tool = AddTodoTool(test_plan_manager=store)
+        add_result = await add_tool.execute(description="Test item", purpose="Setup")
+        item_id = add_result.metadata["item_id"]
+        
+        # Complete it
+        complete_tool = CompleteTodoTool(test_plan_manager=store)
+        result = await complete_tool.execute(
+            item_id=item_id,
+            status="completed",
+            reason="Found SQL injection vulnerability",
+            purpose="Mark done",
+        )
+        
+        assert result.success is True
+        
+        plan = store.get_test_plan()
+        assert plan[0]["status"] == "completed"
+        assert plan[0]["reason"] == "Found SQL injection vulnerability"
+        assert plan[0]["completed_at"] is not None
+    
+    @pytest.mark.asyncio
+    async def test_complete_todo_requires_reason(self):
+        """Test that completing without reason fails."""
+        store = ContextStore()
+        from tempo.tools.meta import AddTodoTool, CompleteTodoTool
+        
+        add_tool = AddTodoTool(test_plan_manager=store)
+        add_result = await add_tool.execute(description="Test item", purpose="Setup")
+        item_id = add_result.metadata["item_id"]
+        
+        complete_tool = CompleteTodoTool(test_plan_manager=store)
+        result = await complete_tool.execute(
+            item_id=item_id,
+            status="completed",
+            reason="",
+            purpose="Test",
+        )
+        
+        assert result.success is False
+        assert "reason is required" in result.error.lower()
+    
+    @pytest.mark.asyncio
+    async def test_complete_todo_invalid_id_fails(self):
+        """Test that completing nonexistent item fails."""
+        store = ContextStore()
+        from tempo.tools.meta import CompleteTodoTool
+        tool = CompleteTodoTool(test_plan_manager=store)
+        
+        result = await tool.execute(
+            item_id="fake-id",
+            status="completed",
+            reason="Some reason",
+            purpose="Test",
+        )
+        
+        assert result.success is False
+        assert "not found" in result.error.lower()

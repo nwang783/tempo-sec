@@ -9,7 +9,7 @@ from typing import Any, Callable, TYPE_CHECKING
 from tempo.agent.config import AgentConfig
 from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
-from tempo.agent.phase_summarizer import PhaseSummarizer
+
 from tempo.agent.branch_coordinator import BranchCoordinator, SubtaskResult
 from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.context.store import ContextStore
@@ -106,17 +106,13 @@ class Agent:
         # Use provided workflow manager or create one (share with TransitionPhaseTool!)
         self.workflow = workflow or WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
-        self.phase_summarizer = PhaseSummarizer(config, self.prompts, self.context)
+
         self.branch_coordinator = BranchCoordinator(
             self.context,
             agent_factory=self._create_subagent_executor(),
         )
         
-        # Register phase transition callback for summarization
-        self._pending_transition: tuple[Phase, Phase] | None = None
-        self._pending_cycle_replacement: bool = False
-        self._cycle_start_message_index: int = 0  # Track where current cycle started
-        self.workflow.on_transition(self._on_phase_transition)
+
         
         self._objective: str = ""
         self._step_count: int = 0
@@ -132,38 +128,49 @@ class Agent:
         """
         Get tool schemas filtered by current phase.
         
-        In REFLECT phase: only continue_analysis is available
-        In other phases: continue_analysis is hidden
+        Phase tool restrictions:
+        - RECON: Standard tools, hide meta tools
+        - HYPOTHESIZE: Only create_test_plan (forces structured output)
+        - TEST: All tools + add_todo/complete_todo, hide continue_analysis
+        - REFLECT: Only continue_analysis + add_todo
         """
         from tempo.prompts.phases import Phase
         
         all_schemas = self.tools.get_schemas()
+        phase = self.workflow.current_phase
         
-        if self.workflow.current_phase == Phase.REFLECT:
-            # REFLECT: Only continue_analysis tool to force decision
+        if phase == Phase.REFLECT:
+            # REFLECT: continue_analysis, add_todo, and summarize_tool_output
+            allowed = {"continue_analysis", "add_todo", "summarize_tool_output"}
             return [
                 s for s in all_schemas 
-                if s.get("function", {}).get("name") == "continue_analysis"
+                if s.get("function", {}).get("name") in allowed
             ]
-        else:
-            # Other phases: Hide continue_analysis
+        
+        elif phase == Phase.HYPOTHESIZE:
+            # HYPOTHESIZE: Only create_test_plan to force structured output
             return [
                 s for s in all_schemas 
-                if s.get("function", {}).get("name") != "continue_analysis"
+                if s.get("function", {}).get("name") == "create_test_plan"
+            ]
+        
+        elif phase == Phase.TEST:
+            # TEST: All tools except continue_analysis and create_test_plan
+            hidden = {"continue_analysis", "create_test_plan"}
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") not in hidden
+            ]
+        
+        else:
+            # RECON: Hide checklist tools and continue_analysis
+            hidden = {"continue_analysis", "create_test_plan", "add_todo", "complete_todo"}
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") not in hidden
             ]
     
-    def _on_phase_transition(self, from_phase: Phase, to_phase: Phase) -> None:
-        """
-        Handle phase transition - mark that we need to generate a summary.
-        
-        The summary will be generated asynchronously in the next step.
-        If transitioning FROM reflect, also mark for context replacement.
-        """
-        self._pending_transition = (from_phase, to_phase)
-        
-        # If transitioning FROM reflect, this completes a cycle - mark for replacement
-        if from_phase == Phase.REFLECT and self.config.replace_context_after_reflect:
-            self._pending_cycle_replacement = True
+
     
     def _create_subagent_executor(self):
         """Create the executor function for subagents."""
@@ -324,58 +331,7 @@ class Agent:
         self._step_count += 1
         self.workflow.record_step()
         
-        # Generate phase summary if we have a pending transition
-        if self._pending_transition and self.config.auto_phase_summary:
-            from_phase, to_phase = self._pending_transition
-            self._pending_transition = None
-            
-            try:
-                summary = await self.phase_summarizer.summarize_phase_transition(
-                    from_phase=from_phase,
-                    to_phase=to_phase,
-                    objective=self._objective,
-                )
-                
-                # If this is a cycle replacement (from REFLECT), replace previous messages
-                if self._pending_cycle_replacement:
-                    self._pending_cycle_replacement = False
-                    
-                    # Get current message count before adding summary
-                    current_msg_count = len(self.context.current_frame.messages)
-                    
-                    # Replace messages from cycle start to now with summary
-                    # Keep at least the system prompt (index 0) and user objective (index 1)
-                    start_idx = max(2, self._cycle_start_message_index)
-                    if start_idx < current_msg_count:
-                        self.context.replace_messages_with_summary(
-                            start_index=start_idx,
-                            end_index=current_msg_count,
-                            summary=summary,
-                        )
-                    
-                    # Mark new cycle start
-                    self._cycle_start_message_index = len(self.context.current_frame.messages)
-                else:
-                    # Normal phase summary - just inject as message
-                    self.context.add_message(
-                        MessageRole.SYSTEM,
-                        f"[Phase Summary: {from_phase.value} → {to_phase.value}]\n{summary}"
-                    )
-                
-                # Notify visualization
-                if self._viz_collector:
-                    self._viz_collector.on_phase_summary(
-                        from_phase=from_phase.value,
-                        to_phase=to_phase.value,
-                        summary=summary,
-                    )
-            except Exception as e:
-                # Log but don't fail if summarization fails
-                self.context.add_message(
-                    MessageRole.SYSTEM,
-                    f"[Phase transition: {from_phase.value} → {to_phase.value}] (summary unavailable: {e})"
-                )
-        
+
         # Check for forced transitions
         forced_phase = self.workflow.should_force_transition()
         if forced_phase:
@@ -420,6 +376,13 @@ class Agent:
                 
                 # Add to context
                 self.context.add_tool_call(tool_call)
+                
+                # Emit test plan updates for checklist tools
+                if tool_call.tool_name in ("create_test_plan", "add_todo", "complete_todo"):
+                    if self._viz_collector and tool_call.success:
+                        self._viz_collector.on_test_plan_update(
+                            self.context.get_test_plan()
+                        )
                 
                 # Process special tools
                 special_result = self.step_handler.process_special_tool(tool_call)
@@ -481,6 +444,17 @@ class Agent:
                 # Handle branching - wait for subagents (async)
                 # Note: This schedules the branch but actual waiting happens in step()
                 pass  # Branch handling is asynchronous
+        
+        elif special.tool_name == "create_test_plan":
+            # Auto-transition to TEST phase
+            if special.phase_transition:
+                step_result.phase_transition = special.phase_transition
+                self.workflow.transition(special.phase_transition)
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[System] Test plan created. Transitioned to {special.phase_transition.value.upper()} phase. "
+                    "Work through your test plan items by priority."
+                )
         
         elif special.tool_name == "complete_recon":
             # Recon is complete - stop the agent

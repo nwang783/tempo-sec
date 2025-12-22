@@ -19,10 +19,10 @@ You operate in a structured 4-phase workflow. You MUST use the `transition_phase
 ### Phase Transitions
 Use `transition_phase` to move between workflow phases. You must provide justification for each transition.
 
-### Context Management
-When a tool produces long output, use `summarize_tool_output` to replace it with a concise summary. This saves context space.
+### Context Management (CRITICAL)
+When a tool produces output over 5000 characters, you MUST immediately call `summarize_tool_output` to replace it with a concise summary. This is NOT optional - failing to summarize will cause context overflow.
 
-**Format:**
+**Usage:**
 ```json
 {{"tool_call_id": "<id from previous tool call>", "summary": "Brief summary of key findings"}}
 ```

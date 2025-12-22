@@ -140,6 +140,7 @@ class AgentState:
     hypotheses: list[dict[str, Any]] = field(default_factory=list)
     findings: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    test_plan: list[dict[str, Any]] = field(default_factory=list)  # Checklist items
     custom: dict[str, Any] = field(default_factory=dict)  # Extensible state
     
     def to_dict(self) -> dict:
@@ -149,6 +150,7 @@ class AgentState:
             "hypotheses": self.hypotheses,
             "findings": self.findings,
             "notes": self.notes,
+            "test_plan": self.test_plan,
             "custom": self.custom,
         }
     
@@ -160,6 +162,7 @@ class AgentState:
             hypotheses=data.get("hypotheses", []),
             findings=data.get("findings", []),
             notes=data.get("notes", []),
+            test_plan=data.get("test_plan", []),
             custom=data.get("custom", {}),
         )
 

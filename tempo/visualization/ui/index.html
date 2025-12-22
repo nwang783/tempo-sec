@@ -64,13 +64,23 @@
                 </div>
             </div>
 
-            <!-- Center Pane: Graph View -->
+            <!-- Center Pane: Graph View / Test Plan -->
             <div class="pane center-pane">
                 <div class="pane-tabs">
-                    <div class="tab active">Graph View</div>
+                    <div class="tab active" data-tab="graph">Graph View</div>
+                    <div class="tab" data-tab="testplan">Test Plan</div>
                 </div>
                 <div class="pane-content no-padding">
-                    <div id="tree-container"></div>
+                    <div id="tree-container" class="tab-content active"></div>
+                    <div id="testplan-container" class="tab-content">
+                        <div class="testplan-header">
+                            <span class="testplan-title">Investigation Areas</span>
+                            <span id="testplan-progress" class="testplan-progress">0 / 0 completed</span>
+                        </div>
+                        <div id="testplan-items" class="testplan-items">
+                            <div class="testplan-empty">No test plan created yet. Waiting for HYPOTHESIZE phase...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

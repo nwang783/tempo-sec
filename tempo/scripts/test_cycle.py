@@ -101,6 +101,9 @@ async def main() -> None:
         ContinueAnalysisTool,
         BranchToSubtasksTool,
         FinishSubtaskTool,
+        CreateTestPlanTool,
+        AddTodoTool,
+        CompleteTodoTool,
     )
     from tempo.tools.view_output import ViewToolOutputTool
     from tempo.prompts.phases import Phase
@@ -201,6 +204,11 @@ async def main() -> None:
         tools.register(SummarizeOutputTool(context_store=context))
         tools.register(ViewToolOutputTool(context_store=context))
         tools.register(ContinueAnalysisTool())
+        
+        # Hypothesis checklist tools
+        tools.register(CreateTestPlanTool(test_plan_manager=context))
+        tools.register(AddTodoTool(test_plan_manager=context))
+        tools.register(CompleteTodoTool(test_plan_manager=context))
         
         if workflow:
             tools.register(TransitionPhaseTool(workflow_manager=workflow))

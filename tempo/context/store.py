@@ -173,6 +173,73 @@ class ContextStore:
         """Get the current agent state."""
         return self.current_frame.state
     
+    # === Test Plan Management (TestPlanManager protocol) ===
+    
+    def add_test_plan_item(
+        self,
+        description: str,
+        priority: str = "medium",
+    ) -> str:
+        """
+        Add a new item to the test plan.
+        
+        Args:
+            description: What to investigate
+            priority: high/medium/low
+            
+        Returns:
+            ID of the created item
+        """
+        import uuid
+        from datetime import datetime
+        
+        item = {
+            "id": str(uuid.uuid4()),
+            "description": description,
+            "priority": priority,
+            "status": "pending",
+            "reason": None,
+            "created_at": datetime.utcnow().isoformat(),
+            "completed_at": None,
+        }
+        self.current_frame.state.test_plan.append(item)
+        return item["id"]
+    
+    def complete_test_plan_item(
+        self,
+        item_id: str,
+        status: str,
+        reason: str,
+    ) -> bool:
+        """
+        Mark a test plan item as completed or skipped.
+        
+        Args:
+            item_id: ID of the item
+            status: "completed" or "skipped"
+            reason: Explanation of findings or why skipped
+            
+        Returns:
+            True if item was found and updated
+        """
+        from datetime import datetime
+        
+        for item in self.current_frame.state.test_plan:
+            if item["id"] == item_id:
+                item["status"] = status
+                item["reason"] = reason
+                item["completed_at"] = datetime.utcnow().isoformat()
+                return True
+        return False
+    
+    def get_test_plan(self) -> list[dict]:
+        """Get the current test plan items."""
+        return self.current_frame.state.test_plan
+    
+    def set_test_plan(self, items: list[dict]) -> None:
+        """Replace the entire test plan."""
+        self.current_frame.state.test_plan = items
+    
     # === Checkpointing ===
     
     def checkpoint(self, label: str = "") -> str:

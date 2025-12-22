@@ -156,23 +156,6 @@ class VisualizationCollector:
             "content_preview": content[:200] if content else ""
         })
 
-    def on_phase_summary(
-        self,
-        from_phase: str,
-        to_phase: str,
-        summary: str,
-    ) -> None:
-        """
-        Called when a phase transition summary is generated.
-        
-        Args:
-            from_phase: The phase being left (e.g., "recon")
-            to_phase: The phase being entered (e.g., "hypothesize")
-            summary: The LLM-generated summary
-        """
-        self.emit("phase_summary", {
-            "from_phase": from_phase,
-            "to_phase": to_phase,
-            "summary": summary,
-            "summary_preview": summary[:200] if summary else "",
-        })
+    def on_test_plan_update(self, items: list) -> None:
+        """Called when the test plan is created or updated."""
+        self.emit("test_plan_update", {"items": items})
