@@ -204,8 +204,9 @@ class TestPhasePrompts:
         builder = PromptBuilder()
         prompt = builder.build_phase_prompt(Phase.HYPOTHESIZE)
         
-        assert "hypothesis" in prompt.lower()
-        assert "test" in prompt.lower()
+        # Updated to use create_test_plan tool
+        assert "create_test_plan" in prompt
+        assert "investigation" in prompt.lower() or "test plan" in prompt.lower()
     
     def test_test_prompt_content(self):
         """Test test prompt has key guidance."""
@@ -219,5 +220,6 @@ class TestPhasePrompts:
         builder = PromptBuilder()
         prompt = builder.build_phase_prompt(Phase.REFLECT)
         
-        assert "finish_task" in prompt
+        # Updated to use continue_analysis tool
+        assert "continue_analysis" in prompt
         assert "findings" in prompt.lower()
