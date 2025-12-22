@@ -82,7 +82,14 @@ async def main() -> None:
     from tempo.tools.registry import ToolRegistry
     from tempo.tools.shell import ShellTool
     from tempo.tools.filesystem import FileReadTool, FileWriteTool
-    from tempo.tools.browser import BrowserTool
+    from tempo.tools.browser_tools import (
+        BrowserSession,
+        BrowserNavigateTool,
+        BrowserSnapshotTool,
+        BrowserClickTool,
+        BrowserTypeTool,
+        BrowserFillFormTool,
+    )
     from tempo.tools.meta import SummarizeOutputTool
     from tempo.tools.manifest_tools import CompleteReconTool
     from tempo.tools.view_output import ViewToolOutputTool
@@ -156,12 +163,23 @@ async def main() -> None:
             tools.register(ShellTool(container_manager=container))
             tools.register(FileReadTool(container_manager=container))
             tools.register(FileWriteTool(container_manager=container))
-            tools.register(BrowserTool(container_manager=container))
+            
+            # Playwright-style browser tools
+            browser_session = BrowserSession(container_manager=container)
         else:
             tools.register(ShellTool())
             tools.register(FileReadTool())
             tools.register(FileWriteTool())
-            tools.register(BrowserTool())
+            
+            # Playwright-style browser tools (local)
+            browser_session = BrowserSession()
+        
+        # Register browser tools
+        tools.register(BrowserNavigateTool(browser_session))
+        tools.register(BrowserSnapshotTool(browser_session))
+        tools.register(BrowserClickTool(browser_session))
+        tools.register(BrowserTypeTool(browser_session))
+        tools.register(BrowserFillFormTool(browser_session))
         
         # Meta tools
         tools.register(SummarizeOutputTool(context_store=context))
