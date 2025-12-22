@@ -94,9 +94,15 @@ class StepHandler:
             # Add reminder to summarize if output is long
             if len(result.output) > max_output_chars:
                 tool_call.raw_output += (
-                    f"\n\n[System: Output captured ({len(result.output)} chars). "
-                    f"You MUST call `summarize_tool_output` with tool_call_id='{tool_call.id}' "
-                    f"to compress this data and save context tokens before proceeding.]"
+                    f"\n\n"
+                    f"╔══════════════════════════════════════════════════════════════╗\n"
+                    f"║ ⚠️  REQUIRED ACTION: SUMMARIZE THIS OUTPUT                    ║\n"
+                    f"╠══════════════════════════════════════════════════════════════╣\n"
+                    f"║ This output is {len(result.output):,} characters. To save context tokens,     ║\n"
+                    f"║ you MUST call `summarize_tool_output` IMMEDIATELY.           ║\n"
+                    f"║                                                              ║\n"
+                    f"║ tool_call_id: {tool_call.id}                      ║\n"
+                    f"╚══════════════════════════════════════════════════════════════╝"
                 )
             
         except Exception as e:

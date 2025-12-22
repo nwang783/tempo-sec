@@ -155,3 +155,7 @@ class VisualizationCollector:
         self.emit("user_prompt_injected", {
             "content_preview": content[:200] if content else ""
         })
+
+    def on_test_plan_update(self, items: list) -> None:
+        """Called when the test plan is created or updated."""
+        self.emit("test_plan_update", {"items": items})

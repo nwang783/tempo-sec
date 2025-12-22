@@ -692,4 +692,104 @@ document.querySelectorAll('.section-header').forEach(header => {
     });
 });
 
+// === Tab Switching ===
+document.querySelectorAll('.pane-tabs .tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+
+        // Update tab active state
+        document.querySelectorAll('.pane-tabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update content visibility
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
+        if (tabName === 'graph') {
+            document.getElementById('tree-container').classList.add('active');
+        } else if (tabName === 'testplan') {
+            document.getElementById('testplan-container').classList.add('active');
+        }
+    });
+});
+
+// === Test Plan Handling ===
+let testPlanItems = [];
+
+function handleTestPlanUpdate(items) {
+    testPlanItems = items || [];
+    renderTestPlan();
+}
+
+function renderTestPlan() {
+    const container = document.getElementById('testplan-items');
+    const progressEl = document.getElementById('testplan-progress');
+
+    if (!testPlanItems || testPlanItems.length === 0) {
+        container.innerHTML = '<div class="testplan-empty">No test plan created yet. Waiting for HYPOTHESIZE phase...</div>';
+        progressEl.textContent = '0 / 0 completed';
+        return;
+    }
+
+    // Calculate progress
+    const completed = testPlanItems.filter(item =>
+        item.status === 'completed' || item.status === 'skipped'
+    ).length;
+    progressEl.textContent = `${completed} / ${testPlanItems.length} completed`;
+
+    // Sort by priority (high first), then by status (pending first)
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    const statusOrder = { pending: 0, in_progress: 1, completed: 2, skipped: 3 };
+
+    const sortedItems = [...testPlanItems].sort((a, b) => {
+        const statusDiff = (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0);
+        if (statusDiff !== 0) return statusDiff;
+        return (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
+    });
+
+    // Render items
+    container.innerHTML = sortedItems.map(item => {
+        const isComplete = item.status === 'completed' || item.status === 'skipped';
+        const checkmark = isComplete ? '✓' : '';
+
+        let reasonHtml = '';
+        if (item.reason) {
+            reasonHtml = `<div class="testplan-item-reason">${escapeHtml(item.reason)}</div>`;
+        }
+
+        return `
+            <div class="testplan-item priority-${item.priority || 'medium'} status-${item.status || 'pending'}">
+                <div class="testplan-checkbox">${checkmark}</div>
+                <div class="testplan-item-content">
+                    <div class="testplan-item-description">${escapeHtml(item.description)}</div>
+                    <div class="testplan-item-meta">
+                        <span class="testplan-item-priority">${item.priority || 'medium'}</span>
+                        <span class="testplan-item-status">${item.status || 'pending'}</span>
+                    </div>
+                    ${reasonHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Add test_plan_update to event handler
+const originalHandleEvent = handleEvent;
+handleEvent = function (event) {
+    if (event.type === 'test_plan_update') {
+        handleTestPlanUpdate(event.data.items);
+        return;
+    }
+    originalHandleEvent(event);
+};
+
 connect();
+

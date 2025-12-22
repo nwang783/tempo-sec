@@ -140,8 +140,8 @@ class Agent:
         phase = self.workflow.current_phase
         
         if phase == Phase.REFLECT:
-            # REFLECT: Only continue_analysis and add_todo
-            allowed = {"continue_analysis", "add_todo"}
+            # REFLECT: continue_analysis, add_todo, and summarize_tool_output
+            allowed = {"continue_analysis", "add_todo", "summarize_tool_output"}
             return [
                 s for s in all_schemas 
                 if s.get("function", {}).get("name") in allowed
@@ -376,6 +376,13 @@ class Agent:
                 
                 # Add to context
                 self.context.add_tool_call(tool_call)
+                
+                # Emit test plan updates for checklist tools
+                if tool_call.tool_name in ("create_test_plan", "add_todo", "complete_todo"):
+                    if self._viz_collector and tool_call.success:
+                        self._viz_collector.on_test_plan_update(
+                            self.context.get_test_plan()
+                        )
                 
                 # Process special tools
                 special_result = self.step_handler.process_special_tool(tool_call)
