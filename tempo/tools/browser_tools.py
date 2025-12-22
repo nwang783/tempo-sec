@@ -106,10 +106,10 @@ class BrowserSession:
 
 
 class BrowserNavigateTool(Tool):
-    """Navigate to a URL."""
+    """Navigate to a URL and get a summary of the page content."""
     
     name = "browser_navigate"
-    description = "Navigate to a URL"
+    description = "Navigate to a URL and return a YAML summary of the page content including links, forms, and key elements"
     category = ToolCategory.BROWSING
     
     def __init__(self, session: BrowserSession):
@@ -121,14 +121,14 @@ class BrowserNavigateTool(Tool):
         purpose: str = "",
     ) -> ToolResult:
         """
-        Navigate to the specified URL.
+        Navigate to the specified URL and extract page summary.
         
         Args:
             url: The URL to navigate to
             purpose: Why this navigation is being performed
             
         Returns:
-            ToolResult with navigation status
+            ToolResult with navigation status and YAML page summary
         """
         try:
             await self.session.ensure_browser()
@@ -157,14 +157,113 @@ class BrowserNavigateTool(Tool):
                     metadata={"url": current_url, "status": status},
                 )
             
+            # Extract page summary
+            page_summary = await self._extract_page_summary()
+            
+            # Format as YAML-like output
+            output = f"""url: {current_url}
+title: "{title}"
+status: {status}
+
+{page_summary}"""
+            
             return ToolResult(
                 success=True,
-                output=f"Navigated to: {current_url}\nTitle: {title}\nStatus: {status}",
+                output=output,
                 metadata={"url": current_url, "title": title, "status": status},
             )
             
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
+    
+    async def _extract_page_summary(self) -> str:
+        """Extract a concise YAML summary of page content."""
+        summary_parts = []
+        
+        # Extract links (max 15)
+        links = await self.session.page.evaluate("""
+            () => Array.from(document.querySelectorAll('a[href]'))
+                .map(a => ({text: a.innerText.trim().substring(0, 50), href: a.href}))
+                .filter(l => l.text && l.href.startsWith('http'))
+                .slice(0, 15)
+        """)
+        
+        if links:
+            summary_parts.append("links:")
+            for link in links:
+                text = link['text'].replace('"', '\\"')
+                summary_parts.append(f'  - text: "{text}"')
+                summary_parts.append(f'    href: "{link["href"]}"')
+        
+        # Extract forms
+        forms = await self.session.page.evaluate("""
+            () => Array.from(document.querySelectorAll('form')).map(form => ({
+                action: form.action || 'none',
+                method: form.method || 'get',
+                inputs: Array.from(form.querySelectorAll('input, textarea, select'))
+                    .map(el => ({
+                        type: el.type || el.tagName.toLowerCase(),
+                        name: el.name || el.id || 'unnamed',
+                        placeholder: el.placeholder || ''
+                    }))
+                    .slice(0, 10)
+            })).slice(0, 5)
+        """)
+        
+        if forms:
+            summary_parts.append("forms:")
+            for i, form in enumerate(forms):
+                summary_parts.append(f"  - id: form_{i}")
+                summary_parts.append(f"    action: \"{form['action']}\"")
+                summary_parts.append(f"    method: {form['method']}")
+                if form['inputs']:
+                    summary_parts.append("    fields:")
+                    for inp in form['inputs']:
+                        summary_parts.append(f"      - name: {inp['name']}")
+                        summary_parts.append(f"        type: {inp['type']}")
+        
+        # Extract buttons
+        buttons = await self.session.page.evaluate("""
+            () => Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"]'))
+                .map(b => b.innerText?.trim() || b.value || b.getAttribute('aria-label') || 'unnamed')
+                .filter(t => t && t.length < 50)
+                .slice(0, 10)
+        """)
+        
+        if buttons:
+            summary_parts.append("buttons:")
+            for btn in buttons:
+                summary_parts.append(f'  - "{btn}"')
+        
+        # Extract headings for content structure
+        headings = await self.session.page.evaluate("""
+            () => Array.from(document.querySelectorAll('h1, h2, h3'))
+                .map(h => ({level: h.tagName, text: h.innerText.trim().substring(0, 80)}))
+                .filter(h => h.text)
+                .slice(0, 10)
+        """)
+        
+        if headings:
+            summary_parts.append("headings:")
+            for h in headings:
+                text = h['text'].replace('"', '\\"')
+                summary_parts.append(f'  - {h["level"].lower()}: "{text}"')
+        
+        # Extract visible text snippet
+        text_content = await self.session.page.evaluate("""
+            () => {
+                const clone = document.body.cloneNode(true);
+                clone.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+                return clone.innerText.replace(/\\s+/g, ' ').trim().substring(0, 500);
+            }
+        """)
+        
+        if text_content:
+            # Truncate and escape for YAML
+            text_preview = text_content[:300].replace('"', '\\"').replace('\n', ' ')
+            summary_parts.append(f'text_preview: "{text_preview}..."')
+        
+        return "\n".join(summary_parts)
     
     async def _execute_in_container(self, url: str) -> ToolResult:
         """Execute navigation in container."""
@@ -181,9 +280,35 @@ async def main():
         try:
             response = await page.goto("{url}", wait_until="domcontentloaded")
             if response:
-                print(f"URL: {{page.url}}")
-                print(f"Title: {{await page.title()}}")
-                print(f"Status: {{response.status}}")
+                title = await page.title()
+                print(f"url: {{page.url}}")
+                print(f'title: "{{title}}"')
+                print(f"status: {{response.status}}")
+                
+                # Extract links
+                links = await page.evaluate("""
+                    () => Array.from(document.querySelectorAll('a[href]'))
+                        .map(a => ({{text: a.innerText.trim().substring(0, 50), href: a.href}}))
+                        .filter(l => l.text && l.href.startsWith('http'))
+                        .slice(0, 15)
+                """)
+                if links:
+                    print("links:")
+                    for link in links:
+                        print(f'  - text: "{{link["text"]}}"')
+                        print(f'    href: "{{link["href"]}}"')
+                
+                # Extract headings
+                headings = await page.evaluate("""
+                    () => Array.from(document.querySelectorAll('h1, h2, h3'))
+                        .map(h => ({{level: h.tagName, text: h.innerText.trim().substring(0, 80)}}))
+                        .filter(h => h.text)
+                        .slice(0, 10)
+                """)
+                if headings:
+                    print("headings:")
+                    for h in headings:
+                        print(f'  - {{h["level"].lower()}}: "{{h["text"]}}"')
             else:
                 print("ERROR: No response")
         finally:
