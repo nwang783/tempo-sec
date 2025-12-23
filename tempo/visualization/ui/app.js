@@ -236,7 +236,7 @@ function addUserPromptNode(promptData) {
 
 function updateState(data) {
     if (data.phase) document.getElementById("state-phase").textContent = data.phase;
-    if (data.step_number) document.getElementById("state-step").textContent = data.step_number;
+    if (data.step_number !== undefined && data.step_number !== null) document.getElementById("state-step").textContent = data.step_number;
 }
 
 function debouncedUpdate() {
@@ -329,7 +329,7 @@ function update() {
         .style("font-family", "monospace")
         .style("font-size", "11px")
         .style("fill", "#555")
-        .text(d => `STEP ${d.data.step_number || '?'}`);
+        .text(d => `STEP ${d.data.step_number !== undefined ? d.data.step_number : '?'}`);
 
     // --- TOOL Card ---
     const cardWidth = 320;

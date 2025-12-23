@@ -47,7 +47,8 @@ class VisualizationServer:
         self._server_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
         
-        self._setup_routes()
+        # Track current agent state to send to new connections
+        self._agent_state: dict = {}
         
         # Determine UI directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +59,20 @@ class VisualizationServer:
             self.app.mount("/static", StaticFiles(directory=self.ui_dir), name="static")
         else:
             logger.warning(f"UI directory not found at {self.ui_dir}")
+        
+        self._setup_routes()
+    
+    def set_agent_state(self, state: dict) -> None:
+        """Set the current agent state (sent to new WebSocket connections)."""
+        self._agent_state = state
+    
+    def update_agent_state(self, **kwargs) -> None:
+        """Update specific fields in the agent state."""
+        self._agent_state.update(kwargs)
+    
+    def clear_agent_state(self) -> None:
+        """Clear the agent state (call when agent finishes)."""
+        self._agent_state = {}
 
     def _setup_routes(self):
         """Configure FastAPI routes."""
@@ -73,6 +88,17 @@ class VisualizationServer:
         async def websocket_endpoint(websocket: WebSocket):
             await websocket.accept()
             self.active_connections.append(websocket)
+            
+            # Send current agent state to new connection (so model shows even on refresh)
+            if self._agent_state:
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "start",
+                        "data": self._agent_state
+                    }))
+                except Exception:
+                    pass
+            
             try:
                 # Keep connection open and process incoming messages
                 while True:
