@@ -341,6 +341,14 @@ class Agent:
                 f"[System] Automatically transitioned to {forced_phase.value} due to step limit."
             )
         
+        # Check context size and optimize if needed
+        if self.config.max_context_tokens and getattr(self.config, 'auto_summarize', True):
+            await self.context.optimize(
+                llm_client=self.llm,
+                threshold=self.config.max_context_tokens,
+                recent_protection_tokens=20000, # Per user request
+            )
+            
         # Get messages for LLM (with output truncation)
         messages = self.context.render_messages(
             max_output_chars=self.config.max_output_chars

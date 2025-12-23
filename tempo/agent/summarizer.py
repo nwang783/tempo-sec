@@ -143,3 +143,68 @@ class OutputSummarizer:
         original_tokens = len(original) // 4
         summary_tokens = len(summary) // 4
         return max(0, original_tokens - summary_tokens)
+
+
+from pydantic import BaseModel, Field
+
+class PhaseSummary(BaseModel):
+    """Structured summary of a phase."""
+    phase_name: str = Field(..., description="Name of the phase (RECON, HYPOTHESIZE, etc)")
+    actions: list[str] = Field(..., description="List of key actions taken")
+    key_findings: list[str] = Field(..., description="Important discoveries or results")
+    narrative_summary: str = Field(..., description="Concise narrative of progress and outcomes")
+
+class PhaseSummarizer:
+    """
+    Summarizes entire workflow phases to save context.
+    Using gemini/gemini-3-flash-preview for efficiency.
+    """
+    
+    def __init__(self, llm: LLMClient):
+        self.llm = llm
+        
+    async def summarize_phase(
+        self, 
+        phase_name: str,
+        messages: list[dict[str, str]]
+    ) -> PhaseSummary:
+        """
+        Summarize a block of messages representing a phase.
+        
+        Args:
+            phase_name: Name of the phase
+            messages: List of message dicts (role, content)
+            
+        Returns:
+            Structured PhaseSummary
+        """
+        # Create a text representation of the history
+        history_text = "\n".join([
+            f"{m['role'].upper()}: {m['content'][:2000]}..." if len(m['content']) > 2000 else f"{m['role'].upper()}: {m['content']}"
+            for m in messages
+        ])
+        
+        prompt = [
+            {
+                "role": "system", 
+                "content": (
+                    f"You are summarizing the {phase_name} phase of a security testing agent. "
+                    "Analyze the conversation history and extract key actions, findings, and a narrative summary. "
+                    "Focus on what was discovered and what was accomplished."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Conversation History:\n{history_text}"
+            }
+        ]
+        
+        # Instantiate a specific client for Gemini Flash 3
+        from tempo.infra.llm import LiteLLMClient
+        # Note: In a real app we might want to inject this or use a factory
+        flash_client = LiteLLMClient(model="gemini/gemini-3-flash-preview")
+        
+        return await flash_client.complete_structured(
+            messages=prompt,
+            response_model=PhaseSummary
+        )
