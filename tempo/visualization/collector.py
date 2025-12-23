@@ -133,11 +133,13 @@ class VisualizationCollector:
         """Called when agent starts execution."""
         state = {"objective": objective, "model": model_name}
         # Store state on server so new connections get it
-        self.server._agent_state = state
+        self.server.set_agent_state(state)
         self.emit("start", state)
 
     def on_agent_finish(self, success: bool, output: Any = None) -> None:
         """Called when agent finishes."""
+        # Clear agent state so stale data isn't sent to new connections
+        self.server.clear_agent_state()
         self.emit("finish", {
             "success": success, 
             "output": str(output) if output else None

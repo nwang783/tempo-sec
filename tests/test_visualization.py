@@ -1,0 +1,121 @@
+"""
+Unit tests for visualization components.
+
+Tests for VisualizationServer state management and VisualizationCollector events.
+"""
+
+import pytest
+from unittest.mock import MagicMock, AsyncMock, patch
+
+
+class TestVisualizationServerState:
+    """Tests for VisualizationServer agent state management."""
+    
+    def test_initial_state_is_empty(self):
+        """Server starts with empty agent state."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        assert server._agent_state == {}
+    
+    def test_set_agent_state(self):
+        """Test setting agent state."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        state = {"model": "test-model", "objective": "Test objective"}
+        
+        server.set_agent_state(state)
+        
+        assert server._agent_state == state
+        assert server._agent_state["model"] == "test-model"
+    
+    def test_update_agent_state(self):
+        """Test updating specific fields in agent state."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        server.set_agent_state({"model": "test-model"})
+        
+        server.update_agent_state(step_number=5)
+        
+        assert server._agent_state["model"] == "test-model"
+        assert server._agent_state["step_number"] == 5
+    
+    def test_clear_agent_state(self):
+        """Test clearing agent state."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        server.set_agent_state({"model": "test-model", "objective": "Test"})
+        
+        server.clear_agent_state()
+        
+        assert server._agent_state == {}
+
+
+class TestVisualizationCollectorEvents:
+    """Tests for VisualizationCollector event emission."""
+    
+    @pytest.mark.asyncio
+    async def test_on_agent_start_stores_state(self):
+        """on_agent_start should store state on server."""
+        from tempo.visualization.collector import VisualizationCollector
+        
+        mock_server = MagicMock()
+        mock_server.broadcast = AsyncMock()
+        collector = VisualizationCollector(mock_server)
+        
+        collector.on_agent_start("Test objective", "anthropic/claude-sonnet")
+        
+        mock_server.set_agent_state.assert_called_once_with({
+            "objective": "Test objective",
+            "model": "anthropic/claude-sonnet"
+        })
+    
+    def test_on_agent_start_emits_event(self):
+        """on_agent_start should emit a start event."""
+        from tempo.visualization.collector import VisualizationCollector
+        
+        mock_server = MagicMock()
+        collector = VisualizationCollector(mock_server)
+        
+        with patch.object(collector, 'emit') as mock_emit:
+            collector.on_agent_start("Test objective", "test-model")
+            
+            mock_emit.assert_called_once_with("start", {
+                "objective": "Test objective",
+                "model": "test-model"
+            })
+    
+    @pytest.mark.asyncio
+    async def test_on_agent_finish_clears_state(self):
+        """on_agent_finish should clear state on server."""
+        from tempo.visualization.collector import VisualizationCollector
+        
+        mock_server = MagicMock()
+        mock_server.broadcast = AsyncMock()
+        collector = VisualizationCollector(mock_server)
+        
+        collector.on_agent_finish(success=True)
+        
+        mock_server.clear_agent_state.assert_called_once()
+    
+    def test_on_agent_finish_emits_event(self):
+        """on_agent_finish should emit a finish event."""
+        from tempo.visualization.collector import VisualizationCollector
+        
+        mock_server = MagicMock()
+        collector = VisualizationCollector(mock_server)
+        
+        with patch.object(collector, 'emit') as mock_emit:
+            collector.on_agent_finish(success=True, output="Done")
+            
+            mock_emit.assert_called_once_with("finish", {
+                "success": True,
+                "output": "Done"
+            })
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

@@ -51,6 +51,18 @@ class VisualizationServer:
         self._agent_state: dict = {}
         
         self._setup_routes()
+    
+    def set_agent_state(self, state: dict) -> None:
+        """Set the current agent state (sent to new WebSocket connections)."""
+        self._agent_state = state
+    
+    def update_agent_state(self, **kwargs) -> None:
+        """Update specific fields in the agent state."""
+        self._agent_state.update(kwargs)
+    
+    def clear_agent_state(self) -> None:
+        """Clear the agent state (call when agent finishes)."""
+        self._agent_state = {}
         
         # Determine UI directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -82,7 +94,6 @@ class VisualizationServer:
                 try:
                     await websocket.send_text(json.dumps({
                         "type": "start",
-                        "timestamp": self._agent_state.get("timestamp", ""),
                         "data": self._agent_state
                     }))
                 except Exception:
