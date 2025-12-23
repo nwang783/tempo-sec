@@ -50,6 +50,16 @@ class VisualizationServer:
         # Track current agent state to send to new connections
         self._agent_state: dict = {}
         
+        # Determine UI directory path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.ui_dir = os.path.join(current_dir, "ui")
+        
+        # Mount static files if directory exists
+        if os.path.exists(self.ui_dir):
+            self.app.mount("/static", StaticFiles(directory=self.ui_dir), name="static")
+        else:
+            logger.warning(f"UI directory not found at {self.ui_dir}")
+        
         self._setup_routes()
     
     def set_agent_state(self, state: dict) -> None:
@@ -63,16 +73,6 @@ class VisualizationServer:
     def clear_agent_state(self) -> None:
         """Clear the agent state (call when agent finishes)."""
         self._agent_state = {}
-        
-        # Determine UI directory path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.ui_dir = os.path.join(current_dir, "ui")
-        
-        # Mount static files if directory exists
-        if os.path.exists(self.ui_dir):
-            self.app.mount("/static", StaticFiles(directory=self.ui_dir), name="static")
-        else:
-            logger.warning(f"UI directory not found at {self.ui_dir}")
 
     def _setup_routes(self):
         """Configure FastAPI routes."""
