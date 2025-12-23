@@ -116,17 +116,16 @@ class ContextStore:
         start_index: int,
         end_index: int,
         summary: str,
+        role: MessageRole = MessageRole.SYSTEM,
     ) -> None:
         """
         Replace a range of messages with a single summary message.
-        
-        Used after REFLECT phase to replace the previous cycle's context
-        with a concise summary, saving tokens for long runs.
         
         Args:
             start_index: First message index to replace (inclusive)
             end_index: Last message index to replace (exclusive)
             summary: The summary text to insert
+            role: Role for the summary message
         """
         messages = self.current_frame.messages
         
@@ -141,19 +140,224 @@ class ContextStore:
         
         # Create summary message
         summary_msg = Message(
-            role=MessageRole.SYSTEM,
-            content=f"[Previous Cycle Summary]\n{summary}",
+            role=role,
+            content=summary,
         )
         
         # Rebuild message list
         self.current_frame.messages = list(before) + [summary_msg] + list(after)
         
-        # Also clear tool calls from the replaced range (they're summarized now)
-        # We keep tool calls as they may be referenced, but mark them as summarized
-        for tc in self.current_frame.tool_calls:
-            if tc.summary is None:
-                tc.summary = "[Included in cycle summary]"
+        # Remove tool calls that occurred within this message block's timeframe
+        # This prevents "dangling" tool calls from being rendered after their context is summarized.
+        if messages and start_index < len(messages) and end_index > 0:
+            # We have a defined range of messages being removed.
+            # We use the timestamps of the first and last message in that block to define the window.
+            # safe access
+            start_msg = messages[start_index]
+            end_msg = messages[end_index - 1] if end_index <= len(messages) else messages[-1]
+            
+            time_start = start_msg.timestamp
+            time_end = end_msg.timestamp
+            
+            # Filter out tool calls within this range
+            self.current_frame.tool_calls = [
+                tc for tc in self.current_frame.tool_calls
+                if not (time_start <= tc.timestamp <= time_end)
+            ]
+
     
+    # === Semantic Summarization ===
+
+    def identify_phase_blocks(self) -> list[dict]:
+        """
+        Identify blocks of messages corresponding to workflow phases.
+        
+        Returns:
+            List of dicts with:
+                - phase: Phase name (e.g., "RECON")
+                - start_index: Start message index
+                - end_index: End message index
+                - content_tokens: Approx token count
+        """
+        blocks = []
+        messages = self.current_frame.messages
+        
+        current_phase = "RECON" # Default start
+        start_index = 0
+        
+        for i, msg in enumerate(messages):
+            # Check for phase transition markers in System messages
+            if msg.role == MessageRole.SYSTEM or msg.role == "system":
+                content = msg.content
+                # Patterns from runner.py and specialized tools
+                lower_content = content.lower()
+                if "transitioned to" in lower_content or "you are now back in" in lower_content or "you are now in" in lower_content:
+                    # Found a transition point. 
+                    # The PREVIOUS block ends at i (exclusive).
+                    if i > start_index:
+                        blocks.append({
+                            "phase": current_phase,
+                            "start_index": start_index,
+                            "end_index": i,
+                        })
+                    
+                    # Extract new phase name
+                    # Simple heuristic: look for phase names
+                    upper_content = content.upper()
+                    new_phase = current_phase # fallback
+                    for p in ["RECON", "HYPOTHESIZE", "TEST", "REFLECT"]:
+                        if p in upper_content:
+                            new_phase = p
+                            break
+                    
+                    current_phase = new_phase
+                    start_index = i # Start new block including this transition message
+        
+        # Add the final block (current phase)
+        if start_index < len(messages):
+            blocks.append({
+                "phase": current_phase,
+                "start_index": start_index,
+                "end_index": len(messages),
+            })
+            
+        return blocks
+
+    async def optimize(
+        self, 
+        llm_client, 
+        threshold: int = 100000, 
+        recent_protection_tokens: int = 20000
+    ) -> bool:
+        """
+        Optimize context by summarizing old phases if over threshold.
+        
+        Args:
+            llm_client: Client to use for summarization
+            threshold: Token limit to trigger optimization
+            recent_protection_tokens: Number of recent tokens to protect
+            
+        Returns:
+            True if optimization was performed
+        """
+        # 1. Check total size
+        total_tokens = self.estimate_tokens()
+        if total_tokens < threshold:
+            return False
+            
+        # 2. Identify phase blocks
+        blocks = self.identify_phase_blocks()
+        if not blocks:
+            return False
+            
+        # 3. Define protected window (indices)
+        # We walk backwards summing tokens until we hit protection limit
+        protected_start_index = len(self.current_frame.messages)
+        content_tokens = 0
+        
+        for i in range(len(self.current_frame.messages) - 1, -1, -1):
+            msg = self.current_frame.messages[i]
+            # Rough estimate
+            tokens = len(msg.content) // 4
+            content_tokens += tokens
+            protected_start_index = i
+            if content_tokens >= recent_protection_tokens:
+                break
+        
+        # 4. Find oldest *completed* phase that is fully before protected window
+        # We start looking from index 1 (skipping potential initial system setup/objective block)
+        target_block = None
+        
+        # Skip the very first block if it's uniquely small or just setup, 
+        # but usually RECON is the first real block.
+        # We also DON'T want to summarize the CURRENT phase (last block).
+        
+        summarizable_blocks = blocks[:-1] # Exclude current phase
+        
+        # Identify Preamble end to protect it
+        # We detect the first ASSISTANT message as the start of "real work"
+        preamble_end_index = 0
+        for i, msg in enumerate(self.current_frame.messages):
+             if msg.role == MessageRole.ASSISTANT:
+                 preamble_end_index = i
+                 break
+        if preamble_end_index == 0 and len(self.current_frame.messages) > 0 and self.current_frame.messages[0].role != MessageRole.ASSISTANT:
+             # If we never found an assistant message, but have history, maybe it's all preamble?
+             # But for optimization, we assume we have phases.
+             # If NO assistant message exists, we probably shouldn't summarize anything yet.
+             # But let's safe-guard: if we found blocks, we assume we can summarize.
+             # Let's default to preserving first 2 messages if no assistant found (System + User)
+             preamble_end_index = 2
+             
+        for block in summarizable_blocks:
+            # Check if block overlaps with protected window
+            if block["end_index"] > protected_start_index:
+                continue
+                
+            # Adjust start_index to preserve Preamble
+            if block["start_index"] < preamble_end_index:
+                block["start_index"] = preamble_end_index
+            
+            # If adjustment made block valid range empty or negative, skip
+            if block["start_index"] >= block["end_index"]:
+                continue
+                
+            # Check if block is long enough to be worth summarizing (> 1000 tokens)
+            # Estimate size
+            block_content = "".join([
+                self.current_frame.messages[j].content 
+                for j in range(block["start_index"], block["end_index"])
+            ])
+            if len(block_content) // 4 < 1000:
+                continue
+                
+            # Found a candidate!
+            target_block = block
+            break
+            
+        if not target_block:
+            return False
+            
+        # 5. Summarize
+        from tempo.agent.summarizer import PhaseSummarizer
+        summarizer = PhaseSummarizer(llm_client)
+        
+        import logging
+        logging.info(f"Summarizing phase {target_block['phase']} (indices {target_block['start_index']}-{target_block['end_index']})")
+        
+        # Extract messages for summary
+        msgs_to_summarize = [
+            self.current_frame.messages[j].to_dict() 
+            for j in range(target_block["start_index"], target_block["end_index"])
+        ]
+        
+        try:
+            summary = await summarizer.summarize_phase(
+                target_block["phase"],
+                msgs_to_summarize
+            )
+            
+            # Format the replacement
+            summary_text = (
+                f"## Phase Summary: {target_block['phase']}\n"
+                f"**Actions:**\n- " + "\n- ".join(summary.actions) + "\n\n"
+                f"**Key Findings:**\n- " + "\n- ".join(summary.key_findings) + "\n\n"
+                f"**Narrative:**\n{summary.narrative_summary}"
+            )
+            
+            # 6. Replace
+            self.replace_messages_with_summary(
+                target_block["start_index"],
+                target_block["end_index"],
+                summary_text,
+                role=MessageRole.SYSTEM 
+            )
+            return True
+            
+        except Exception as e:
+            logging.error(f"Phase summarization failed: {e}")
+            return False
+
     # === State Management ===
     
     def update_state(self, **kwargs) -> None:
@@ -464,6 +668,18 @@ class ContextStore:
         
         return messages
     
+    def _get_preamble_end_index(self, messages: list[dict[str, str]]) -> int:
+        """
+        Find the index where the 'preamble' (System prompts + User Objective) ends.
+        Heuristic: The preamble ends just before the first ASSISTANT message.
+        """
+        for i, msg in enumerate(messages):
+            if msg["role"] == "assistant":
+                return i
+        
+        # If no assistant message, potentially the whole thing is preamble 
+        return len(messages)
+
     def _truncate_to_token_limit(
         self,
         messages: list[dict[str, str]],
@@ -471,7 +687,11 @@ class ContextStore:
     ) -> list[dict[str, str]]:
         """
         Truncate messages to fit within token limit.
-        Keeps system message and most recent messages.
+        Prioritizes:
+        1. System messages (always kept)
+        2. First few messages (User Objective)
+        3. Most recent messages (Immediate context)
+        4. Drops middle history
         """
         # Rough estimate: 4 chars per token
         total_tokens = sum(len(m["content"]) // 4 for m in messages)
@@ -479,23 +699,35 @@ class ContextStore:
         if total_tokens <= max_tokens:
             return messages
         
-        # Keep first message if system, then take from end
-        result = []
-        if messages and messages[0]["role"] == "system":
-            result.append(messages[0])
-            messages = messages[1:]
+        # 1. Identify Preamble (System messages + User Objective)
+        # We protect everything up to the first Assistant message
+        preamble_end = self._get_preamble_end_index(messages)
+        kept_start = messages[:preamble_end]
+        remaining_messages = messages[preamble_end:]
         
-        # Add messages from the end until we hit limit
-        remaining_tokens = max_tokens - sum(len(m["content"]) // 4 for m in result)
-        for msg in reversed(messages):
+        # Calculate remaining budget
+        current_tokens = sum(len(m["content"]) // 4 for m in kept_start)
+        remaining_budget = max(0, max_tokens - current_tokens)
+        
+        # 2. Fill the rest with MOST RECENT messages from remaining_messages
+        kept_end = []
+        for msg in reversed(remaining_messages):
             msg_tokens = len(msg["content"]) // 4
-            if msg_tokens <= remaining_tokens:
-                result.insert(len(result) - len(result) + 1 if result else 0, msg)
-                remaining_tokens -= msg_tokens
+            if msg_tokens <= remaining_budget:
+                kept_end.insert(0, msg)
+                remaining_budget -= msg_tokens
             else:
+                # We can't fit this message, stop
                 break
-        
-        return result
+                
+        # If we had to drop messages, insert a marker
+        if len(kept_start) + len(kept_end) < len(kept_start) + len(messages):
+             kept_start.append({
+                 "role": "system",
+                 "content": f"[... Context Truncated. Dropped {len(messages) - len(kept_end)} messages ...]"
+             })
+             
+        return kept_start + kept_end
     
     def estimate_tokens(self) -> int:
         """
