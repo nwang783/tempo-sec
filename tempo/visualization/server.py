@@ -47,6 +47,9 @@ class VisualizationServer:
         self._server_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
         
+        # Track current agent state to send to new connections
+        self._agent_state: dict = {}
+        
         self._setup_routes()
         
         # Determine UI directory path
@@ -73,6 +76,18 @@ class VisualizationServer:
         async def websocket_endpoint(websocket: WebSocket):
             await websocket.accept()
             self.active_connections.append(websocket)
+            
+            # Send current agent state to new connection (so model shows even on refresh)
+            if self._agent_state:
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "start",
+                        "timestamp": self._agent_state.get("timestamp", ""),
+                        "data": self._agent_state
+                    }))
+                except Exception:
+                    pass
+            
             try:
                 # Keep connection open and process incoming messages
                 while True:

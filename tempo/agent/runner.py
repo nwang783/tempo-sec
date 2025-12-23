@@ -224,6 +224,10 @@ class Agent:
         self._objective = objective
         self._step_count = start_step
         
+        # Notify visualization that agent is starting
+        if self._viz_collector:
+            self._viz_collector.on_agent_start(objective, self.config.model)
+        
         # Only reset workflow if starting fresh
         if start_step == 0:
             self.workflow.reset(initial_phase)
