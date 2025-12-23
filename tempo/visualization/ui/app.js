@@ -381,29 +381,81 @@ function update() {
             return p.length > 40 ? p.substring(0, 37) + "..." : p;
         });
 
-    // --- PHASE Banner ---
+    // --- PHASE Banner (IDE-style) ---
     const phaseGroup = nodeEnter.filter(d => d.type === 'phase_marker');
+    const phaseWidth = cardWidth + 40; // Wider than tool cards for emphasis
+    const phaseHeight = 42;
 
+    // Background bar with IDE header styling
     phaseGroup.append('rect')
-        .attr('x', -cardWidth / 2)
+        .attr('x', -phaseWidth / 2)
         .attr('y', 0)
-        .attr('width', cardWidth)
-        .attr('height', 45)
-        .attr('rx', 22)
-        .style("fill", "#050505")
-        .style("stroke", "var(--accent-green)")
-        .style("stroke-width", "2px")
-        .style("filter", "drop-shadow(0 0 8px var(--accent-green))");
+        .attr('width', phaseWidth)
+        .attr('height', phaseHeight)
+        .attr('rx', 4)
+        .style("fill", "#2d2d30")
+        .style("stroke", "#007acc")
+        .style("stroke-width", "1px");
 
+    // Left accent bar (like VS Code active tab indicator)
+    phaseGroup.append('rect')
+        .attr('x', -phaseWidth / 2)
+        .attr('y', 0)
+        .attr('width', 4)
+        .attr('height', phaseHeight)
+        .attr('rx', 2)
+        .style("fill", "#007acc");
+
+    // Phase icon circle
+    phaseGroup.append('circle')
+        .attr('cx', -phaseWidth / 2 + 28)
+        .attr('cy', phaseHeight / 2)
+        .attr('r', 14)
+        .style("fill", "#1e1e1e")
+        .style("stroke", "#007acc")
+        .style("stroke-width", "1.5px");
+
+    // Phase icon
     phaseGroup.append('text')
-        .attr('x', 0)
-        .attr('y', 28)
+        .attr('x', -phaseWidth / 2 + 28)
+        .attr('y', phaseHeight / 2)
+        .attr("dy", "5px")
         .attr("text-anchor", "middle")
         .style("font-size", "14px")
-        .style("font-weight", "bold")
-        .style("fill", "var(--accent-green)")
-        .style("text-transform", "uppercase")
-        .text(d => `>>> ${d.name} <<<`);
+        .style("fill", "#007acc")
+        .text(d => {
+            // Different icons for different phases
+            const name = d.name.toLowerCase();
+            if (name.includes('recon')) return '🔍';
+            if (name.includes('hypo')) return '💡';
+            if (name.includes('test')) return '⚡';
+            if (name.includes('reflect')) return '📊';
+            return '▶';
+        });
+
+    // Phase label - monospace like terminal
+    phaseGroup.append('text')
+        .attr('x', -phaseWidth / 2 + 55)
+        .attr('y', phaseHeight / 2 + 1)
+        .attr("dy", "4px")
+        .attr("text-anchor", "start")
+        .style("font-family", "var(--font-code)")
+        .style("font-size", "13px")
+        .style("font-weight", "600")
+        .style("fill", "#cccccc")
+        .style("letter-spacing", "0.5px")
+        .text(d => `PHASE: ${d.name}`);
+
+    // Right-side chevron decoration
+    phaseGroup.append('text')
+        .attr('x', phaseWidth / 2 - 15)
+        .attr('y', phaseHeight / 2)
+        .attr("dy", "4px")
+        .attr("text-anchor", "end")
+        .style("font-family", "var(--font-code)")
+        .style("font-size", "11px")
+        .style("fill", "#555")
+        .text('>');
 
     // --- USER PROMPT Banner ---
     const userPromptGroup = nodeEnter.filter(d => d.type === 'user_prompt');

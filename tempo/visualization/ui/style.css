@@ -516,11 +516,19 @@ svg:active {
     font-family: var(--font-code) !important;
 }
 
+/* Phase markers - IDE-style design */
 .node.phase_marker rect {
-    fill: #1e1e1e !important;
-    stroke: var(--ghidra-green) !important;
-    rx: 0 !important;
-    /* Sharp corners for phases? Or keep rounded */
+    /* Styles applied via D3 inline */
+}
+
+.node.phase_marker:hover rect:first-of-type {
+    fill: #333337 !important;
+}
+
+.node.phase_marker.selected rect:first-of-type {
+    stroke: #007acc !important;
+    stroke-width: 2px !important;
+    filter: drop-shadow(0 0 6px rgba(0, 122, 204, 0.4));
 }
 
 .link {
