@@ -37,6 +37,11 @@ from tempo.tools.meta import (
     BranchToSubtasksTool,
     FinishSubtaskTool,
 )
+from tempo.tools.testplan_tools import (
+    CreateTestPlanTool,
+    AddTodoTool,
+    CompleteTodoTool,
+)
 
 __all__ = [
     # Base
@@ -63,4 +68,8 @@ __all__ = [
     "FinishTaskTool",
     "BranchToSubtasksTool",
     "FinishSubtaskTool",
+    # Test plan tools
+    "CreateTestPlanTool",
+    "AddTodoTool",
+    "CompleteTodoTool",
 ]

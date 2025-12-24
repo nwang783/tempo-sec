@@ -108,6 +108,8 @@ async def main() -> None:
         ContinueAnalysisTool,
         BranchToSubtasksTool,
         FinishSubtaskTool,
+    )
+    from tempo.tools.testplan_tools import (
         CreateTestPlanTool,
         AddTodoTool,
         CompleteTodoTool,

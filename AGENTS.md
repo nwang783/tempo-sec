@@ -33,6 +33,8 @@ Use `tempo/infra/protocols.py` for cross-component type hints.
 - `tempo/agent/step_handler.py` — Tool execution logic
 - `tempo/tools/registry.py` — Tool registration
 - `tempo/context/store.py` — Context tree management
+- `tempo/infra/phases.py` — Workflow phase definitions (Phase enum)
+- `tempo/infra/protocols.py` — Cross-component type interfaces
 
 ## Workflow Phases
 

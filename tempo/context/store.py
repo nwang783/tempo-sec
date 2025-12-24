@@ -87,6 +87,30 @@ class ContextStore:
         """
         self.current_frame.tool_calls.append(tool_call)
     
+    def find_tool_call(self, tool_call_id: str) -> ToolCall | None:
+        """
+        Find a tool call by ID in the context history.
+        
+        Implements the ToolCallFinder protocol from infra.protocols.
+        
+        Args:
+            tool_call_id: ID of the tool call to find
+            
+        Returns:
+            The ToolCall if found, None otherwise
+        """
+        # Search in current frame and ancestors
+        frame_id = self._current_frame_id
+        while frame_id is not None:
+            frame = self._frames.get(frame_id)
+            if frame is None:
+                break
+            for tc in frame.tool_calls:
+                if tc.id == tool_call_id:
+                    return tc
+            frame_id = frame.parent_id
+        return None
+    
     def summarize_tool_call(self, tool_call_id: str, summary: str) -> None:
         """
         Replace a tool call's raw output with a summary.
