@@ -594,14 +594,7 @@ function showDetails(d) {
     detailsContent.innerHTML = html;
 }
 
-function escapeHtml(t) {
-    if (!t) return "";
-    return t.toString()
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
+// escapeHtml is defined below (DOM-based version)
 
 window.addEventListener('resize', () => {
     width = container.clientWidth;
@@ -937,8 +930,8 @@ function renderToolCallItem(item, index, expandedClass, summarizedClass) {
     const toolIcon = getToolIcon(item.tool_name);
     const statusClass = item.success ? '' : 'error';
     const preview = getPreview(item.display_output || '', 80);
-    const savedBadge = item.tokens_saved > 0 
-        ? `<span class="context-tokens-saved">-${item.tokens_saved.toLocaleString()}</span>` 
+    const savedBadge = item.tokens_saved > 0
+        ? `<span class="context-tokens-saved">-${item.tokens_saved.toLocaleString()}</span>`
         : '';
 
     return `

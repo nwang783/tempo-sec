@@ -114,16 +114,16 @@ class VisualizationServer:
                         "type": "start",
                         "data": self._agent_state
                     }))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to send initial state to new connection: {e}")
             
             try:
                 # Keep connection open and process incoming messages
                 while True:
                     raw = await websocket.receive_text()
                     await self._handle_incoming_message(raw)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"WebSocket connection closed: {e}")
             finally:
                 if websocket in self.active_connections:
                     self.active_connections.remove(websocket)
@@ -193,11 +193,13 @@ class VisualizationServer:
         @self.app.get("/api/context/{session_id}")
         async def get_context_by_id(session_id: str):
             """Load a specific session's context data."""
-            # Sanitize session_id to prevent path traversal
-            if "/" in session_id or "\\" in session_id or ".." in session_id:
+            # Validate path stays within persistence directory
+            try:
+                context_path = (Path(self.persistence_dir) / f"{session_id}.json").resolve()
+                if not context_path.is_relative_to(Path(self.persistence_dir).resolve()):
+                    raise HTTPException(status_code=400, detail="Invalid session ID")
+            except (ValueError, OSError):
                 raise HTTPException(status_code=400, detail="Invalid session ID")
-            
-            context_path = Path(self.persistence_dir) / f"{session_id}.json"
             if not context_path.exists():
                 raise HTTPException(status_code=404, detail="Context file not found")
             
