@@ -65,3 +65,12 @@ python -m pytest tests/agent/ -v  # Agent-specific tests
 | Modify prompts | Edit `prompts/templates/` and `phases.py` |
 | Add config option | Update `AgentConfig` dataclass + `from_dict()` mapping |
 | Extend workflow | Modify `workflow.py` phase transitions |
+
+## Documentation
+
+For detailed documentation, see:
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - Component architecture and structure
+- [docs/WORKFLOW.md](docs/WORKFLOW.md) - Phase workflow and branching
+- [docs/TOOLS.md](docs/TOOLS.md) - Tool specifications and how to add new tools
+- [MISSION.md](MISSION.md) - Vision and philosophy
+
