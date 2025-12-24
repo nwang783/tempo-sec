@@ -50,7 +50,7 @@ class TransitionPhaseTool(Tool):
         Returns:
             ToolResult indicating success/failure
         """
-        from tempo.prompts.phases import Phase
+        from tempo.infra.phases import Phase
         from tempo.agent.workflow import WorkflowError
         
         try:
@@ -76,7 +76,7 @@ class TransitionPhaseTool(Tool):
             
     def get_schema(self) -> ToolSchema:
         """Return the JSON schema for this tool's parameters."""
-        from tempo.prompts.phases import Phase
+        from tempo.infra.phases import Phase
         
         return ToolSchema(
             name=self.name,

@@ -86,20 +86,8 @@ class ViewToolOutputTool(Tool):
         )
     
     def _find_tool_call(self, tool_call_id: str):
-        """Find a tool call by ID in the context store."""
-        from tempo.context.frame import ToolCall
-        
-        # Search through all frames
-        frame_id = self.context_store._current_frame_id
-        while frame_id is not None:
-            frame = self.context_store._frames.get(frame_id)
-            if frame is None:
-                break
-            for tc in frame.tool_calls:
-                if tc.id == tool_call_id:
-                    return tc
-            frame_id = frame.parent_id
-        return None
+        """Find a tool call by ID using the context store's protocol method."""
+        return self.context_store.find_tool_call(tool_call_id)
     
     def get_schema(self) -> ToolSchema:
         """Return the JSON schema for this tool's parameters."""

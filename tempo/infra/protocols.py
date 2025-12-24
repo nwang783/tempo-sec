@@ -135,3 +135,20 @@ class TestPlanManager(Protocol):
     def set_test_plan(self, items: list[dict]) -> None:
         """Replace the entire test plan."""
         ...
+
+
+class ToolCallFinder(Protocol):
+    """Protocol for finding tool calls in context history."""
+    
+    def find_tool_call(self, tool_call_id: str) -> Any | None:
+        """
+        Find a tool call by ID in the context history.
+        
+        Args:
+            tool_call_id: ID of the tool call to find
+            
+        Returns:
+            The ToolCall if found, None otherwise
+        """
+        ...
+

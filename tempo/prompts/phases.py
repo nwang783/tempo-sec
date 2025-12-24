@@ -3,18 +3,17 @@ Workflow phases for the security agent.
 
 Defines the Phase enum and PhaseConfig for controlling
 the agent's structured workflow progression.
+
+Note: Phase enum is defined in infra/phases.py to allow tools
+to import it without violating the dependency rule that
+Context/Prompts/Tools must not import from each other.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 
-
-class Phase(str, Enum):
-    """Workflow phases for the security agent."""
-    RECON = "recon"
-    HYPOTHESIZE = "hypothesize"
-    TEST = "test"
-    REFLECT = "reflect"
+# Import Phase from infra/ - this is the canonical location
+# Re-exported here for backward compatibility
+from tempo.infra.phases import Phase
 
 
 @dataclass
