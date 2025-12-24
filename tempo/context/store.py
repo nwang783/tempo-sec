@@ -757,8 +757,6 @@ class ContextStore:
         
         return {
             "session_id": self._session_id,
-            "created_at": None,
-            "updated_at": None,
             "current_frame_id": self._current_frame_id,
             "frames": frames,
         }
