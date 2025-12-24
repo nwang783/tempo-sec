@@ -58,7 +58,7 @@ class TransitionPhaseTool(Tool):
             self.workflow.transition(target_phase)
             return ToolResult(
                 success=True,
-                output=f"Transitioned to {target_phase.value}. Justification: {justification}",
+                output=f"Switched to {target_phase.value} phase.",
                 metadata={"phase": target_phase.value},
             )
         except ValueError:
@@ -205,7 +205,7 @@ class ContinueAnalysisTool(Tool):
         if should_continue:
             return ToolResult(
                 success=True,
-                output=f"Continuing analysis. Reason: {reasoning}",
+                output="Continuing analysis.",
                 metadata={"continue": True, "reasoning": reasoning},
             )
         else:
@@ -217,7 +217,7 @@ class ContinueAnalysisTool(Tool):
                 )
             return ToolResult(
                 success=True,
-                output=f"Analysis complete. Findings: {findings}",
+                output="Analysis complete.",
                 metadata={"finish": True, "findings": findings, "reasoning": reasoning},
             )
             
@@ -478,15 +478,9 @@ class CreateTestPlanTool(Tool):
         # Set the test plan
         self.plan_manager.set_test_plan(plan_items)
         
-        # Format for output
-        plan_text = "\n".join([
-            f"  [{i+1}] ({item['priority'].upper()}) {item['description']}"
-            for i, item in enumerate(plan_items)
-        ])
-        
         return ToolResult(
             success=True,
-            output=f"Test plan created with {len(plan_items)} items:\n{plan_text}\n\nTransitioning to TEST phase.",
+            output=f"Test plan created with {len(plan_items)} items. Transitioning to TEST phase.",
             metadata={"plan_created": True, "item_count": len(plan_items)},
         )
     
@@ -571,7 +565,7 @@ class AddTodoTool(Tool):
         
         return ToolResult(
             success=True,
-            output=f"Added item to test plan: {description} (priority: {priority})",
+            output=f"Added item (id: {item_id}, priority: {priority}).",
             metadata={"item_id": item_id},
         )
     
@@ -668,7 +662,7 @@ class CompleteTodoTool(Tool):
         
         return ToolResult(
             success=True,
-            output=f"Marked item as {status}: {reason}",
+            output=f"Item {item_id} marked as {status}.",
             metadata={"item_id": item_id, "status": status},
         )
     

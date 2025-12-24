@@ -58,7 +58,7 @@ class TestContinueAnalysisTool:
         
         assert result.success is True
         assert result.metadata["finish"] is True
-        assert "SQL injection" in result.output
+        assert "Analysis complete" in result.output
     
     @pytest.mark.asyncio
     async def test_execute_finish_requires_findings(self):
