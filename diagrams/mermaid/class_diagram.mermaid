@@ -1,4 +1,5 @@
 classDiagram
+    %% Context Layer
     class ContextFrame {
         +String id
         +String parent_id
@@ -8,7 +9,6 @@ classDiagram
         +AgentState state
         +String label
         +Boolean is_checkpoint
-        +Boolean is_branch_point
         +to_dict() Dict
         +from_dict(data) ContextFrame
     }
@@ -45,26 +45,125 @@ classDiagram
         +summarize_tool_call(id, summary)
         +checkpoint(label) String
         +revert(frame_id)
-        +branch(n, objectives) List
-        +merge_branches(ids, summaries)
         +render_messages() List
+        +save() String
+        +load(path) ContextStore
     }
     
+    %% Agent Layer
     class Agent {
         +ContextStore context
         +PromptBuilder prompts
         +ToolRegistry tools
         +LLMClient llm
         +AgentConfig config
+        +StepHandler step_handler
         +run(objective) AgentResult
         +step() StepResult
-        +branch_explore(objectives) List
     }
     
+    class StepHandler {
+        +ToolRegistry tools
+        +ContextStore context
+        +handle_tool_call(request) ToolResult
+        +execute_tool(name, args) ToolResult
+    }
+    
+    class BranchCoordinator {
+        +ContextStore context
+        +spawn_subtasks(subtasks) String
+        +await_completion(branch_id) List
+        +merge_results(results) String
+    }
+    
+    class WorkflowManager {
+        +Phase current_phase
+        +Dict phase_step_counts
+        +can_transition(phase) Boolean
+        +transition(phase)
+        +record_step()
+    }
+    
+    %% Tools Layer
+    class Tool {
+        <<abstract>>
+        +String name
+        +String description
+        +ToolCategory category
+        +execute(**kwargs) ToolResult
+        +get_schema() ToolSchema
+    }
+    
+    class ToolRegistry {
+        +Dict tools
+        +register(tool)
+        +get(name) Tool
+        +list_tools() List
+        +get_schemas() List
+    }
+    
+    class BrowserSession {
+        +ContainerManager container
+        +ensure_browser()
+        +close()
+        +get_element_by_ref(ref) Dict
+        +store_snapshot_refs(refs)
+    }
+    
+    %% Visualization Layer
+    class VisualizationCollector {
+        +List steps
+        +on_step(data)
+        +on_tool_call(data)
+        +on_phase_transition(data)
+        +get_state() Dict
+    }
+    
+    class VisualizationServer {
+        +VisualizationCollector collector
+        +start()
+        +stop()
+        +broadcast(event)
+    }
+    
+    %% Infrastructure Layer
+    class LLMClient {
+        <<abstract>>
+        +complete(messages, tools) LLMResponse
+        +complete_structured(messages, model) T
+    }
+    
+    class LLMResponse {
+        +String content
+        +List tool_calls
+        +TokenUsage usage
+        +String model
+    }
+    
+    class ContainerManager {
+        +ContainerConfig config
+        +start()
+        +stop()
+        +exec(command) Tuple
+    }
+    
+    %% Relationships
     ContextFrame "1" *-- "0..*" Message
     ContextFrame "1" *-- "0..*" ToolCall
     ContextFrame "1" *-- "1" AgentState
     ContextStore "1" *-- "0..*" ContextFrame
+    
     Agent --> ContextStore
     Agent --> ToolRegistry
     Agent --> LLMClient
+    Agent --> StepHandler
+    Agent --> WorkflowManager
+    Agent --> BranchCoordinator
+    
+    StepHandler --> ToolRegistry
+    StepHandler --> ContextStore
+    
+    ToolRegistry "1" *-- "0..*" Tool
+    BrowserSession --> ContainerManager
+    
+    VisualizationServer --> VisualizationCollector

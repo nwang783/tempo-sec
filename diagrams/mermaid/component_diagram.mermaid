@@ -2,12 +2,14 @@ flowchart TB
     subgraph Agent["Agent Layer"]
         AR[Agent Runner]
         WM[Workflow Manager]
+        SH[Step Handler]
         OS[Output Summarizer]
+        BC[Branch Coordinator]
+        EB[Event Bus]
     end
     
     subgraph Context["Context Layer"]
         CS[Context Store]
-        BM[Branch Manager]
         PS[Persistence]
         JF[(JSON Files)]
     end
@@ -20,46 +22,105 @@ flowchart TB
     
     subgraph Tools["Tools Layer"]
         TR[Tool Registry]
-        ST[Shell Tool]
-        BT[Browser Tool]
-        FT[Filesystem Tools]
-        IT[Installer Tool]
+        TF[Tool Factory]
+        subgraph BuiltIn["Built-in Tools"]
+            ST[Shell Tool]
+            FT[Filesystem Tools]
+        end
+        subgraph Browser["Browser Tools"]
+            BS[Browser Session]
+            BN[browser_navigate]
+            BSN[browser_snapshot]
+            BCK[browser_click]
+            BTY[browser_type]
+            BFF[browser_fill_form]
+        end
+        subgraph Meta["Meta Tools"]
+            TP[transition_phase]
+            SUO[summarize_output]
+            BTS[branch_to_subtasks]
+            FIN[finish_task]
+        end
+        subgraph TaskTools["Task Tools"]
+            TPT[Test Plan Tools]
+            MT[Manifest Tools]
+            VO[View Output Tool]
+        end
+    end
+    
+    subgraph Visualization["Visualization Layer"]
+        VS[Visualization Server]
+        VC[Visualization Collector]
+        PM[Prompt Manager]
+        UI[Web UI]
     end
     
     subgraph Infra["Infrastructure Layer"]
         LC[LLM Client]
         CM[Container Manager]
+        PR[Protocols]
         LL{{LiteLLM}}
         DK{{Docker}}
         CF[config.toml]
     end
     
+    subgraph Scripts["Entry Points"]
+        RC[recon.py]
+        TC[test_cycle.py]
+    end
+    
+    %% Agent dependencies
     AR --> CS
     AR --> PB
     AR --> TR
     AR --> LC
     AR --> WM
     AR --> OS
+    AR --> SH
+    AR --> EB
     AR --> CF
+    
+    SH --> TR
+    SH --> CS
+    BC --> CS
+    BC --> AR
     
     WM --> PC
     OS --> LC
     OS --> PB
     
-    CS --> BM
+    %% Context
     CS --> PS
     PS --> JF
     
+    %% Prompts
     PB --> TM
     PB --> PC
     
-    TR --> ST
-    TR --> BT
-    TR --> FT
-    TR --> IT
+    %% Tools
+    TF --> TR
+    TF --> BuiltIn
+    TF --> Browser
+    TF --> Meta
+    TF --> TaskTools
     
+    BS --> BN
+    BS --> BSN
+    BS --> BCK
+    BS --> BTY
+    BS --> BFF
+    
+    %% Visualization
+    VS --> VC
+    VS --> PM
+    VS --> UI
+    EB --> VC
+    
+    %% Infrastructure
     LC --> LL
     CM --> DK
     ST --> CM
-    BT --> CM
-    FT --> CM
+    
+    %% Scripts
+    RC --> AR
+    TC --> AR

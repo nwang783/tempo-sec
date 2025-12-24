@@ -1,19 +1,22 @@
 flowchart TD
-    A[Main Agent @ Frame 5] --> B{Identify Attack Surfaces}
-    B --> C[Clone A: Surface 1]
-    B --> D[Clone B: Surface 2]
-    B --> E[Clone C: Surface 3]
+    A[Main Agent] -->|branch_to_subtasks| B{BranchCoordinator}
+    B --> C[Subagent 1: Hypothesis A]
+    B --> D[Subagent 2: Hypothesis B]
+    B --> E[Subagent 3: Hypothesis C]
     
-    C --> F[Explore & Test]
-    D --> G[Explore & Test]
-    E --> H[Explore & Test]
+    C --> F[Test & Explore]
+    D --> G[Test & Explore]
+    E --> H[Test & Explore]
     
-    F --> I[Summary A]
-    G --> J[Summary B]
-    H --> K[Summary C]
+    F -->|finish_subtask| I[Summary 1]
+    G -->|finish_subtask| J[Summary 2]
+    H -->|finish_subtask| K[Summary 3]
     
-    I --> L[Merge into Main Context]
+    I --> L[merge_results]
     J --> L
     K --> L
     
-    L --> M[Main Agent @ Frame 6<br/>Contains all summaries]
+    L --> M[Main Agent resumes<br/>with merged summaries]
+    
+    style B fill:#f9f,stroke:#333
+    style L fill:#9f9,stroke:#333

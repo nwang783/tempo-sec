@@ -1,27 +1,33 @@
 stateDiagram-v2
     [*] --> RECON
     
-    RECON --> HYPOTHESIZE: PHASE: hypothesize
-    RECON --> RECON: need more info
+    RECON --> HYPOTHESIZE: transition_phase
+    RECON --> RECON: more recon needed
     
-    HYPOTHESIZE --> TEST: PHASE: test
-    HYPOTHESIZE --> RECON: need more recon
+    HYPOTHESIZE --> TEST: transition_phase
+    HYPOTHESIZE --> RECON: need more info
     
-    TEST --> REFLECT: PHASE: reflect
-    TEST --> TEST: more tests
+    TEST --> REFLECT: transition_phase
+    TEST --> TEST: more testing
     
-    REFLECT --> RECON: new surface
+    REFLECT --> RECON: new attack surface
     REFLECT --> HYPOTHESIZE: new hypothesis
-    REFLECT --> TEST: verify
-    REFLECT --> [*]: complete
+    REFLECT --> TEST: verify finding
+    REFLECT --> [*]: finish_task
     
     note right of RECON
-        Gather info
-        Map attack surface
-        Note anomalies
+        Gather information
+        Map attack surfaces
+        Generate target manifest
     end note
     
     note right of TEST
-        Can branch for
-        parallel testing
+        Can use branch_to_subtasks
+        for parallel hypothesis testing
+    end note
+    
+    note right of REFLECT
+        Analyze results
+        Plan next cycle
+        May pause for user input
     end note
