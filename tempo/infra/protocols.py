@@ -152,3 +152,67 @@ class ToolCallFinder(Protocol):
         """
         ...
 
+
+class VisualizationObserver(Protocol):
+    """
+    Protocol for components that observe agent execution events.
+    
+    This allows the Agent to notify visualization components without
+    depending on concrete implementations, following the project's
+    dependency rules.
+    """
+    
+    def on_step(self, step_data: dict, frame_id: str) -> None:
+        """
+        Called when an agent step completes.
+        
+        Args:
+            step_data: Serialized step result containing:
+                - step_number: int
+                - phase: str | None (if phase transition occurred)
+                - error: str | None
+                - should_continue: bool
+                - llm_content: str | None
+                - usage: dict (token usage stats)
+            frame_id: ID of the current context frame
+        """
+        ...
+    
+    def on_tool_call(self, tool_data: dict, frame_id: str) -> None:
+        """
+        Called when a tool execution completes.
+        
+        Args:
+            tool_data: Serialized tool call containing:
+                - id: str
+                - tool_name: str
+                - input: dict
+                - raw_output: str
+                - summary: str | None
+                - success: bool
+                - error: str | None
+                - duration_ms: int
+            frame_id: ID of the current context frame
+        """
+        ...
+    
+    def on_agent_start(self, objective: str, model_name: str = "") -> None:
+        """
+        Called when agent starts execution.
+        
+        Args:
+            objective: The task objective
+            model_name: Name of the LLM being used
+        """
+        ...
+    
+    def on_agent_finish(self, success: bool, output: Any = None) -> None:
+        """
+        Called when agent finishes execution.
+        
+        Args:
+            success: Whether the agent completed successfully
+            output: Final output/result if any
+        """
+        ...
+

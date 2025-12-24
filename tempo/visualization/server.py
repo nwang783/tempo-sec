@@ -8,7 +8,6 @@ import asyncio
 import json
 import logging
 import os
-import threading
 import webbrowser
 from pathlib import Path
 from typing import List, Optional, TYPE_CHECKING
@@ -22,6 +21,11 @@ from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
+from tempo.visualization.context_processor import (
+    build_context_data_from_store,
+    process_context_for_ui,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +149,8 @@ class VisualizationServer:
             # Try to read from live context store first (real-time during agent run)
             if self._context_store:
                 try:
-                    context_data = self._build_context_data_from_store(self._context_store)
-                    processed_data = self._process_context_for_ui(context_data)
+                    context_data = build_context_data_from_store(self._context_store)
+                    processed_data = process_context_for_ui(context_data)
                     return JSONResponse(content=processed_data)
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=str(e))
@@ -164,7 +168,7 @@ class VisualizationServer:
                     context_data = json.load(f)
                 
                 # Process frames to add token estimates
-                processed_data = self._process_context_for_ui(context_data)
+                processed_data = process_context_for_ui(context_data)
                 return JSONResponse(content=processed_data)
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail="Invalid context file")
@@ -206,7 +210,7 @@ class VisualizationServer:
             try:
                 with open(context_path, "r") as f:
                     context_data = json.load(f)
-                processed_data = self._process_context_for_ui(context_data)
+                processed_data = process_context_for_ui(context_data)
                 return JSONResponse(content=processed_data)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
@@ -315,106 +319,4 @@ class VisualizationServer:
             except asyncio.CancelledError:
                 pass
     
-    def _estimate_tokens(self, text: str) -> int:
-        """Estimate token count for text (roughly 4 chars per token)."""
-        if not text:
-            return 0
-        return len(text) // 4
-    
-    def _build_context_data_from_store(self, context_store: "ContextStore") -> dict:
-        """Build context data dict from a live ContextStore (same format as JSON file)."""
-        return context_store.export_for_visualization()
-    
-    def _process_context_for_ui(self, context_data: dict) -> dict:
-        """
-        Process context data for the UI, adding token estimates and
-        flattening the structure for display.
-        """
-        result = {
-            "session_id": context_data.get("session_id"),
-            "created_at": context_data.get("created_at"),
-            "updated_at": context_data.get("updated_at"),
-            "current_frame_id": context_data.get("current_frame_id"),
-            "messages": [],
-            "total_tokens": 0,
-            "total_messages": 0,
-            "total_tool_calls": 0,
-        }
-        
-        frames = context_data.get("frames", {})
-        current_frame_id = context_data.get("current_frame_id")
-        
-        # Build frame path from root to current
-        frame_path = []
-        frame_id = current_frame_id
-        while frame_id and frame_id in frames:
-            frame_path.append(frames[frame_id])
-            frame_id = frames[frame_id].get("parent_id")
-        frame_path.reverse()
-        
-        # Collect all messages and tool calls in order
-        message_index = 0
-        for frame in frame_path:
-            # Process messages
-            for msg in frame.get("messages", []):
-                content = msg.get("content", "")
-                tokens = self._estimate_tokens(content)
-                result["messages"].append({
-                    "index": message_index,
-                    "type": "message",
-                    "role": msg.get("role"),
-                    "content": content,
-                    "timestamp": msg.get("timestamp"),
-                    "tokens": tokens,
-                    "is_summarized": False,
-                    "metadata": msg.get("metadata", {}),
-                })
-                result["total_tokens"] += tokens
-                result["total_messages"] += 1
-                message_index += 1
-            
-            # Process tool calls
-            for tc in frame.get("tool_calls", []):
-                tool_name = tc.get("tool_name", "unknown")
-                raw_output = tc.get("raw_output", "")
-                summary = tc.get("summary")
-                is_summarized = summary is not None
-                
-                # For display, use summary if available
-                display_output = summary if is_summarized else raw_output
-                
-                # Calculate tokens for input and output separately
-                input_data = tc.get("input", {})
-                input_str = json.dumps(input_data) if input_data else ""
-                input_tokens = self._estimate_tokens(input_str)
-                output_tokens = self._estimate_tokens(display_output)
-                raw_output_tokens = self._estimate_tokens(raw_output)
-                
-                # Tokens saved by summarization
-                tokens_saved = raw_output_tokens - output_tokens if is_summarized else 0
-                
-                result["messages"].append({
-                    "index": message_index,
-                    "type": "tool_call",
-                    "tool_call_id": tc.get("id"),
-                    "tool_name": tool_name,
-                    "input": input_data,
-                    "raw_output": raw_output,
-                    "summary": summary,
-                    "display_output": display_output,
-                    "timestamp": tc.get("timestamp"),
-                    "duration_ms": tc.get("duration_ms", 0),
-                    "success": tc.get("success", True),
-                    "error": tc.get("error"),
-                    "is_summarized": is_summarized,
-                    "input_tokens": input_tokens,
-                    "output_tokens": output_tokens,
-                    "raw_output_tokens": raw_output_tokens,
-                    "tokens_saved": tokens_saved,
-                    "tokens": input_tokens + output_tokens,
-                })
-                result["total_tokens"] += input_tokens + output_tokens
-                result["total_tool_calls"] += 1
-                message_index += 1
-        
-        return result
+

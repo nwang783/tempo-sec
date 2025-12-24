@@ -140,37 +140,36 @@ class TestVisualizationAPI:
 
 
 class TestProcessContextForUI:
-    """Tests for _process_context_for_ui method."""
+    """Tests for context_processor functions."""
     
-    @pytest.fixture
-    def server(self):
-        """Create a VisualizationServer instance."""
-        from tempo.visualization.server import VisualizationServer
-        
-        return VisualizationServer(auto_open=False)
-    
-    def test_token_estimation(self, server):
+    def test_token_estimation(self):
         """Token estimation uses 4 chars per token."""
-        assert server._estimate_tokens("") == 0
-        assert server._estimate_tokens("1234") == 1
-        assert server._estimate_tokens("12345678") == 2
+        from tempo.visualization.context_processor import estimate_tokens
+        
+        assert estimate_tokens("") == 0
+        assert estimate_tokens("1234") == 1
+        assert estimate_tokens("12345678") == 2
     
-    def test_process_context_empty(self, server):
+    def test_process_context_empty(self):
         """Processing empty context returns proper structure."""
+        from tempo.visualization.context_processor import process_context_for_ui
+        
         context_data = {
             "session_id": "test",
             "current_frame_id": None,
             "frames": {},
         }
         
-        result = server._process_context_for_ui(context_data)
+        result = process_context_for_ui(context_data)
         
         assert result["session_id"] == "test"
         assert result["messages"] == []
         assert result["total_tokens"] == 0
     
-    def test_process_context_with_messages(self, server):
+    def test_process_context_with_messages(self):
         """Processing context with messages computes tokens."""
+        from tempo.visualization.context_processor import process_context_for_ui
+        
         context_data = {
             "session_id": "test",
             "current_frame_id": "frame-1",
@@ -186,14 +185,16 @@ class TestProcessContextForUI:
             },
         }
         
-        result = server._process_context_for_ui(context_data)
+        result = process_context_for_ui(context_data)
         
         assert len(result["messages"]) == 1
         assert result["messages"][0]["tokens"] == 25  # 100 chars / 4
         assert result["total_tokens"] == 25
     
-    def test_process_context_summarized_tool_call(self, server):
+    def test_process_context_summarized_tool_call(self):
         """Processing summarized tool calls shows tokens saved."""
+        from tempo.visualization.context_processor import process_context_for_ui
+        
         context_data = {
             "session_id": "test",
             "current_frame_id": "frame-1",
@@ -216,7 +217,7 @@ class TestProcessContextForUI:
             },
         }
         
-        result = server._process_context_for_ui(context_data)
+        result = process_context_for_ui(context_data)
         
         assert len(result["messages"]) == 1
         tc = result["messages"][0]
