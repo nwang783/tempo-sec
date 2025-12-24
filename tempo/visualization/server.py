@@ -10,14 +10,16 @@ import logging
 import os
 import threading
 import webbrowser
+from pathlib import Path
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tempo.visualization.prompt_manager import UserPromptManager
+    from tempo.context.store import ContextStore
 
 import uvicorn
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,15 +35,16 @@ class VisualizationServer:
         host: str = "127.0.0.1", 
         port: int = 8080, 
         auto_open: bool = True,
-
         prompt_manager: "UserPromptManager | None" = None,
         stop_event: "asyncio.Event | None" = None,
+        persistence_dir: str = "./contexts",
     ):
         self.host = host
         self.port = port
         self.auto_open = auto_open
         self.prompt_manager = prompt_manager
         self.stop_event = stop_event
+        self.persistence_dir = persistence_dir
         self.app = FastAPI(title="Tempo Sec Visualization")
         self.active_connections: List[WebSocket] = []
         self._server_task: Optional[asyncio.Task] = None
@@ -49,6 +52,12 @@ class VisualizationServer:
         
         # Track current agent state to send to new connections
         self._agent_state: dict = {}
+        
+        # Track current session ID for context loading
+        self._current_session_id: Optional[str] = None
+        
+        # Reference to the live context store (for real-time context viewing)
+        self._context_store: Optional["ContextStore"] = None
         
         # Determine UI directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -73,6 +82,15 @@ class VisualizationServer:
     def clear_agent_state(self) -> None:
         """Clear the agent state (call when agent finishes)."""
         self._agent_state = {}
+    
+    def set_session_id(self, session_id: str) -> None:
+        """Set the current session ID for context loading."""
+        self._current_session_id = session_id
+    
+    def set_context_store(self, context_store: "ContextStore") -> None:
+        """Set the live context store for real-time context viewing."""
+        self._context_store = context_store
+        self._current_session_id = context_store.session_id
 
     def _setup_routes(self):
         """Configure FastAPI routes."""
@@ -120,6 +138,76 @@ class VisualizationServer:
         @self.app.get("/health")
         async def health():
             return {"status": "ok", "connections": len(self.active_connections)}
+        
+        @self.app.get("/api/context")
+        async def get_context():
+            """Load and return the current session's context data with token estimates."""
+            # Try to read from live context store first (real-time during agent run)
+            if self._context_store:
+                try:
+                    context_data = self._build_context_data_from_store(self._context_store)
+                    processed_data = self._process_context_for_ui(context_data)
+                    return JSONResponse(content=processed_data)
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+            
+            # Fall back to reading from disk
+            if not self._current_session_id:
+                raise HTTPException(status_code=404, detail="No active session")
+            
+            context_path = Path(self.persistence_dir) / f"{self._current_session_id}.json"
+            if not context_path.exists():
+                raise HTTPException(status_code=404, detail="Context file not found")
+            
+            try:
+                with open(context_path, "r") as f:
+                    context_data = json.load(f)
+                
+                # Process frames to add token estimates
+                processed_data = self._process_context_for_ui(context_data)
+                return JSONResponse(content=processed_data)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=500, detail="Invalid context file")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/sessions")
+        async def list_sessions():
+            """List all available context sessions."""
+            sessions = []
+            context_dir = Path(self.persistence_dir)
+            if context_dir.exists():
+                for file_path in context_dir.glob("*.json"):
+                    try:
+                        with open(file_path, "r") as f:
+                            data = json.load(f)
+                        sessions.append({
+                            "session_id": data.get("session_id", file_path.stem),
+                            "created_at": data.get("created_at"),
+                            "updated_at": data.get("updated_at"),
+                        })
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+            return JSONResponse(content=sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True))
+        
+        @self.app.get("/api/context/{session_id}")
+        async def get_context_by_id(session_id: str):
+            """Load a specific session's context data."""
+            # Sanitize session_id to prevent path traversal
+            if "/" in session_id or "\\" in session_id or ".." in session_id:
+                raise HTTPException(status_code=400, detail="Invalid session ID")
+            
+            context_path = Path(self.persistence_dir) / f"{session_id}.json"
+            if not context_path.exists():
+                raise HTTPException(status_code=404, detail="Context file not found")
+            
+            try:
+                with open(context_path, "r") as f:
+                    context_data = json.load(f)
+                processed_data = self._process_context_for_ui(context_data)
+                return JSONResponse(content=processed_data)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
 
     async def broadcast(self, message: str) -> None:
         """Send message to all connected clients."""
@@ -224,3 +312,107 @@ class VisualizationServer:
                 await self._server_task
             except asyncio.CancelledError:
                 pass
+    
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count for text (roughly 4 chars per token)."""
+        if not text:
+            return 0
+        return len(text) // 4
+    
+    def _build_context_data_from_store(self, context_store: "ContextStore") -> dict:
+        """Build context data dict from a live ContextStore (same format as JSON file)."""
+        return context_store.export_for_visualization()
+    
+    def _process_context_for_ui(self, context_data: dict) -> dict:
+        """
+        Process context data for the UI, adding token estimates and
+        flattening the structure for display.
+        """
+        result = {
+            "session_id": context_data.get("session_id"),
+            "created_at": context_data.get("created_at"),
+            "updated_at": context_data.get("updated_at"),
+            "current_frame_id": context_data.get("current_frame_id"),
+            "messages": [],
+            "total_tokens": 0,
+            "total_messages": 0,
+            "total_tool_calls": 0,
+        }
+        
+        frames = context_data.get("frames", {})
+        current_frame_id = context_data.get("current_frame_id")
+        
+        # Build frame path from root to current
+        frame_path = []
+        frame_id = current_frame_id
+        while frame_id and frame_id in frames:
+            frame_path.append(frames[frame_id])
+            frame_id = frames[frame_id].get("parent_id")
+        frame_path.reverse()
+        
+        # Collect all messages and tool calls in order
+        message_index = 0
+        for frame in frame_path:
+            # Process messages
+            for msg in frame.get("messages", []):
+                content = msg.get("content", "")
+                tokens = self._estimate_tokens(content)
+                result["messages"].append({
+                    "index": message_index,
+                    "type": "message",
+                    "role": msg.get("role"),
+                    "content": content,
+                    "timestamp": msg.get("timestamp"),
+                    "tokens": tokens,
+                    "is_summarized": False,
+                    "metadata": msg.get("metadata", {}),
+                })
+                result["total_tokens"] += tokens
+                result["total_messages"] += 1
+                message_index += 1
+            
+            # Process tool calls
+            for tc in frame.get("tool_calls", []):
+                tool_name = tc.get("tool_name", "unknown")
+                raw_output = tc.get("raw_output", "")
+                summary = tc.get("summary")
+                is_summarized = summary is not None
+                
+                # For display, use summary if available
+                display_output = summary if is_summarized else raw_output
+                
+                # Calculate tokens for input and output separately
+                input_data = tc.get("input", {})
+                input_str = json.dumps(input_data) if input_data else ""
+                input_tokens = self._estimate_tokens(input_str)
+                output_tokens = self._estimate_tokens(display_output)
+                raw_output_tokens = self._estimate_tokens(raw_output)
+                
+                # Tokens saved by summarization
+                tokens_saved = raw_output_tokens - output_tokens if is_summarized else 0
+                
+                result["messages"].append({
+                    "index": message_index,
+                    "type": "tool_call",
+                    "tool_call_id": tc.get("id"),
+                    "tool_name": tool_name,
+                    "input": input_data,
+                    "raw_output": raw_output,
+                    "summary": summary,
+                    "display_output": display_output,
+                    "timestamp": tc.get("timestamp"),
+                    "duration_ms": tc.get("duration_ms", 0),
+                    "success": tc.get("success", True),
+                    "error": tc.get("error"),
+                    "is_summarized": is_summarized,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "raw_output_tokens": raw_output_tokens,
+                    "tokens_saved": tokens_saved,
+                    "tokens": input_tokens + output_tokens,
+                })
+                result["total_tokens"] += input_tokens + output_tokens
+                result["total_tool_calls"] += 1
+                message_index += 1
+        
+        return result

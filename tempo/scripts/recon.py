@@ -149,7 +149,9 @@ async def main() -> None:
             host=config.visualization_host,
             port=config.visualization_port,
             auto_open=config.auto_open_browser,
+            persistence_dir=config.persistence_dir,
         )
+        viz_server.set_context_store(context)
         await viz_server.start()
         viz_collector = VisualizationCollector(viz_server)
     

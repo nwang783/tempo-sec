@@ -739,6 +739,30 @@ class ContextStore:
         messages = self.render_messages()
         return sum(len(m["content"]) // 4 for m in messages)
     
+    def export_for_visualization(self) -> dict:
+        """
+        Export the context tree data for visualization purposes.
+        
+        Returns:
+            Dictionary with session_id, current_frame_id, and serialized frames
+        """
+        frames = {}
+        
+        # Walk the frame path from current to root
+        frame_id = self._current_frame_id
+        while frame_id and frame_id in self._frames:
+            frame = self._frames[frame_id]
+            frames[frame_id] = frame.to_dict()
+            frame_id = frame.parent_id
+        
+        return {
+            "session_id": self._session_id,
+            "created_at": None,
+            "updated_at": None,
+            "current_frame_id": self._current_frame_id,
+            "frames": frames,
+        }
+    
     # === Persistence ===
     
     def save(self) -> str:

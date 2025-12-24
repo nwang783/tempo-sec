@@ -186,7 +186,9 @@ async def main() -> None:
             auto_open=config.auto_open_browser,
             prompt_manager=prompt_manager,
             stop_event=stop_event,
+            persistence_dir=config.persistence_dir,
         )
+        viz_server.set_context_store(context)
         await viz_server.start()
         viz_collector = VisualizationCollector(viz_server)
     
