@@ -33,7 +33,7 @@ class TestPromptBuilder:
         template = builder._load_template("system")
         
         assert "cybersecurity" in template.lower()
-        assert "{objective}" in template
+        assert "{current_phase}" in template
     
     def test_load_template_caching(self):
         """Test that templates are cached."""
@@ -57,7 +57,6 @@ class TestPromptBuilder:
         builder = PromptBuilder()
         
         prompt = builder.build_system_prompt(
-            objective="Find vulnerabilities in example.com",
             current_phase=Phase.RECON,
             tool_descriptions="### shell\nExecute commands",
             scope_description="Only test example.com",
@@ -65,7 +64,6 @@ class TestPromptBuilder:
             findings_count=1,
         )
         
-        assert "Find vulnerabilities" in prompt
         assert "recon" in prompt.lower()
         assert "shell" in prompt
         assert "example.com" in prompt
@@ -159,13 +157,11 @@ class TestPromptBuilder:
         ]
         
         prompt = builder.build_full_prompt(
-            objective="Test example.com",
             current_phase=Phase.RECON,
             tool_schemas=schemas,
         )
         
         # Should contain both system and phase content
-        assert "Test example.com" in prompt
         assert "RECON" in prompt
         assert "browser" in prompt
     def test_filter_schemas_for_subagent(self):

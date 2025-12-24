@@ -43,7 +43,6 @@ class PromptBuilder:
     
     def build_system_prompt(
         self,
-        objective: str,
         current_phase: Phase,
         tool_descriptions: str,
         scope_description: str = "No specific scope defined.",
@@ -54,7 +53,6 @@ class PromptBuilder:
         Build the main system prompt.
         
         Args:
-            objective: The agent's objective
             current_phase: Current workflow phase
             tool_descriptions: Formatted tool descriptions
             scope_description: Scope/limits for testing
@@ -67,7 +65,6 @@ class PromptBuilder:
         template = self._load_template("system")
         
         return template.format(
-            objective=objective,
             current_phase=current_phase.value,
             tool_descriptions=tool_descriptions,
             scope_description=scope_description,
@@ -230,7 +227,6 @@ class PromptBuilder:
     
     def build_full_prompt(
         self,
-        objective: str,
         current_phase: Phase,
         tool_schemas: list[dict],
         scope_description: str = "No specific scope defined.",
@@ -241,7 +237,6 @@ class PromptBuilder:
         Build the complete system prompt with phase instructions.
         
         Args:
-            objective: The agent's objective
             current_phase: Current workflow phase
             tool_schemas: List of tool schemas
             scope_description: Scope/limits for testing
@@ -254,7 +249,6 @@ class PromptBuilder:
         tool_descriptions = self.format_tool_descriptions(tool_schemas)
         
         system_prompt = self.build_system_prompt(
-            objective=objective,
             current_phase=current_phase,
             tool_descriptions=tool_descriptions,
             scope_description=scope_description,

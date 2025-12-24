@@ -239,15 +239,14 @@ class Agent:
         if not is_resuming:
             # Add initial system message
             system_prompt = self.prompts.build_full_prompt(
-                objective=objective,
                 current_phase=initial_phase,
                 tool_schemas=self.tools.get_schemas(),
                 scope_description=self.config.scope or "No specific scope defined.",
             )
             self.context.add_message(MessageRole.SYSTEM, system_prompt)
             
-            # Add user objective
-            self.context.add_message(MessageRole.USER, f"Objective: {objective}")
+            # Add user objective (includes full task context, e.g. manifest info)
+            self.context.add_message(MessageRole.USER, objective)
         
         max_steps = max_steps or self.config.max_steps or 50
         

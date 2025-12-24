@@ -124,12 +124,10 @@ class TestIntegration:
         ]
         
         prompt = builder.build_full_prompt(
-            objective="Find vulnerabilities",
             current_phase=Phase.RECON,
             tool_schemas=schemas,
         )
         
-        assert "Find vulnerabilities" in prompt
         assert "RECON" in prompt
         assert "test_tool" in prompt
     
