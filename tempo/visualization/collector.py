@@ -2,18 +2,20 @@
 Visualization Collector.
 
 Captures agent execution events and forwards them to the visualization server.
+
+This module implements the VisualizationObserver protocol, allowing the Agent
+to emit events without tight coupling to this implementation.
 """
 
 import asyncio
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, TYPE_CHECKING
 
-from tempo.context.frame import ToolCall
-from tempo.infra.llm import LLMResponse
-from tempo.visualization.server import VisualizationServer
+if TYPE_CHECKING:
+    from tempo.visualization.server import VisualizationServer
 
 logger = logging.getLogger(__name__)
 
@@ -40,38 +42,54 @@ class VisualizationEvent:
 class VisualizationCollector:
     """
     Collects events from the Agent and forwards them to the VisualizationServer.
+    
+    Implements the VisualizationObserver protocol from infra/protocols.py,
+    allowing agents to depend on the protocol rather than this concrete class.
+    
+    Methods accept dict data to avoid importing from context/ or agent/,
+    following the project's dependency rules.
     """
     
-    def __init__(self, server: VisualizationServer):
+    def __init__(self, server: "VisualizationServer"):
         self.server = server
-        self._loop = asyncio.get_event_loop()
         # Cost tracking state
         self._total_cost: float = 0.0
         self._total_prompt_tokens: int = 0
         self._total_completion_tokens: int = 0
         self._total_cached_tokens: int = 0
     
-    def on_step(self, step_result: Any, frame_id: str) -> None:
+    def on_step(self, step_data: dict | Any, frame_id: str) -> None:
         """
         Called when an agent step completes.
         
         Args:
-            step_result: StepResult object from Agent.step()
+            step_data: Step data dict OR StepResult object (for compatibility).
+                       Dict should contain: step_number, phase, error,
+                       should_continue, llm_content, usage
             frame_id: ID of the current context frame
         """
-        # Extract relevant data from StepResult
-        # Note: We avoid importing StepResult directly to avoid circular imports if possible
-        # but type hinting uses Any for flexibility
-        
-        data = {
-            "step_number": getattr(step_result, "step_number", 0),
-            "phase": str(getattr(step_result, "phase_transition", "")) if getattr(step_result, "phase_transition") else None,
-            "error": getattr(step_result, "error", None),
-            "should_continue": getattr(step_result, "should_continue", True),
-            "llm_content": step_result.llm_response.content if step_result.llm_response else None,
-            "usage": asdict(step_result.llm_response.usage) if step_result.llm_response and step_result.llm_response.usage else {},
-            "frame_id": frame_id
-        }
+        # Support both dict and object input for compatibility
+        if isinstance(step_data, dict):
+            data = {
+                "step_number": step_data.get("step_number", 0),
+                "phase": step_data.get("phase"),
+                "error": step_data.get("error"),
+                "should_continue": step_data.get("should_continue", True),
+                "llm_content": step_data.get("llm_content"),
+                "usage": step_data.get("usage", {}),
+                "frame_id": frame_id
+            }
+        else:
+            # Legacy: object-based input (StepResult)
+            data = {
+                "step_number": getattr(step_data, "step_number", 0),
+                "phase": str(getattr(step_data, "phase_transition", "")) if getattr(step_data, "phase_transition", None) else None,
+                "error": getattr(step_data, "error", None),
+                "should_continue": getattr(step_data, "should_continue", True),
+                "llm_content": step_data.llm_response.content if getattr(step_data, "llm_response", None) else None,
+                "usage": self._extract_usage(step_data),
+                "frame_id": frame_id
+            }
         
         self.emit("step", data)
         
@@ -97,36 +115,52 @@ class VisualizationCollector:
                 "to_phase": data["phase"],
                 "step_number": data["step_number"]
             })
+    
+    def _extract_usage(self, step_result: Any) -> dict:
+        """Extract usage dict from step_result, handling both dict and object forms."""
+        if not getattr(step_result, "llm_response", None):
+            return {}
+        usage = getattr(step_result.llm_response, "usage", None)
+        if usage is None:
+            return {}
+        # Convert dataclass to dict if needed
+        if hasattr(usage, "__dict__"):
+            return asdict(usage) if hasattr(usage, "__dataclass_fields__") else vars(usage)
+        return usage if isinstance(usage, dict) else {}
 
-    def on_tool_call(self, tool_call: ToolCall, frame_id: str) -> None:
+    def on_tool_call(self, tool_data: dict | Any, frame_id: str) -> None:
         """
         Called when a tool execution completes.
         
         Args:
-            tool_call: ToolCall object with results
+            tool_data: Tool call data dict OR ToolCall object (for compatibility).
+                       Dict should contain: id, tool_name, input, raw_output,
+                       summary, success, error, duration_ms, metadata
             frame_id: ID of the current context frame
         """
-        data = tool_call.to_dict()
-        data["frame_id"] = frame_id
+        # Support both dict and object input for compatibility
+        if isinstance(tool_data, dict):
+            data = dict(tool_data)  # Copy to avoid mutation
+            data["frame_id"] = frame_id
+        else:
+            # Legacy: object-based input (ToolCall)
+            data = tool_data.to_dict() if hasattr(tool_data, "to_dict") else {}
+            data["frame_id"] = frame_id
         
-        # Add metadata for visualization if not present
-        if "purpose" not in data.get("input", {}):
-            # Try to extract purpose if it was passed as an argument
-            pass
-            
         self.emit("tool_call", data)
         
         # Check if this is a summarization tool call
-        if tool_call.tool_name == "summarize_tool_output" and tool_call.success:
-            summarized_id = tool_call.metadata.get("summarized_tool_id")
+        tool_name = data.get("tool_name", "")
+        if tool_name == "summarize_tool_output" and data.get("success", False):
+            metadata = data.get("metadata", {})
+            summarized_id = metadata.get("summarized_tool_id")
             if summarized_id:
                 self.emit("summarized", {"tool_call_id": summarized_id})
 
     def emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Send event to server."""
         event = VisualizationEvent.create(event_type, data)
-        # We need to schedule this on the event loop since this might be called synchronously
-        # or from a different context.
+        # Schedule on event loop since this might be called synchronously
         asyncio.create_task(self.server.broadcast(event.to_json()))
 
     def on_agent_start(self, objective: str, model_name: str = "") -> None:
@@ -164,3 +198,4 @@ class VisualizationCollector:
     def on_test_plan_update(self, items: list) -> None:
         """Called when the test plan is created or updated."""
         self.emit("test_plan_update", {"items": items})
+

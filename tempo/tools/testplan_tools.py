@@ -42,7 +42,6 @@ class CreateTestPlanTool(Tool):
         Args:
             test_plan_manager: Component implementing TestPlanManager protocol
         """
-        from tempo.infra.protocols import TestPlanManager
         self.plan_manager = test_plan_manager
     
     async def execute(
@@ -155,7 +154,6 @@ class AddTodoTool(Tool):
         Args:
             test_plan_manager: Component implementing TestPlanManager protocol
         """
-        from tempo.infra.protocols import TestPlanManager
         self.plan_manager = test_plan_manager
     
     async def execute(
@@ -231,7 +229,6 @@ class CompleteTodoTool(Tool):
         Args:
             test_plan_manager: Component implementing TestPlanManager protocol
         """
-        from tempo.infra.protocols import TestPlanManager
         self.plan_manager = test_plan_manager
     
     async def execute(
