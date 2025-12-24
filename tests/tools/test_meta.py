@@ -177,7 +177,7 @@ class TestCreateTestPlanTool:
     def test_name_and_category(self):
         """Test tool name and category are set."""
         store = ContextStore()
-        from tempo.tools.meta import CreateTestPlanTool
+        from tempo.tools.testplan_tools import CreateTestPlanTool
         tool = CreateTestPlanTool(test_plan_manager=store)
         
         assert tool.name == "create_test_plan"
@@ -187,7 +187,7 @@ class TestCreateTestPlanTool:
     async def test_create_plan_adds_items_to_state(self):
         """Test that creating a plan populates test_plan in state."""
         store = ContextStore()
-        from tempo.tools.meta import CreateTestPlanTool
+        from tempo.tools.testplan_tools import CreateTestPlanTool
         tool = CreateTestPlanTool(test_plan_manager=store)
         
         result = await tool.execute(
@@ -214,7 +214,7 @@ class TestCreateTestPlanTool:
     async def test_create_plan_requires_items(self):
         """Test that empty items list fails."""
         store = ContextStore()
-        from tempo.tools.meta import CreateTestPlanTool
+        from tempo.tools.testplan_tools import CreateTestPlanTool
         tool = CreateTestPlanTool(test_plan_manager=store)
         
         result = await tool.execute(items=[], purpose="Test")
@@ -229,7 +229,7 @@ class TestAddTodoTool:
     def test_name_and_category(self):
         """Test tool name and category are set."""
         store = ContextStore()
-        from tempo.tools.meta import AddTodoTool
+        from tempo.tools.testplan_tools import AddTodoTool
         tool = AddTodoTool(test_plan_manager=store)
         
         assert tool.name == "add_todo"
@@ -239,7 +239,7 @@ class TestAddTodoTool:
     async def test_add_todo_creates_item(self):
         """Test that adding a todo creates an item in state."""
         store = ContextStore()
-        from tempo.tools.meta import AddTodoTool
+        from tempo.tools.testplan_tools import AddTodoTool
         tool = AddTodoTool(test_plan_manager=store)
         
         result = await tool.execute(
@@ -260,7 +260,7 @@ class TestAddTodoTool:
     async def test_add_todo_defaults_to_medium_priority(self):
         """Test that priority defaults to medium."""
         store = ContextStore()
-        from tempo.tools.meta import AddTodoTool
+        from tempo.tools.testplan_tools import AddTodoTool
         tool = AddTodoTool(test_plan_manager=store)
         
         await tool.execute(description="Test item", purpose="Test")
@@ -275,7 +275,7 @@ class TestCompleteTodoTool:
     def test_name_and_category(self):
         """Test tool name and category are set."""
         store = ContextStore()
-        from tempo.tools.meta import CompleteTodoTool
+        from tempo.tools.testplan_tools import CompleteTodoTool
         tool = CompleteTodoTool(test_plan_manager=store)
         
         assert tool.name == "complete_todo"
@@ -285,7 +285,7 @@ class TestCompleteTodoTool:
     async def test_complete_todo_updates_status(self):
         """Test that completing a todo updates its status."""
         store = ContextStore()
-        from tempo.tools.meta import AddTodoTool, CompleteTodoTool
+        from tempo.tools.testplan_tools import AddTodoTool, CompleteTodoTool
         
         # Add an item first
         add_tool = AddTodoTool(test_plan_manager=store)
@@ -312,7 +312,7 @@ class TestCompleteTodoTool:
     async def test_complete_todo_requires_reason(self):
         """Test that completing without reason fails."""
         store = ContextStore()
-        from tempo.tools.meta import AddTodoTool, CompleteTodoTool
+        from tempo.tools.testplan_tools import AddTodoTool, CompleteTodoTool
         
         add_tool = AddTodoTool(test_plan_manager=store)
         add_result = await add_tool.execute(description="Test item", purpose="Setup")
@@ -333,7 +333,7 @@ class TestCompleteTodoTool:
     async def test_complete_todo_invalid_id_fails(self):
         """Test that completing nonexistent item fails."""
         store = ContextStore()
-        from tempo.tools.meta import CompleteTodoTool
+        from tempo.tools.testplan_tools import CompleteTodoTool
         tool = CompleteTodoTool(test_plan_manager=store)
         
         result = await tool.execute(
