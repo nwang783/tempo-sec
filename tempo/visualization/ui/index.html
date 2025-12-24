@@ -64,11 +64,12 @@
                 </div>
             </div>
 
-            <!-- Center Pane: Graph View / Test Plan -->
+            <!-- Center Pane: Graph View / Test Plan / Context Window -->
             <div class="pane center-pane">
                 <div class="pane-tabs">
                     <div class="tab active" data-tab="graph">Graph View</div>
                     <div class="tab" data-tab="testplan">Test Plan</div>
+                    <div class="tab" data-tab="context">Context Window</div>
                 </div>
                 <div class="pane-content no-padding">
                     <div id="tree-container" class="tab-content active"></div>
@@ -79,6 +80,19 @@
                         </div>
                         <div id="testplan-items" class="testplan-items">
                             <div class="testplan-empty">No test plan created yet. Waiting for HYPOTHESIZE phase...</div>
+                        </div>
+                    </div>
+                    <div id="context-container" class="tab-content">
+                        <div class="context-header">
+                            <span class="context-title">Context Window</span>
+                            <div class="context-stats">
+                                <span id="context-total-tokens" class="context-stat">0 tokens</span>
+                                <span id="context-message-count" class="context-stat">0 messages</span>
+                                <button id="context-refresh-btn" class="context-refresh-btn">↻ Refresh</button>
+                            </div>
+                        </div>
+                        <div id="context-items" class="context-items">
+                            <div class="context-empty">Loading context window...</div>
                         </div>
                     </div>
                 </div>

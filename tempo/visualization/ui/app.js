@@ -762,6 +762,9 @@ document.querySelectorAll('.pane-tabs .tab').forEach(tab => {
             document.getElementById('tree-container').classList.add('active');
         } else if (tabName === 'testplan') {
             document.getElementById('testplan-container').classList.add('active');
+        } else if (tabName === 'context') {
+            document.getElementById('context-container').classList.add('active');
+            loadContextWindow();
         }
     });
 });
@@ -842,6 +845,171 @@ handleEvent = function (event) {
     }
     originalHandleEvent(event);
 };
+
+// === Context Window ===
+let contextData = null;
+let expandedItems = new Set();
+
+async function loadContextWindow() {
+    const container = document.getElementById('context-items');
+    const totalTokensEl = document.getElementById('context-total-tokens');
+    const messageCountEl = document.getElementById('context-message-count');
+
+    container.innerHTML = '<div class="context-empty">Loading context window...</div>';
+
+    try {
+        const response = await fetch('/api/context');
+        if (!response.ok) {
+            if (response.status === 404) {
+                container.innerHTML = '<div class="context-empty">No active session. Start an agent run to see context.</div>';
+                return;
+            }
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        contextData = await response.json();
+        renderContextWindow();
+
+        // Update stats
+        totalTokensEl.textContent = `${contextData.total_tokens.toLocaleString()} tokens`;
+        const msgCount = contextData.messages.length;
+        messageCountEl.textContent = `${msgCount} items`;
+    } catch (error) {
+        console.error('Failed to load context:', error);
+        container.innerHTML = `<div class="context-empty">Failed to load context: ${error.message}</div>`;
+    }
+}
+
+function renderContextWindow() {
+    const container = document.getElementById('context-items');
+
+    if (!contextData || !contextData.messages || contextData.messages.length === 0) {
+        container.innerHTML = '<div class="context-empty">No messages in context window.</div>';
+        return;
+    }
+
+    const html = contextData.messages.map((item, index) => {
+        const isExpanded = expandedItems.has(index);
+        const expandedClass = isExpanded ? 'expanded' : '';
+        const summarizedClass = item.is_summarized ? 'summarized' : '';
+
+        if (item.type === 'message') {
+            return renderMessageItem(item, index, expandedClass, summarizedClass);
+        } else if (item.type === 'tool_call') {
+            return renderToolCallItem(item, index, expandedClass, summarizedClass);
+        }
+        return '';
+    }).join('');
+
+    container.innerHTML = html;
+
+    // Add click handlers for expand/collapse
+    container.querySelectorAll('.context-item-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const index = parseInt(header.dataset.index, 10);
+            toggleContextItem(index);
+        });
+    });
+}
+
+function renderMessageItem(item, index, expandedClass, summarizedClass) {
+    const roleIcon = getRoleIcon(item.role);
+    const roleClass = `role-${item.role}`;
+    const preview = getPreview(item.content, 100);
+
+    return `
+        <div class="context-item ${expandedClass} ${summarizedClass} ${roleClass}">
+            <div class="context-item-header" data-index="${index}">
+                <span class="context-item-icon">${roleIcon}</span>
+                <span class="context-item-type">${item.role.toUpperCase()}</span>
+                <span class="context-item-preview">${escapeHtml(preview)}</span>
+                <span class="context-item-tokens">${item.tokens.toLocaleString()} tokens</span>
+                <span class="context-item-expand">${expandedClass ? '▼' : '▶'}</span>
+            </div>
+            <div class="context-item-body">
+                <pre class="context-item-content">${escapeHtml(item.content)}</pre>
+            </div>
+        </div>
+    `;
+}
+
+function renderToolCallItem(item, index, expandedClass, summarizedClass) {
+    const toolIcon = getToolIcon(item.tool_name);
+    const statusClass = item.success ? '' : 'error';
+    const preview = getPreview(item.display_output || '', 80);
+    const savedBadge = item.tokens_saved > 0 
+        ? `<span class="context-tokens-saved">-${item.tokens_saved.toLocaleString()}</span>` 
+        : '';
+
+    return `
+        <div class="context-item tool-call ${expandedClass} ${summarizedClass} ${statusClass}">
+            <div class="context-item-header" data-index="${index}">
+                <span class="context-item-icon">${toolIcon}</span>
+                <span class="context-item-type">${item.tool_name}</span>
+                <span class="context-item-preview">${escapeHtml(preview)}</span>
+                <span class="context-item-tokens">
+                    ${item.tokens.toLocaleString()} tokens
+                    ${savedBadge}
+                </span>
+                <span class="context-item-expand">${expandedClass ? '▼' : '▶'}</span>
+            </div>
+            <div class="context-item-body">
+                <div class="context-tool-section">
+                    <div class="context-tool-label">Input:</div>
+                    <pre class="context-tool-input">${escapeHtml(JSON.stringify(item.input, null, 2))}</pre>
+                </div>
+                <div class="context-tool-section">
+                    <div class="context-tool-label">Output: <span class="context-output-tokens">(${item.output_tokens.toLocaleString()} tokens)</span></div>
+                    <pre class="context-tool-output">${escapeHtml(item.display_output || '(no output)')}</pre>
+                </div>
+                ${item.is_summarized ? `
+                <div class="context-tool-section raw-output-section">
+                    <div class="context-tool-label">Raw Output (summarized): <span class="context-output-tokens">(${item.raw_output_tokens.toLocaleString()} tokens)</span></div>
+                    <pre class="context-tool-output raw">${escapeHtml(item.raw_output || '(no output)')}</pre>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function toggleContextItem(index) {
+    if (expandedItems.has(index)) {
+        expandedItems.delete(index);
+    } else {
+        expandedItems.add(index);
+    }
+    renderContextWindow();
+}
+
+function getRoleIcon(role) {
+    switch (role) {
+        case 'system': return '⚙️';
+        case 'user': return '👤';
+        case 'assistant': return '🤖';
+        case 'tool_result': return '📋';
+        default: return '💬';
+    }
+}
+
+function getToolIcon(toolName) {
+    if (toolName.includes('shell')) return '>';
+    if (toolName.includes('browser')) return '🌐';
+    if (toolName.includes('file') || toolName.includes('read') || toolName.includes('write')) return '📄';
+    if (toolName.includes('transition')) return '🚀';
+    if (toolName.includes('summarize')) return '📝';
+    return '⚙️';
+}
+
+function getPreview(text, maxLength) {
+    if (!text) return '';
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    if (cleaned.length <= maxLength) return cleaned;
+    return cleaned.substring(0, maxLength) + '...';
+}
+
+// Refresh button handler
+document.getElementById('context-refresh-btn')?.addEventListener('click', loadContextWindow);
 
 connect();
 
