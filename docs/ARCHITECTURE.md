@@ -43,6 +43,7 @@ flowchart TB
 | **Prompts** | `tempo/prompts/` | LLM instruction templates, phase configurations |
 | **Tools** | `tempo/tools/` | Capability execution (shell, browser, files) |
 | **Agent** | `tempo/agent/` | Orchestration, workflow control |
+| **Agents** | `tempo/agents/` | Agent definitions (Recon, TestCycle) |
 | **Infra** | `tempo/infra/` | Cross-cutting (LLM client, container, protocols) |
 | **Visualization** | `tempo/visualization/` | Real-time UI server |
 
@@ -104,6 +105,11 @@ tempo/
 │   ├── event_bus.py        # Event routing
 │   └── config.py           # AgentConfig
 │
+├── agents/             # Modular Agent Definitions
+│   ├── base.py             # Agent protocols/ABC
+│   ├── recon.py            # Recon Agent
+│   └── test_cycle.py       # Test Cycle Agent
+│
 ├── context/
 │   ├── store.py            # ContextStore
 │   ├── frame.py            # ContextFrame, Message, ToolCall
@@ -138,8 +144,7 @@ tempo/
 │   └── protocols.py        # Type interfaces
 │
 └── scripts/
-    ├── recon.py            # Reconnaissance script
-    └── test_cycle.py       # Testing cycle script
+    └── run.py              # Unified CLI runner
 ```
 
 ---

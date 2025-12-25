@@ -1,26 +1,24 @@
-#!/usr/bin/env python3
 """
-Tempo Sec - Main Entry Point
+Tempo Sec - Agentic Cybersecurity System
+
+This is the main entry point for running Tempo agents.
+It redirects to the unified runner.
 
 Usage:
-    Recon:  python -m tempo.scripts.recon --target example.com
-    Test:   python -m tempo.scripts.test_cycle --manifest ./manifests/example.json
+    python main.py --agent <name> [options]
+    
+Example:
+    python main.py --agent recon --target https://example.com
+    python main.py --agent test_cycle --manifest ./manifests/example_com_manifest.json
 """
 
 import sys
+import os
 
+# Ensure project root is in path
+sys.path.append(os.getcwd())
 
-def main():
-    print("Tempo Sec - Security Testing Agent")
-    print()
-    print("Usage:")
-    print("  Recon:  python -m tempo.scripts.recon --target <domain>")
-    print("  Test:   python -m tempo.scripts.test_cycle --manifest <path>")
-    print()
-    print("Or use the installed commands:")
-    print("  tempo-recon --target <domain>")
-    print("  tempo-test --manifest <path>")
-
+from tempo.scripts.run import main_sync
 
 if __name__ == "__main__":
-    main()
+    main_sync()

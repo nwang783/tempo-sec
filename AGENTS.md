@@ -16,6 +16,7 @@ The codebase follows a strict separation pattern with four primitives:
 | **Prompts** | `tempo/prompts/` | LLM instruction templates, phase configurations |
 | **Tools** | `tempo/tools/` | Capability execution (shell, browser, files) |
 | **Agent** | `tempo/agent/` | Orchestration, workflow control |
+| **Agents** | `tempo/agents/` | Agent definitions (Recon, TestCycle) |
 | **Infra** | `tempo/infra/` | Cross-cutting (LLM client, container, protocols) |
 
 ### Dependency Rules
@@ -28,6 +29,8 @@ Use `tempo/infra/protocols.py` for cross-component type hints.
 
 ## Key Files
 
+- `tempo/scripts/run.py` — Unified CLI runner
+- `tempo/agents/base.py` — BaseAgentDefinition
 - `tempo/agent/runner.py` — Main agent loop
 - `tempo/agent/config.py` — Configuration (supports TOML via `AgentConfig.from_toml()`)
 - `tempo/agent/step_handler.py` — Tool execution logic
@@ -62,6 +65,7 @@ python -m pytest tests/agent/ -v  # Agent-specific tests
 | Task | Approach |
 |------|----------|
 | Add new tool | Create in `tools/`, register in `tool_factory.py` |
+| Create new agent | Create in `agents/`, inherit `BaseAgentDefinition`, register |
 | Modify prompts | Edit `prompts/templates/` and `phases.py` |
 | Add config option | Update `AgentConfig` dataclass + `from_dict()` mapping |
 | Extend workflow | Modify `workflow.py` phase transitions |
