@@ -133,6 +133,32 @@ class SummarizeOutputTool(Tool):
             ToolResult indicating success/failure
         """
         try:
+            # If there are currently-truncated tool calls and the agent is trying to
+            # summarize a different ID, fail loudly with guidance. This prevents
+            # infinite loops where the model repeatedly summarizes the wrong call_id.
+            truncated_ids: list[str] = []
+            getter = getattr(self.context, "get_truncated_tool_call_ids", None)
+            if callable(getter):
+                truncated_ids = list(getter(max_output_chars=10000))
+
+            if truncated_ids and tool_call_id not in truncated_ids:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=(
+                        f"Tool call {tool_call_id} is not currently truncated.\n\n"
+                        f"You MUST summarize one of the currently truncated tool calls instead.\n"
+                        f"Truncated tool_call_id(s): {truncated_ids[:5]}\n\n"
+                        f"Next action (copy this and replace SUMMARY):\n"
+                        f'{{\"tool_call_id\":\"{truncated_ids[0]}\",\"summary\":\"SUMMARY\"}}'
+                    ),
+                    metadata={"truncated_tool_call_ids": truncated_ids[:5]},
+                )
+
+            # Cap pathological summaries so they can't remain truncated forever.
+            if len(summary) > 4000:
+                summary = summary[:4000] + "\n...[summary truncated]..."
+
             self.context.summarize_tool_call(tool_call_id, summary)
             return ToolResult(
                 success=True,

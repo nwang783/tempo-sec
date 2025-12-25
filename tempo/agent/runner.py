@@ -387,6 +387,21 @@ class Agent:
                 
                 # Add to context
                 self.context.add_tool_call(tool_call)
+
+                # If summarization was mis-targeted, inject a short system hint listing
+                # the currently truncated IDs so the model can recover in the next step.
+                if (
+                    tool_call.tool_name == "summarize_tool_output"
+                    and not tool_call.success
+                    and isinstance(tool_call.metadata, dict)
+                    and tool_call.metadata.get("truncated_tool_call_ids")
+                ):
+                    truncated_ids = tool_call.metadata.get("truncated_tool_call_ids") or []
+                    self.context.add_message(
+                        MessageRole.SYSTEM,
+                        "[System] summarize_tool_output was called with a non-truncated tool_call_id. "
+                        f"Summarize one of these tool_call_id(s) instead: {truncated_ids}"
+                    )
                 
                 # Emit test plan updates for checklist tools
                 if tool_call.tool_name in ("create_test_plan", "add_todo", "complete_todo"):
@@ -449,6 +464,15 @@ class Agent:
         elif special.tool_name == "transition_phase":
             if special.phase_transition:
                 step_result.phase_transition = special.phase_transition
+
+                # Keep persisted context state in sync with workflow for resume/debugging.
+                # Only do this when the tool actually succeeded; otherwise we'd lie in history.
+                if tool_call.success:
+                    self.context.update_state(current_phase=special.phase_transition.value)
+                    self.context.add_message(
+                        MessageRole.SYSTEM,
+                        f"[System] Transitioned to {special.phase_transition.value.upper()} phase."
+                    )
         
         elif special.tool_name == "branch_to_subtasks":
             if special.branch_id:

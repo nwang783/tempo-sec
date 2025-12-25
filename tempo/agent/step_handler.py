@@ -85,11 +85,18 @@ class StepHandler:
         
         try:
             # Execute the tool
-            result = await tool.execute(**tool_call_request.arguments)
+            result: ToolResult = await tool.execute(**tool_call_request.arguments)
             
-            tool_call.raw_output = result.output
             tool_call.metadata = result.metadata
             tool_call.success = result.success
+            tool_call.error = result.error
+
+            # Ensure failures are visible to the model even if tool returned empty output.
+            # Many tools return success=False, output="" and set error="...".
+            if (not result.success) and (not (result.output or "").strip()) and result.error:
+                tool_call.raw_output = f"Error: {result.error}"
+            else:
+                tool_call.raw_output = result.output
             
             # Note: Truncation instructions are added by get_truncated_output()
             # when the output exceeds max_chars during context rendering.
