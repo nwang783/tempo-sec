@@ -1,10 +1,7 @@
 # Tempo Sec Configuration
 # Copy to config.toml and customize for your environment
 
-[model]
-# LLM provider and model
-# Options: "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o", "openai/gpt-4-turbo", "gemini/gemini-2.0-flash", "gemini/gemini-1.5-pro"
-provider = "anthropic/claude-sonnet-4-20250514"
+
 
 [context]
 # Maximum context tokens before triggering summarization

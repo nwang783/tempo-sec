@@ -216,3 +216,103 @@ class VisualizationObserver(Protocol):
         """
         ...
 
+
+class AgentDefinition(Protocol):
+    """
+    Protocol for modular agent definitions.
+    
+    Agent definitions encapsulate the configuration for a specific type of agent:
+    - What model to use
+    - Which tools to register
+    - How to build prompts and objectives
+    - Starting phase
+    
+    This enables a single unified runner that can load and execute different
+    agent types based on CLI arguments.
+    
+    Example:
+        class ReconAgent:
+            name = "recon"
+            description = "Reconnaissance agent for target discovery"
+            model = "anthropic/claude-sonnet-4-20250514"
+            initial_phase = Phase.RECON
+            
+            def create_tools(self, context, container=None, workflow=None, **kwargs):
+                tools = ToolRegistry()
+                tools.register(ShellTool(container))
+                # ...
+                return tools
+    """
+    
+    @property
+    def name(self) -> str:
+        """Unique identifier for this agent (e.g., 'recon', 'test_cycle')."""
+        ...
+    
+    @property
+    def description(self) -> str:
+        """Human-readable description of what this agent does."""
+        ...
+    
+    @property
+    def model(self) -> str:
+        """LLM model to use (e.g., 'anthropic/claude-sonnet-4-20250514')."""
+        ...
+    
+    @property
+    def initial_phase(self) -> Any:
+        """Starting workflow phase (Phase enum value)."""
+        ...
+    
+    def create_tools(
+        self,
+        context: Any,
+        container: Any | None = None,
+        workflow: Any | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """
+        Create the tool registry for this agent.
+        
+        Args:
+            context: ContextStore instance
+            container: Optional ContainerManager for sandboxed execution
+            workflow: Optional WorkflowManager for phase transitions
+            **kwargs: Additional agent-specific parameters
+            
+        Returns:
+            ToolRegistry with tools for this agent
+        """
+        ...
+    
+    def build_system_prompt(
+        self,
+        prompts: Any,
+        tool_schemas: list[dict],
+        scope_description: str,
+    ) -> str:
+        """
+        Build the system prompt for this agent.
+        
+        Args:
+            prompts: PromptBuilder instance
+            tool_schemas: List of tool schemas in OpenAI format
+            scope_description: Scope/limits for testing
+            
+        Returns:
+            Formatted system prompt string
+        """
+        ...
+    
+    def build_objective(self, target: str, **kwargs: Any) -> str:
+        """
+        Build the user objective from runtime parameters.
+        
+        Args:
+            target: Primary target (URL, path, etc.)
+            **kwargs: Additional agent-specific parameters
+            
+        Returns:
+            Formatted objective string
+        """
+        ...

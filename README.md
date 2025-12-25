@@ -39,11 +39,10 @@ cp .env.example .env
 ```bash
 # Run the Recon Agent
 # "https://mysouschef.com" seems be a good target to start with ;)
-python tempo/scripts/recon.py --target https://mysouschef.com --config config.toml
+tempo --agent recon --target https://mysouschef.com
 
 # Run the Test Agent
-python tempo/scripts/test_cycle.py --manifest manifests/souschefhub_com_manifest.json
-
+tempo --agent test_cycle --manifest manifests/souschefhub_com_manifest.json
 ```
 
 ---
