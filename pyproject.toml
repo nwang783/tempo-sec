@@ -43,6 +43,7 @@ dev = [
     "mypy>=1.8.0",
 ]
 
+[project.scripts]
 tempo = "tempo.scripts.run:main_sync"
 
 [tool.pytest.ini_options]
