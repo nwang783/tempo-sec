@@ -691,6 +691,22 @@ class ContextStore:
             messages = self._truncate_to_token_limit(messages, max_tokens)
         
         return messages
+
+    def get_truncated_tool_call_ids(self, max_output_chars: int = 10000) -> list[str]:
+        """
+        Return tool_call IDs whose output would be truncated for the LLM.
+
+        This is used to help the agent target summarize_tool_output correctly.
+        """
+        ids: list[str] = []
+        seen: set[str] = set()
+        for frame in self._get_frame_path():
+            for tc in frame.tool_calls:
+                output = tc.output_for_context or ""
+                if len(output) > max_output_chars and tc.id not in seen:
+                    seen.add(tc.id)
+                    ids.append(tc.id)
+        return ids
     
     def _get_preamble_end_index(self, messages: list[dict[str, str]]) -> int:
         """
