@@ -145,9 +145,10 @@ class PromptBuilder:
     # Tool-specific extended guidance injected alongside descriptions
     TOOL_GUIDANCE: dict[str, str] = {
         "summarize_tool_output": (
-            "**CRITICAL**: When a tool produces output over 5000 characters, "
-            "you MUST immediately call this tool to replace it with a concise summary. "
-            "Failing to summarize will cause context overflow."
+            "**MANDATORY**: This tool MUST be called immediately after any non-meta tool "
+            "that returns output exceeding the token threshold. You will have no access to other "
+            "tools until summarization is complete. Extract key information relevant to "
+            "your objective and discard verbose details."
         ),
         "transition_phase": (
             "Use this to move between workflow phases (RECON → HYPOTHESIZE → TEST → REFLECT). "

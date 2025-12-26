@@ -15,10 +15,17 @@ from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.context.store import ContextStore
 from tempo.context.frame import MessageRole, ToolCall
 from tempo.infra.llm import LLMClient, LLMResponse
+from tempo.infra.tokenizer import count_tokens
 from tempo.prompts.builder import PromptBuilder
 from tempo.prompts.phases import Phase
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.base import ToolResult
+
+# Threshold for mandatory summarization of tool outputs
+SUMMARIZATION_TOKEN_THRESHOLD = 100
+
+# Marker prefix for summarization prompt messages (for easy identification/removal)
+SUMMARIZATION_PROMPT_MARKER = "[SUMMARIZATION_REQUIRED]"
 
 if TYPE_CHECKING:
     from tempo.visualization.prompt_manager import UserPromptManager
@@ -119,14 +126,55 @@ class Agent:
         self._findings: list[dict] = []
         self._hypotheses: list[dict] = []
         
+        # Pending summarization tracking - tool call IDs that require summarization
+        # before other tools become available again
+        self._pending_summarization: set[str] = set()
+        
         # Step handler for tool execution (delegates callback to us for context)
         self.step_handler = StepHandler(
             tools=tools,
             on_tool_call=self._handle_tool_call_complete,
         )
+    
+    # Tools exempt from summarization requirement (meta tools and control tools)
+    _SUMMARIZATION_EXEMPT_TOOLS: set[str] = {
+        "summarize_tool_output", "view_tool_output", "transition_phase",
+        "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
+        "branch_to_subtasks", "finish_subtask", "complete_recon",
+        "complete_browser_task",
+    }
+    
+    def _requires_summarization(self, tool_call: ToolCall) -> bool:
+        """
+        Determine if a tool call output requires summarization.
+        
+        Non-meta tool outputs exceeding 100 tokens require summarization
+        before the agent can access other tools.
+        
+        Args:
+            tool_call: The completed tool call to check
+            
+        Returns:
+            True if the output requires summarization
+        """
+        # Meta tools are exempt
+        if tool_call.tool_name in self._SUMMARIZATION_EXEMPT_TOOLS:
+            return False
+        
+        # Failed tool calls don't need summarization
+        if not tool_call.success:
+            return False
+        
+        # Check token count
+        tokens = count_tokens(tool_call.raw_output)
+        return tokens > SUMMARIZATION_TOKEN_THRESHOLD
+
     def _get_phase_filtered_tools(self) -> list[dict]:
         """
-        Get tool schemas filtered by current phase.
+        Get tool schemas filtered by current phase and summarization state.
+        
+        Summarization requirement takes priority:
+        - If pending summarizations exist, ONLY summarize_tool_output is available
         
         Phase tool restrictions:
         - RECON: Standard tools, hide meta tools
@@ -137,6 +185,14 @@ class Agent:
         from tempo.prompts.phases import Phase
         
         all_schemas = self.tools.get_schemas()
+        
+        # CRITICAL: If there are pending summarizations, ONLY allow summarize_tool_output
+        if self._pending_summarization:
+            return [
+                s for s in all_schemas 
+                if s.get("function", {}).get("name") == "summarize_tool_output"
+            ]
+        
         phase = self.workflow.current_phase
         
         if phase == Phase.REFLECT:
@@ -391,6 +447,19 @@ class Agent:
                 
                 # Add to context
                 self.context.add_tool_call(tool_call)
+                
+                # Track tool calls that require summarization (>threshold tokens, non-meta)
+                if self._requires_summarization(tool_call):
+                    self._pending_summarization.add(tool_call.id)
+                
+                # Handle successful summarization - remove from pending
+                if (
+                    tool_call.tool_name == "summarize_tool_output"
+                    and tool_call.success
+                ):
+                    summarized_id = tool_call.input.get("tool_call_id")
+                    if summarized_id and summarized_id in self._pending_summarization:
+                        self._pending_summarization.discard(summarized_id)
 
                 # If summarization was mis-targeted, inject a short system hint listing
                 # the currently truncated IDs so the model can recover in the next step.
@@ -406,6 +475,7 @@ class Agent:
                         "[System] summarize_tool_output was called with a non-truncated tool_call_id. "
                         f"Summarize one of these tool_call_id(s) instead: {truncated_ids}"
                     )
+
                 
                 # Emit test plan updates for checklist tools
                 if tool_call.tool_name in ("create_test_plan", "add_todo", "complete_todo"):
@@ -421,6 +491,19 @@ class Agent:
                         step_result, tool_call, special_result
                     )
         
+        # After processing all tool calls, inject ONE system message if NEW pending summarizations were added
+        # First, remove any old summarization prompts to avoid clutter
+        self.context.remove_summarization_prompts()
+        
+        # Only add new prompt if there are still pending summarizations
+        if self._pending_summarization:
+            pending_ids = list(self._pending_summarization)
+            self.context.add_message(
+                MessageRole.SYSTEM,
+                f"{SUMMARIZATION_PROMPT_MARKER} {len(pending_ids)} tool output(s) exceed {SUMMARIZATION_TOKEN_THRESHOLD} tokens and require summarization. "
+                f"Call summarize_tool_output for each of these tool_call_id(s): {pending_ids}"
+            )
+
         # Invoke step callback if provided
         if self._on_step:
             self._on_step(step_result)

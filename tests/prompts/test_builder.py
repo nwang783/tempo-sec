@@ -153,8 +153,8 @@ class TestPromptBuilder:
         formatted = builder.format_tool_descriptions(schemas)
         
         # Guidance for summarize_tool_output
-        assert "CRITICAL" in formatted
-        assert "context overflow" in formatted
+        assert "MANDATORY" in formatted
+        assert "token threshold" in formatted
         
         # Guidance for transition_phase
         assert "workflow phases" in formatted
