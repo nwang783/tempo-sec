@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     # LLM
-    "litellm>=1.40.0",
+    "litellm>=1.80.0",
     "instructor>=1.0.0",
     
     # Data validation

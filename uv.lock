@@ -2184,7 +2184,7 @@ requires-dist = [
     { name = "docker", specifier = ">=7.0.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "instructor", specifier = ">=1.0.0" },
-    { name = "litellm", specifier = ">=1.40.0" },
+    { name = "litellm", specifier = ">=1.80.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "playwright", specifier = ">=1.40.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
