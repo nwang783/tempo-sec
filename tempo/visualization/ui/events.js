@@ -90,6 +90,10 @@ export function handleEvent(event) {
         case "test_plan_update":
             panels.handleTestPlanUpdate(data.items);
             break;
+
+        case "available_tools":
+            panels.updateAvailableToolsPanel(data.tools);
+            break;
     }
 }
 

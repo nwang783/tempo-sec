@@ -352,6 +352,38 @@ body {
     }
 }
 
+/* Available Tools Panel */
+.tools-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.tool-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-family: var(--font-code);
+    color: var(--text-secondary);
+}
+
+.tool-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.tool-icon {
+    color: var(--accent-color);
+}
+
+.tools-empty {
+    padding: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
 /* Graph View (D3) */
 #tree-container {
     width: 100%;
