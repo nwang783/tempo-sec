@@ -20,6 +20,7 @@ from tempo.context.persistence import (
     load_context_tree,
     save_context_tree,
 )
+from tempo.infra.tokenizer import count_tokens
 
 
 class ContextStore:
@@ -282,7 +283,7 @@ class ContextStore:
         for i in range(len(self.current_frame.messages) - 1, -1, -1):
             msg = self.current_frame.messages[i]
             # Rough estimate
-            tokens = len(msg.content) // 4
+            tokens = count_tokens(msg.content)
             content_tokens += tokens
             protected_start_index = i
             if content_tokens >= recent_protection_tokens:
@@ -332,7 +333,7 @@ class ContextStore:
                 self.current_frame.messages[j].content 
                 for j in range(block["start_index"], block["end_index"])
             ])
-            if len(block_content) // 4 < 1000:
+            if count_tokens(block_content) < 1000:
                 continue
                 
             # Found a candidate!
@@ -733,8 +734,8 @@ class ContextStore:
         3. Most recent messages (Immediate context)
         4. Drops middle history
         """
-        # Rough estimate: 4 chars per token
-        total_tokens = sum(len(m["content"]) // 4 for m in messages)
+        # Rough estimate using tokenizer
+        total_tokens = sum(count_tokens(m["content"]) for m in messages)
         
         if total_tokens <= max_tokens:
             return messages
@@ -752,7 +753,7 @@ class ContextStore:
         # 2. Fill the rest with MOST RECENT messages from remaining_messages
         kept_end = []
         for msg in reversed(remaining_messages):
-            msg_tokens = len(msg["content"]) // 4
+            msg_tokens = count_tokens(msg["content"])
             if msg_tokens <= remaining_budget:
                 kept_end.insert(0, msg)
                 remaining_budget -= msg_tokens
@@ -777,7 +778,7 @@ class ContextStore:
             Approximate token count
         """
         messages = self.render_messages()
-        return sum(len(m["content"]) // 4 for m in messages)
+        return sum(count_tokens(m["content"]) for m in messages)
     
     def export_for_visualization(self) -> dict:
         """

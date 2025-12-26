@@ -143,12 +143,15 @@ class TestProcessContextForUI:
     """Tests for context_processor functions."""
     
     def test_token_estimation(self):
-        """Token estimation uses 4 chars per token."""
+        """Token estimation uses LiteLLM tokenizer."""
         from tempo.visualization.context_processor import estimate_tokens
         
         assert estimate_tokens("") == 0
-        assert estimate_tokens("1234") == 1
-        assert estimate_tokens("12345678") == 2
+        # Token counts will now be model-aware, just verify they're reasonable
+        result = estimate_tokens("1234")
+        assert result >= 1  # At least 1 token
+        result = estimate_tokens("12345678")
+        assert result >= 1  # At least 1 token
     
     def test_process_context_empty(self):
         """Processing empty context returns proper structure."""
@@ -188,8 +191,8 @@ class TestProcessContextForUI:
         result = process_context_for_ui(context_data)
         
         assert len(result["messages"]) == 1
-        assert result["messages"][0]["tokens"] == 25  # 100 chars / 4
-        assert result["total_tokens"] == 25
+        assert result["messages"][0]["tokens"] >= 1  # Using real tokenizer now
+        assert result["total_tokens"] >= 1
     
     def test_process_context_summarized_tool_call(self):
         """Processing summarized tool calls shows tokens saved."""

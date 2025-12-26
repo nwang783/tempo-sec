@@ -150,7 +150,8 @@ class VisualizationServer:
             if self._context_store:
                 try:
                     context_data = build_context_data_from_store(self._context_store)
-                    processed_data = process_context_for_ui(context_data)
+                    model = self._agent_state.get("model", "")
+                    processed_data = process_context_for_ui(context_data, model=model)
                     return JSONResponse(content=processed_data)
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=str(e))
@@ -168,7 +169,8 @@ class VisualizationServer:
                     context_data = json.load(f)
                 
                 # Process frames to add token estimates
-                processed_data = process_context_for_ui(context_data)
+                model = self._agent_state.get("model", "")
+                processed_data = process_context_for_ui(context_data, model=model)
                 return JSONResponse(content=processed_data)
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail="Invalid context file")
@@ -210,7 +212,8 @@ class VisualizationServer:
             try:
                 with open(context_path, "r") as f:
                     context_data = json.load(f)
-                processed_data = process_context_for_ui(context_data)
+                model = self._agent_state.get("model", "")
+                processed_data = process_context_for_ui(context_data, model=model)
                 return JSONResponse(content=processed_data)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
