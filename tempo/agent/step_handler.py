@@ -195,4 +195,17 @@ class StepHandler:
                     phase_transition=Phase.TEST,
                 )
         
+        elif tool_call.tool_name == "complete_browser_task":
+            # Browser task complete - stop the browser agent
+            if tool_call.metadata.get("browser_task_complete"):
+                return SpecialToolResult(
+                    tool_name="complete_browser_task",
+                    should_continue=False,
+                    findings={
+                        "findings": tool_call.metadata.get("findings", ""),
+                        "success": tool_call.metadata.get("task_success", True),
+                        "extracted_data": tool_call.metadata.get("extracted_data", ""),
+                    },
+                )
+        
         return None

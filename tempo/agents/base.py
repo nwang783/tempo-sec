@@ -114,12 +114,12 @@ class BaseAgentDefinition(ABC):
         )
     
     @abstractmethod
-    def build_objective(self, target: str, **kwargs: Any) -> str:
+    def build_objective(self, target: str | None = None, **kwargs: Any) -> str:
         """
         Build the user objective from runtime parameters.
         
         Args:
-            target: Primary target (URL, path, etc.)
+            target: Primary target (URL, path, etc.), optional for sub-agents
             **kwargs: Additional agent-specific parameters
             
         Returns:

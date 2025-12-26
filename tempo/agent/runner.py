@@ -504,6 +504,15 @@ class Agent:
                     "step": self._step_count,
                 })
         
+        elif special.tool_name == "complete_browser_task":
+            # Browser task complete - stop the browser agent
+            step_result.should_continue = False
+            if special.findings:
+                self._findings.append({
+                    **special.findings,
+                    "step": self._step_count,
+                })
+        
         return step_result
     
     def _handle_tool_call_complete(self, tool_call: ToolCall) -> None:
