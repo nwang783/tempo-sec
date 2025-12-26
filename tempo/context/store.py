@@ -88,6 +88,34 @@ class ContextStore:
         """
         self.current_frame.tool_calls.append(tool_call)
     
+    # Marker used to identify summarization prompt messages
+    SUMMARIZATION_PROMPT_MARKER = "[SUMMARIZATION_REQUIRED]"
+    
+    def remove_summarization_prompts(self) -> int:
+        """
+        Remove all system messages that are summarization prompts.
+        
+        These are messages marked with SUMMARIZATION_PROMPT_MARKER
+        that were injected to guide the agent. They should be removed
+        once no longer needed to avoid context clutter.
+        
+        Returns:
+            Number of messages removed
+        """
+        removed = 0
+        # Only check current frame's messages
+        frame = self.current_frame
+        original_count = len(frame.messages)
+        frame.messages = [
+            m for m in frame.messages 
+            if not (
+                m.role == MessageRole.SYSTEM 
+                and m.content.startswith(self.SUMMARIZATION_PROMPT_MARKER)
+            )
+        ]
+        removed = original_count - len(frame.messages)
+        return removed
+    
     def find_tool_call(self, tool_call_id: str) -> ToolCall | None:
         """
         Find a tool call by ID in the context history.
