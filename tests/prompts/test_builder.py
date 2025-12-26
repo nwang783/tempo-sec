@@ -141,6 +141,57 @@ class TestPromptBuilder:
         # Purpose should be filtered out
         assert "purpose" not in formatted.lower()
     
+    def test_tool_guidance_injected_for_known_tools(self):
+        """Test that tool-specific guidance is injected for known tools."""
+        builder = PromptBuilder()
+        
+        schemas = [
+            {"type": "function", "function": {"name": "summarize_tool_output", "description": "Summarize output"}},
+            {"type": "function", "function": {"name": "transition_phase", "description": "Transition phase"}},
+        ]
+        
+        formatted = builder.format_tool_descriptions(schemas)
+        
+        # Guidance for summarize_tool_output
+        assert "CRITICAL" in formatted
+        assert "context overflow" in formatted
+        
+        # Guidance for transition_phase
+        assert "workflow phases" in formatted
+        assert "justification" in formatted
+    
+    def test_tool_guidance_not_injected_for_unknown_tools(self):
+        """Test that unknown tools don't get extra guidance."""
+        builder = PromptBuilder()
+        
+        schemas = [
+            {"type": "function", "function": {"name": "custom_unknown_tool", "description": "A custom tool"}},
+        ]
+        
+        formatted = builder.format_tool_descriptions(schemas)
+        
+        # Should just have the description, no extra guidance
+        assert "custom_unknown_tool" in formatted
+        assert "A custom tool" in formatted
+        assert "CRITICAL" not in formatted  # No guidance keywords
+        assert "workflow phases" not in formatted
+    
+    def test_tool_guidance_for_recon_agent(self):
+        """Test guidance for recon agent tools (complete_recon instead of finish_task)."""
+        builder = PromptBuilder()
+        
+        schemas = [
+            {"type": "function", "function": {"name": "complete_recon", "description": "Complete recon"}},
+            {"type": "function", "function": {"name": "summarize_tool_output", "description": "Summarize"}},
+        ]
+        
+        formatted = builder.format_tool_descriptions(schemas)
+        
+        assert "reconnaissance is complete" in formatted.lower()
+        assert "saves the target manifest" in formatted.lower()
+        assert "finish_task" not in formatted  # Not available for recon agent
+
+    
     def test_build_full_prompt(self):
         """Test building complete prompt."""
         builder = PromptBuilder()

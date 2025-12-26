@@ -142,9 +142,47 @@ class PromptBuilder:
             tool_descriptions=tool_descriptions,
         )
     
+    # Tool-specific extended guidance injected alongside descriptions
+    TOOL_GUIDANCE: dict[str, str] = {
+        "summarize_tool_output": (
+            "**CRITICAL**: When a tool produces output over 5000 characters, "
+            "you MUST immediately call this tool to replace it with a concise summary. "
+            "Failing to summarize will cause context overflow."
+        ),
+        "transition_phase": (
+            "Use this to move between workflow phases (RECON → HYPOTHESIZE → TEST → REFLECT). "
+            "You must provide justification for each transition."
+        ),
+        "branch_to_subtasks": (
+            "Use when investigating multiple things independently. Each subtask spawns "
+            "a subagent that works in parallel. Subagents call `finish_subtask` when done."
+        ),
+        "finish_task": (
+            "Call this when your overall objective is complete. Provide a summary of findings."
+        ),
+        "complete_recon": (
+            "Call this when reconnaissance is complete. This saves the target manifest."
+        ),
+        "create_test_plan": (
+            "Use this to create a structured test plan with prioritized hypotheses. "
+            "The agent will automatically transition to TEST phase after creating a plan."
+        ),
+        "continue_analysis": (
+            "Use this in the REFLECT phase to either continue with more testing "
+            "(should_continue=true → returns to HYPOTHESIZE) or finish analysis "
+            "(should_continue=false → provides final findings)."
+        ),
+        "view_tool_output": (
+            "Use this to view specific character ranges of truncated tool outputs. "
+            "Helps navigate large results without overwhelming context."
+        ),
+    }
+    
     def format_tool_descriptions(self, schemas: list[dict]) -> str:
         """
         Format tool schemas into a readable description for prompts.
+        
+        Injects extended guidance for tools that have it defined in TOOL_GUIDANCE.
         
         Args:
             schemas: List of tool schemas in OpenAI format
@@ -157,6 +195,11 @@ class PromptBuilder:
             func = schema.get("function", {})
             name = func.get("name", "unknown")
             desc = func.get("description", "No description")
+            
+            # Add extended guidance if available for this tool
+            guidance = self.TOOL_GUIDANCE.get(name)
+            if guidance:
+                desc = f"{desc}\n\n{guidance}"
             
             # Extract parameters
             params = func.get("parameters", {}).get("properties", {})
