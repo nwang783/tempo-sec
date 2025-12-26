@@ -34,7 +34,7 @@ class TestCycleAgent(BaseAgentDefinition):
     """
     
     _name = "test_cycle"
-    _model = "anthropic/claude-haiku-4-5"
+    _model = "openai/gpt-4.1-mini"
     _initial_phase = Phase.HYPOTHESIZE
     
     def __init__(
