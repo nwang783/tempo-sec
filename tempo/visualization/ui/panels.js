@@ -132,6 +132,30 @@ export function renderTestPlan() {
 }
 
 // ============================================================================
+// Available Tools Panel
+// ============================================================================
+
+/**
+ * Update the available tools panel with current tools.
+ * 
+ * @param {Array<string>} tools - List of available tool names
+ */
+export function updateAvailableToolsPanel(tools) {
+    state.setAvailableTools(tools);
+    const container = document.getElementById('available-tools-list');
+    if (!container) return;
+
+    if (!tools || tools.length === 0) {
+        container.innerHTML = '<div class="tools-empty">No tools available</div>';
+        return;
+    }
+
+    container.innerHTML = tools.map(name =>
+        `<div class="tool-item"><span class="tool-icon">⚙</span> ${escapeHtml(name)}</div>`
+    ).join('');
+}
+
+// ============================================================================
 // Context Window Panel
 // ============================================================================
 

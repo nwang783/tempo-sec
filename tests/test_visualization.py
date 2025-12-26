@@ -116,6 +116,25 @@ class TestVisualizationCollectorEvents:
                 "output": "Done"
             })
 
+    def test_on_available_tools_emits_event(self):
+        """on_available_tools should emit tool names."""
+        from tempo.visualization.collector import VisualizationCollector
+        
+        mock_server = MagicMock()
+        collector = VisualizationCollector(mock_server)
+        
+        schemas = [
+            {"function": {"name": "shell"}},
+            {"function": {"name": "file_read"}},
+        ]
+        
+        with patch.object(collector, 'emit') as mock_emit:
+            collector.on_available_tools(schemas)
+            
+            mock_emit.assert_called_once_with("available_tools", {
+                "tools": ["shell", "file_read"]
+            })
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

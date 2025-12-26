@@ -91,7 +91,13 @@ export const appState = {
      * Indices of expanded items in the context window.
      * @type {Set<number>}
      */
-    expandedItems: new Set()
+    expandedItems: new Set(),
+
+    /**
+     * List of currently available tool names.
+     * @type {Array<string>}
+     */
+    availableTools: []
 };
 
 // Initialize root frame
@@ -136,6 +142,9 @@ export function getContextData() { return appState.contextData; }
 
 /** @returns {Set<number>} */
 export function getExpandedItems() { return appState.expandedItems; }
+
+/** @returns {Array<string>} */
+export function getAvailableTools() { return appState.availableTools; }
 
 // ============================================================================
 // State Mutation Functions
@@ -191,6 +200,14 @@ export function setContextData(data) {
 }
 
 /**
+ * Set the available tools list.
+ * @param {Array<string>} tools - Tool names
+ */
+export function setAvailableTools(tools) {
+    appState.availableTools = tools;
+}
+
+/**
  * Toggle an expanded item in the context window.
  * @param {number} index - Item index
  * @returns {boolean} New expanded state
@@ -221,4 +238,5 @@ export function resetState() {
     appState.testPlanItems = [];
     appState.contextData = null;
     appState.expandedItems.clear();
+    appState.availableTools = [];
 }

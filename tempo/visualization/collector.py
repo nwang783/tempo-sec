@@ -199,3 +199,15 @@ class VisualizationCollector:
         """Called when the test plan is created or updated."""
         self.emit("test_plan_update", {"items": items})
 
+    def on_available_tools(self, tool_schemas: list[dict]) -> None:
+        """Called when the available tools are determined for a step.
+        
+        Args:
+            tool_schemas: List of tool schemas in OpenAI format
+        """
+        tool_names = [
+            s.get("function", {}).get("name", "unknown")
+            for s in tool_schemas
+        ]
+        self.emit("available_tools", {"tools": tool_names})
+

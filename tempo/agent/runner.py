@@ -360,6 +360,10 @@ class Agent:
         # Get phase-filtered tool schemas (REFLECT: only continue_analysis)
         tool_schemas = self._get_phase_filtered_tools()
         
+        # Emit available tools to visualization
+        if self._viz_collector:
+            self._viz_collector.on_available_tools(tool_schemas)
+        
         # Call LLM
         response = await self.llm.complete(
             messages=messages,
