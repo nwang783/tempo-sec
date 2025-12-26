@@ -81,14 +81,7 @@ class ReconAgent(BaseAgentDefinition):
         from tempo.tools.registry import ToolRegistry
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.browser_tools import (
-            BrowserSession,
-            BrowserNavigateTool,
-            BrowserSnapshotTool,
-            BrowserClickTool,
-            BrowserTypeTool,
-            BrowserFillFormTool,
-        )
+        from tempo.tools.browser_task_tool import BrowserTaskTool
         from tempo.tools.meta import SummarizeOutputTool
         from tempo.tools.manifest_tools import CompleteReconTool
         from tempo.tools.view_output import ViewToolOutputTool
@@ -100,13 +93,8 @@ class ReconAgent(BaseAgentDefinition):
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
         
-        # Browser tools
-        browser_session = BrowserSession(container_manager=container)
-        tools.register(BrowserNavigateTool(browser_session))
-        tools.register(BrowserSnapshotTool(browser_session))
-        tools.register(BrowserClickTool(browser_session))
-        tools.register(BrowserTypeTool(browser_session))
-        tools.register(BrowserFillFormTool(browser_session))
+        # Browser task delegation tool (uses browser agent)
+        tools.register(BrowserTaskTool(container_manager=container))
         
         # Meta tools
         tools.register(SummarizeOutputTool(context_store=context))

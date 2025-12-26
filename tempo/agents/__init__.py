@@ -116,3 +116,4 @@ def _ensure_builtin_agents_loaded() -> None:
         # Import builtin agents to trigger registration
         from tempo.agents import recon  # noqa: F401
         from tempo.agents import test_cycle  # noqa: F401
+        from tempo.agents import browser  # noqa: F401

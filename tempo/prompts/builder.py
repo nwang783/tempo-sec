@@ -248,6 +248,29 @@ class PromptBuilder:
             scope_description=scope_description,
         )
     
+    def build_browser_prompt(
+        self,
+        tool_schemas: list[dict],
+    ) -> str:
+        """
+        Build the system prompt for browser agent.
+        
+        This is a focused prompt for browser automation tasks,
+        without phase transitions or security testing context.
+        
+        Args:
+            tool_schemas: List of tool schemas
+            
+        Returns:
+            Formatted browser agent system prompt
+        """
+        tool_descriptions = self.format_tool_descriptions(tool_schemas)
+        template = self._load_template("browser_base")
+        
+        return template.format(
+            tools=tool_descriptions,
+        )
+    
     def filter_schemas_for_subagent(self, schemas: list[dict]) -> list[dict]:
         """
         Filter tool schemas for subagent use.
