@@ -8,26 +8,26 @@ This module is extracted from server.py to improve cohesion.
 import json
 from typing import Any, TYPE_CHECKING
 
+from tempo.infra.tokenizer import count_tokens
+
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
 
 
-def estimate_tokens(text: str) -> int:
+def estimate_tokens(text: str, model: str | None = None) -> int:
     """
-    Estimate token count for text (roughly 4 chars per token).
+    Estimate token count for text using LiteLLM tokenizer.
     
-    This is a simple heuristic that works reasonably well for English text
-    and is much faster than calling a tokenizer.
+    Uses the appropriate tokenizer for the specified model when available.
     
     Args:
         text: The text to estimate tokens for
+        model: Optional model name for accurate counting
         
     Returns:
         Estimated token count
     """
-    if not text:
-        return 0
-    return len(text) // 4
+    return count_tokens(text, model)
 
 
 def build_context_data_from_store(context_store: "ContextStore") -> dict:
@@ -46,7 +46,7 @@ def build_context_data_from_store(context_store: "ContextStore") -> dict:
     return context_store.export_for_visualization()
 
 
-def process_context_for_ui(context_data: dict) -> dict:
+def process_context_for_ui(context_data: dict, model: str | None = None) -> dict:
     """
     Process context data for the UI.
     
@@ -56,6 +56,7 @@ def process_context_for_ui(context_data: dict) -> dict:
     
     Args:
         context_data: Raw context data (from JSON file or ContextStore.export_for_visualization())
+        model: Optional model name for accurate token counting
         
     Returns:
         Processed data with:
@@ -85,7 +86,7 @@ def process_context_for_ui(context_data: dict) -> dict:
     for frame in frame_path:
         # Process messages
         for msg in frame.get("messages", []):
-            processed_msg = _process_message(msg, message_index)
+            processed_msg = _process_message(msg, message_index, model)
             result["messages"].append(processed_msg)
             result["total_tokens"] += processed_msg["tokens"]
             result["total_messages"] += 1
@@ -93,7 +94,7 @@ def process_context_for_ui(context_data: dict) -> dict:
         
         # Process tool calls
         for tc in frame.get("tool_calls", []):
-            processed_tc = _process_tool_call(tc, message_index)
+            processed_tc = _process_tool_call(tc, message_index, model)
             result["messages"].append(processed_tc)
             result["total_tokens"] += processed_tc["tokens"]
             result["total_tool_calls"] += 1
@@ -117,10 +118,10 @@ def _build_frame_path(frames: dict, current_frame_id: str | None) -> list[dict]:
     return frame_path
 
 
-def _process_message(msg: dict, index: int) -> dict:
+def _process_message(msg: dict, index: int, model: str | None = None) -> dict:
     """Process a single message for UI display."""
     content = msg.get("content", "")
-    tokens = estimate_tokens(content)
+    tokens = estimate_tokens(content, model)
     return {
         "index": index,
         "type": "message",
@@ -133,7 +134,7 @@ def _process_message(msg: dict, index: int) -> dict:
     }
 
 
-def _process_tool_call(tc: dict, index: int) -> dict:
+def _process_tool_call(tc: dict, index: int, model: str | None = None) -> dict:
     """
     Process a single tool call for UI display.
     
@@ -151,9 +152,9 @@ def _process_tool_call(tc: dict, index: int) -> dict:
     # Calculate tokens for input and output separately
     input_data = tc.get("input", {})
     input_str = json.dumps(input_data) if input_data else ""
-    input_tokens = estimate_tokens(input_str)
-    output_tokens = estimate_tokens(display_output)
-    raw_output_tokens = estimate_tokens(raw_output)
+    input_tokens = estimate_tokens(input_str, model)
+    output_tokens = estimate_tokens(display_output, model)
+    raw_output_tokens = estimate_tokens(raw_output, model)
     
     # Tokens saved by summarization
     tokens_saved = raw_output_tokens - output_tokens if is_summarized else 0

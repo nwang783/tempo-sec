@@ -45,7 +45,8 @@ async def test_semantic_summarization():
             store.add_message(MessageRole.USER, f"Recon result {i}")
             
         # Add bulky text to RECON to ensure it meets the 1000 token threshold for summarization
-        bulky_text = "A" * 5000 # ~1250 tokens
+        # With accurate tokenizer: ~8000 chars = ~1200 tokens (varies by model)
+        bulky_text = "A" * 8000
         store.add_message(MessageRole.ASSISTANT, f"Bulky Recon: {bulky_text}")
             
         # Transition Marker (Note: store.py is case-insensitive, but we use standard format here)
