@@ -50,6 +50,7 @@ class BrowserTaskTool(Tool):
         task: str,
         url: str = "",
         max_steps: int = 10,
+        **kwargs,
     ) -> ToolResult:
         """
         Execute a browser task via the browser agent.
@@ -58,7 +59,7 @@ class BrowserTaskTool(Tool):
             task: Description of what the browser agent should accomplish
             url: Optional starting URL (if provided, agent navigates there first)
             max_steps: Maximum steps for the browser agent (default: 10)
-            purpose: Why this browser task is being performed
+            **kwargs: Additional arguments (ignored)
             
         Returns:
             ToolResult with the browser agent's findings
@@ -91,7 +92,7 @@ class BrowserTaskTool(Tool):
         # Create browser agent config
         config = AgentConfig(
             model=browser_agent_def.model,
-            max_steps=max_steps,
+            max_total_steps=max_steps,
         )
         
         # Build prompts
@@ -103,13 +104,16 @@ class BrowserTaskTool(Tool):
             scope_description="Browser automation task",
         )
         
+        # Add system prompt to context
+        from tempo.context.frame import MessageRole
+        browser_context.add_message(MessageRole.SYSTEM, system_prompt)
+        
         # Create and run browser agent
         browser_agent = Agent(
             config=config,
             llm=llm,
             tools=browser_tools,
             context=browser_context,
-            system_prompt=system_prompt,
         )
         
         # Build objective
