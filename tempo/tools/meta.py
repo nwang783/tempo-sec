@@ -163,6 +163,16 @@ class SummarizePreviousOutputTool(Tool):
         import json
         tool_input_str = json.dumps(tool_call.input, indent=2) if isinstance(tool_call.input, dict) else str(tool_call.input)
         
+        # Limit output to ~10k tokens (~40k chars) to avoid rate limits
+        MAX_CHARS_FOR_SUMMARIZER = 40000
+        raw_output = tool_call.raw_output or ""
+        output_truncated = len(raw_output) > MAX_CHARS_FOR_SUMMARIZER
+        output_for_summary = raw_output[:MAX_CHARS_FOR_SUMMARIZER]
+        
+        truncation_note = ""
+        if output_truncated:
+            truncation_note = f"\n\n[NOTE: Output truncated to first {MAX_CHARS_FOR_SUMMARIZER:,} chars. Full output is {len(raw_output):,} chars. Use view_tool_output to see remaining content.]"
+        
         prompt = f"""Summarize the following tool output concisely. Focus on information relevant to the current conversation context.
 
 ## Recent Conversation Context:
@@ -172,13 +182,14 @@ class SummarizePreviousOutputTool(Tool):
 ## Input: {tool_input_str}
 
 ## Output to Summarize:
-{tool_call.raw_output}
+{output_for_summary}{truncation_note}
 
 ## Instructions:
 1. Extract key findings relevant to the conversation context
 2. Note any errors or issues
 3. Identify actionable information
 4. Keep summary under 200 words
+{f"5. Note that only the first {MAX_CHARS_FOR_SUMMARIZER:,} chars were summarized" if output_truncated else ""}
 
 Provide ONLY the summary, no preamble."""
 
