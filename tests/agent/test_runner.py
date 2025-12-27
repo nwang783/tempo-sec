@@ -419,11 +419,11 @@ class TestSummarizationRequirement:
         
         agent = Agent(config, llm, tools, context=context)
         
-        # Initially, both tools should be available (in RECON phase)
+        # Initially, summarize_previous_tool_output should be HIDDEN (no pending summarizations)
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         assert "dummy" in tool_names
-        assert "summarize_previous_tool_output" in tool_names
+        assert "summarize_previous_tool_output" not in tool_names  # Hidden when no pending
         
         # Add a pending summarization
         agent.context.add_pending_summarization("test-id")

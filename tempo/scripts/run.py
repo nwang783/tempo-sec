@@ -278,7 +278,14 @@ async def main() -> None:
     
     try:
         # Create Workflow Manager
-        workflow = WorkflowManager(config, initial_phase=agent_def.initial_phase)
+        # When resuming, use the persisted phase from context; otherwise use agent's initial phase
+        if args.context and context.current_frame and context.current_frame.state.current_phase:
+            from tempo.prompts.phases import Phase
+            persisted_phase = Phase(context.current_frame.state.current_phase)
+            print(f"📍 Resuming in phase: {persisted_phase.value.upper()}")
+            workflow = WorkflowManager(config, initial_phase=persisted_phase)
+        else:
+            workflow = WorkflowManager(config, initial_phase=agent_def.initial_phase)
         
         if use_container:
             print("🐳 Initializing container sandbox...")
