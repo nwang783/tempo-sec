@@ -25,5 +25,5 @@ For extensive targets, use `branch_to_subtasks` to investigate areas in parallel
 ```
 
 ### Remember
-- Summarize large scan outputs with `summarize_tool_output`
+- Summarize large scan outputs with `summarize_previous_tool_output`
 - Document all findings for the next phase

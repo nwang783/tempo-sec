@@ -151,7 +151,7 @@ class VisualizationCollector:
         
         # Check if this is a summarization tool call
         tool_name = data.get("tool_name", "")
-        if tool_name == "summarize_tool_output" and data.get("success", False):
+        if tool_name == "summarize_previous_tool_output" and data.get("success", False):
             metadata = data.get("metadata", {})
             summarized_id = metadata.get("summarized_tool_id")
             if summarized_id:

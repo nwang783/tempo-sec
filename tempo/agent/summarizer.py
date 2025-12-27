@@ -115,7 +115,7 @@ class OutputSummarizer:
         Determine if a tool call output should be summarized.
         
         Note: The agent is now responsible for initiating summarization
-        via the `summarize_tool_output` tool. This method can be used
+        via the `summarize_previous_tool_output` tool. This method can be used
         for auto-summarization hints.
         
         Args:

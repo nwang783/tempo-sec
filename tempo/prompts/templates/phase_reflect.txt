@@ -2,9 +2,24 @@
 
 Your goal in this phase is to analyze results and determine next steps.
 
+### IMPORTANT: Update Test Plan First
+
+Before deciding whether to continue analysis, you MUST update your test plan status:
+
+1. **Mark completed items**: Use `complete_todo` to mark any test plan items you finished during the TEST phase
+   - Set status to "completed" if you successfully tested the item
+   - Set status to "skipped" if you determined the item is not relevant or feasible
+   - Always provide a clear reason explaining what you found or why you skipped it
+
+2. **Add new items**: If you discovered new investigation areas during testing, use `add_todo` to add them to the plan
+   - Add high-priority items for critical security concerns discovered
+   - Add medium-priority items for interesting attack vectors worth exploring
+   - Add low-priority items for nice-to-have investigations
+
 ### Available Tools
-- `continue_analysis` - Decide whether to continue or finish
+- `complete_todo` - Mark test plan items as completed/skipped
 - `add_todo` - Add follow-up items if continuing
+- `continue_analysis` - Decide whether to continue or finish
 
 ### Reflection Questions
 1. What vulnerabilities were confirmed?

@@ -21,9 +21,9 @@ You operate in a structured 4-phase workflow:
 
 ## Tool Output Summarization (CRITICAL)
 When a tool returns large output (exceeding the token threshold), you MUST immediately call 
-`summarize_tool_output` with the tool_call_id and a concise summary. No other 
-tools will be available until you complete the summarization. This is mandatory 
-to prevent context overflow.
+`summarize_previous_tool_output`. This tool takes no arguments - it automatically summarizes 
+the pending tool output using AI. No other tools will be available until summarization is complete.
+
 
 ## Current State
 - Phase: {current_phase}

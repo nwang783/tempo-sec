@@ -146,13 +146,13 @@ class TestPromptBuilder:
         builder = PromptBuilder()
         
         schemas = [
-            {"type": "function", "function": {"name": "summarize_tool_output", "description": "Summarize output"}},
+            {"type": "function", "function": {"name": "summarize_previous_tool_output", "description": "Summarize output"}},
             {"type": "function", "function": {"name": "transition_phase", "description": "Transition phase"}},
         ]
         
         formatted = builder.format_tool_descriptions(schemas)
         
-        # Guidance for summarize_tool_output
+        # Guidance for summarize_previous_tool_output
         assert "MANDATORY" in formatted
         assert "token threshold" in formatted
         

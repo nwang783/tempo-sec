@@ -153,7 +153,7 @@ class TestToolCall:
         assert len(result) <= 10000, f"Result length {len(result)} exceeds limit 10000"
         # Verify instruction is included
         assert "OUTPUT TRUNCATED" in result
-        assert "MUST call summarize_tool_output" in result
+        assert "MUST call summarize_previous_tool_output" in result
         assert tc.id in result
         assert "view_tool_output" in result
     

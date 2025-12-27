@@ -100,7 +100,7 @@ class ToolCall:
             f"\n\n[OUTPUT TRUNCATED - Showing {{content_chars:,}} of {total:,} chars]\n"
             f"Tool call ID: {self.id}\n"
             f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
-            f"IMPORTANT: You MUST call summarize_tool_output for this tool call."
+            f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
         )
         
         # Calculate how much space we have for content
@@ -113,7 +113,7 @@ class ToolCall:
             f"\n\n[OUTPUT TRUNCATED - Showing {content_chars:,} of {total:,} chars]\n"
             f"Tool call ID: {self.id}\n"
             f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
-            f"IMPORTANT: You MUST call summarize_tool_output for this tool call."
+            f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
         )
         
         return f"{output[:content_chars]}{final_instruction}"
