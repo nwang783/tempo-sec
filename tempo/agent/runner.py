@@ -172,57 +172,73 @@ class Agent:
     def _get_phase_filtered_tools(self) -> list[dict]:
         """
         Get tool schemas filtered by current phase and summarization state.
-        
+
         Summarization requirement takes priority:
         - If pending summarizations exist, ONLY summarize_tool_output is available
-        
+
         Phase tool restrictions:
         - RECON: Standard tools, hide meta tools
-        - HYPOTHESIZE: Only create_test_plan (forces structured output)
+        - HYPOTHESIZE:
+            * If NO plan exists: Only create_test_plan (forces structured output)
+            * If plan EXISTS: Only add_todo, complete_todo, transition_phase (manage existing plan)
         - TEST: All tools + add_todo/complete_todo, hide continue_analysis
-        - REFLECT: Only continue_analysis + add_todo
+        - REFLECT: Only continue_analysis + add_todo + complete_todo
         """
         from tempo.prompts.phases import Phase
-        
+
         all_schemas = self.tools.get_schemas()
-        
+
         # CRITICAL: If there are pending summarizations, ONLY allow summarize_tool_output
         if self._pending_summarization:
             return [
-                s for s in all_schemas 
+                s for s in all_schemas
                 if s.get("function", {}).get("name") == "summarize_tool_output"
             ]
-        
+
         phase = self.workflow.current_phase
-        
+
         if phase == Phase.REFLECT:
-            # REFLECT: continue_analysis, add_todo, and summarize_tool_output
-            allowed = {"continue_analysis", "add_todo", "summarize_tool_output"}
+            # REFLECT: continue_analysis, add_todo, complete_todo, and summarize_tool_output
+            allowed = {"continue_analysis", "add_todo", "complete_todo", "summarize_tool_output"}
             return [
-                s for s in all_schemas 
+                s for s in all_schemas
                 if s.get("function", {}).get("name") in allowed
             ]
-        
+
         elif phase == Phase.HYPOTHESIZE:
-            # HYPOTHESIZE: Only create_test_plan to force structured output
-            return [
-                s for s in all_schemas 
-                if s.get("function", {}).get("name") == "create_test_plan"
-            ]
-        
+            # Check if a test plan already exists
+            has_plan = (
+                self.context.current_frame.state.test_plan is not None
+                and len(self.context.current_frame.state.test_plan) > 0
+            )
+
+            if has_plan:
+                # Plan exists - allow todo management and phase transition
+                allowed = {"add_todo", "complete_todo", "transition_phase", "summarize_tool_output"}
+                return [
+                    s for s in all_schemas
+                    if s.get("function", {}).get("name") in allowed
+                ]
+            else:
+                # No plan - force plan creation
+                return [
+                    s for s in all_schemas
+                    if s.get("function", {}).get("name") == "create_test_plan"
+                ]
+
         elif phase == Phase.TEST:
             # TEST: All tools except continue_analysis and create_test_plan
             hidden = {"continue_analysis", "create_test_plan"}
             return [
-                s for s in all_schemas 
+                s for s in all_schemas
                 if s.get("function", {}).get("name") not in hidden
             ]
-        
+
         else:
             # RECON: Hide checklist tools and continue_analysis
             hidden = {"continue_analysis", "create_test_plan", "add_todo", "complete_todo"}
             return [
-                s for s in all_schemas 
+                s for s in all_schemas
                 if s.get("function", {}).get("name") not in hidden
             ]
     
@@ -535,10 +551,23 @@ class Agent:
             if special.should_continue and special.phase_transition:
                 # Agent wants to continue - transition to the specified phase
                 self.workflow.transition(special.phase_transition)
-                self.context.add_message(
-                    MessageRole.SYSTEM,
-                    f"[Continuing analysis] {tool_call.raw_output}\nYou are now back in the {special.phase_transition.value.upper()} phase."
-                )
+
+                # Build phase-specific message
+                phase_msg = f"[Continuing analysis] {tool_call.raw_output}\nYou are now back in the {special.phase_transition.value.upper()} phase."
+
+                # For HYPOTHESIZE phase, inject phase-specific instructions based on plan existence
+                if special.phase_transition == Phase.HYPOTHESIZE:
+                    has_plan = (
+                        self.context.current_frame.state.test_plan is not None
+                        and len(self.context.current_frame.state.test_plan) > 0
+                    )
+                    phase_instructions = self.prompts.build_phase_prompt(
+                        special.phase_transition,
+                        has_test_plan=has_plan
+                    )
+                    phase_msg += f"\n\n{phase_instructions}"
+
+                self.context.add_message(MessageRole.SYSTEM, phase_msg)
             elif not special.should_continue:
                 # Agent is done
                 step_result.should_continue = False
@@ -556,10 +585,23 @@ class Agent:
                 # Only do this when the tool actually succeeded; otherwise we'd lie in history.
                 if tool_call.success:
                     self.context.update_state(current_phase=special.phase_transition.value)
-                    self.context.add_message(
-                        MessageRole.SYSTEM,
-                        f"[System] Transitioned to {special.phase_transition.value.upper()} phase."
-                    )
+
+                    # Build phase-specific message with appropriate guidance
+                    phase_msg = f"[System] Transitioned to {special.phase_transition.value.upper()} phase."
+
+                    # For HYPOTHESIZE phase, inject phase-specific instructions based on plan existence
+                    if special.phase_transition == Phase.HYPOTHESIZE:
+                        has_plan = (
+                            self.context.current_frame.state.test_plan is not None
+                            and len(self.context.current_frame.state.test_plan) > 0
+                        )
+                        phase_instructions = self.prompts.build_phase_prompt(
+                            special.phase_transition,
+                            has_test_plan=has_plan
+                        )
+                        phase_msg += f"\n\n{phase_instructions}"
+
+                    self.context.add_message(MessageRole.SYSTEM, phase_msg)
         
         elif special.tool_name == "branch_to_subtasks":
             if special.branch_id:

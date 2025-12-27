@@ -72,17 +72,22 @@ class PromptBuilder:
             findings_count=findings_count,
         )
     
-    def build_phase_prompt(self, phase: Phase) -> str:
+    def build_phase_prompt(self, phase: Phase, has_test_plan: bool = False) -> str:
         """
         Build the phase-specific prompt.
-        
+
         Args:
             phase: The workflow phase
-            
+            has_test_plan: Whether a test plan already exists (for HYPOTHESIZE phase)
+
         Returns:
             Formatted phase prompt
         """
-        template_name = f"phase_{phase.value}"
+        # Special handling for HYPOTHESIZE phase based on plan existence
+        if phase == Phase.HYPOTHESIZE and has_test_plan:
+            template_name = "phase_hypothesize_existing"
+        else:
+            template_name = f"phase_{phase.value}"
         return self._load_template(template_name)
     
     def build_summarization_prompt(
