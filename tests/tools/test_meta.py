@@ -133,42 +133,20 @@ class TestSummarizeOutputTool:
         store = ContextStore()
         tool = SummarizeOutputTool(context_store=store)
         
-        assert tool.name == "summarize_tool_output"
+        assert tool.name == "summarize_previous_tool_output"
         assert tool.category.value == "meta"
     
     @pytest.mark.asyncio
-    async def test_summarize_existing_tool_call(self):
-        """Test summarizing an existing tool call."""
-        store = ContextStore()
-        
-        # Add a tool call
-        tc = ToolCall(tool_name="shell", raw_output="Very long output " * 100)
-        store.add_tool_call(tc)
-        
-        tool = SummarizeOutputTool(context_store=store)
-        result = await tool.execute(
-            tool_call_id=tc.id,
-            summary="Command executed successfully",
-            purpose="Reduce context",
-        )
-        
-        assert result.success is True
-        assert tc.summary == "Command executed successfully"
-    
-    @pytest.mark.asyncio
-    async def test_summarize_nonexistent_fails(self):
-        """Test summarizing nonexistent tool call fails."""
+    async def test_summarize_no_pending_fails(self):
+        """Test summarizing when no output is pending fails."""
         store = ContextStore()
         tool = SummarizeOutputTool(context_store=store)
         
-        result = await tool.execute(
-            tool_call_id="fake-id",
-            summary="Summary",
-            purpose="Test",
-        )
+        result = await tool.execute(purpose="Test")
         
         assert result.success is False
-        assert "not found" in result.error.lower()
+        assert "no tool output pending" in result.error.lower()
+
 
 
 class TestCreateTestPlanTool:

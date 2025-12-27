@@ -45,6 +45,8 @@ class ContextStore:
         self._session_id = session_id or str(uuid.uuid4())
         self._frames: dict[str, ContextFrame] = {}
         self._current_frame_id: str | None = None
+        # Track tool calls that need summarization (shared between runner and tools)
+        self._pending_summarization: set[str] = set()
         
         # Create root frame
         root = ContextFrame()
@@ -725,7 +727,7 @@ class ContextStore:
         """
         Return tool_call IDs whose output would be truncated for the LLM.
 
-        This is used to help the agent target summarize_tool_output correctly.
+        This is used to help the agent target summarize_previous_tool_output correctly.
         """
         ids: list[str] = []
         seen: set[str] = set()
@@ -737,7 +739,53 @@ class ContextStore:
                     ids.append(tc.id)
         return ids
     
+    def get_pending_summarization_id(self, max_output_chars: int = 10000) -> str | None:
+        """
+        Get the ID of the first tool call that needs summarization.
+        
+        Returns:
+            The tool_call_id if found, None otherwise
+        """
+        # Use the tracked set of pending IDs (set by the runner)
+        if self._pending_summarization:
+            return next(iter(self._pending_summarization))
+        return None
+    
+    def add_pending_summarization(self, tool_call_id: str) -> None:
+        """Add a tool call ID to the pending summarization set."""
+        self._pending_summarization.add(tool_call_id)
+    
+    def remove_pending_summarization(self, tool_call_id: str) -> None:
+        """Remove a tool call ID from the pending summarization set."""
+        self._pending_summarization.discard(tool_call_id)
+    
+    def get_pending_summarization_ids(self) -> set[str]:
+        """Get all pending summarization tool call IDs."""
+        return self._pending_summarization.copy()
+    
+    def has_pending_summarization(self) -> bool:
+        """Check if there are any pending summarizations."""
+        return bool(self._pending_summarization)
+    
+    def get_recent_messages(self, limit: int = 5) -> list[Message]:
+        """
+        Get the most recent messages from the context for summarization context.
+        
+        Args:
+            limit: Maximum number of messages to return
+            
+        Returns:
+            List of recent Message objects
+        """
+        all_messages: list[Message] = []
+        for frame in self._get_frame_path():
+            all_messages.extend(frame.messages)
+        
+        # Return the last N messages
+        return all_messages[-limit:] if all_messages else []
+    
     def _get_preamble_end_index(self, messages: list[dict[str, str]]) -> int:
+
         """
         Find the index where the 'preamble' (System prompts + User Objective) ends.
         Heuristic: The preamble ends just before the first ASSISTANT message.

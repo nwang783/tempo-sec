@@ -99,16 +99,16 @@ class TransitionPhaseTool(Tool):
         )
 
 
-class SummarizeOutputTool(Tool):
-    """Summarize the output of a previous tool call."""
+class SummarizePreviousOutputTool(Tool):
+    """Summarize the previous tool output using LLM with conversation context."""
     
-    name = "summarize_tool_output"
-    description = "Summarize a previous tool output to save context tokens"
+    name = "summarize_previous_tool_output"
+    description = "Summarize the previous tool's output to save context. Call this when prompted after a large tool output."
     category = ToolCategory.META
     
     def __init__(self, context_store: ContextSummarizer):
         """
-        Initialize the summarize output tool.
+        Initialize the summarize previous output tool.
         
         Args:
             context_store: Any component implementing ContextSummarizer protocol
@@ -117,59 +117,93 @@ class SummarizeOutputTool(Tool):
         
     async def execute(
         self,
-        tool_call_id: str,
-        summary: str,
         purpose: str = "",
     ) -> ToolResult:
         """
-        Summarize a tool call's output.
+        Summarize the pending tool call's output using Gemini Flash.
+        
+        No arguments needed - automatically targets the first unsummarized tool call
+        and uses LLM with conversation context to generate a substantive summary.
         
         Args:
-            tool_call_id: ID of the tool call to summarize
-            summary: Concise summary of the tool output
             purpose: A one-sentence summary of why this tool is being called
             
         Returns:
-            ToolResult indicating success/failure
+            ToolResult indicating success/failure with the generated summary
         """
-        try:
-            # If there are currently-truncated tool calls and the agent is trying to
-            # summarize a different ID, fail loudly with guidance. This prevents
-            # infinite loops where the model repeatedly summarizes the wrong call_id.
-            truncated_ids: list[str] = []
-            getter = getattr(self.context, "get_truncated_tool_call_ids", None)
-            if callable(getter):
-                truncated_ids = list(getter(max_output_chars=10000))
-
-            if truncated_ids and tool_call_id not in truncated_ids:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error=(
-                        f"Tool call {tool_call_id} is not currently truncated.\n\n"
-                        f"You MUST summarize one of the currently truncated tool calls instead.\n"
-                        f"Truncated tool_call_id(s): {truncated_ids[:5]}\n\n"
-                        f"Next action (copy this and replace SUMMARY):\n"
-                        f'{{\"tool_call_id\":\"{truncated_ids[0]}\",\"summary\":\"SUMMARY\"}}'
-                    ),
-                    metadata={"truncated_tool_call_ids": truncated_ids[:5]},
-                )
-
-            # Cap pathological summaries so they can't remain truncated forever.
-            if len(summary) > 4000:
-                summary = summary[:4000] + "\n...[summary truncated]..."
-
-            self.context.summarize_tool_call(tool_call_id, summary)
-            return ToolResult(
-                success=True,
-                output=f"Summarized tool call {tool_call_id}",
-                metadata={"summarized_tool_id": tool_call_id},
-            )
-        except KeyError as e:
+        from tempo.infra.llm import LiteLLMClient
+        
+        # Get the pending tool call ID
+        pending_id = self.context.get_pending_summarization_id()
+        if not pending_id:
             return ToolResult(
                 success=False,
                 output="",
-                error=f"Tool call not found: {tool_call_id}",
+                error="No tool output pending summarization.",
+            )
+        
+        # Get the tool call
+        tool_call = self.context.find_tool_call(pending_id)
+        if not tool_call:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Tool call not found: {pending_id}",
+            )
+        
+        # Get recent conversation context
+        recent_messages = self.context.get_recent_messages(limit=5)
+        context_str = "\n".join([
+            f"{m.role.value.upper()}: {m.content[:500]}..." 
+            if len(m.content) > 500 else f"{m.role.value.upper()}: {m.content}"
+            for m in recent_messages
+        ])
+        
+        # Build summarization prompt with context
+        import json
+        tool_input_str = json.dumps(tool_call.input, indent=2) if isinstance(tool_call.input, dict) else str(tool_call.input)
+        
+        prompt = f"""Summarize the following tool output concisely. Focus on information relevant to the current conversation context.
+
+## Recent Conversation Context:
+{context_str}
+
+## Tool: {tool_call.tool_name}
+## Input: {tool_input_str}
+
+## Output to Summarize:
+{tool_call.raw_output}
+
+## Instructions:
+1. Extract key findings relevant to the conversation context
+2. Note any errors or issues
+3. Identify actionable information
+4. Keep summary under 200 words
+
+Provide ONLY the summary, no preamble."""
+
+        try:
+            # Use Gemini Flash for efficient summarization
+            flash_client = LiteLLMClient(model="gemini/gemini-3-flash-preview")
+            response = await flash_client.complete(
+                messages=[{"role": "user", "content": prompt}],
+            )
+            
+            summary = response.content.strip()
+            
+            # Store the summary
+            self.context.summarize_tool_call(pending_id, summary)
+            
+            return ToolResult(
+                success=True,
+                output=f"Summarized: {summary}",
+                metadata={"summarized_tool_id": pending_id},
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Summarization failed: {str(e)}",
             )
 
     def get_schema(self) -> ToolSchema:
@@ -179,19 +213,14 @@ class SummarizeOutputTool(Tool):
             description=self.description,
             parameters={
                 "type": "object",
-                "properties": {
-                    "tool_call_id": {
-                        "type": "string",
-                        "description": "ID of the tool call to summarize",
-                    },
-                    "summary": {
-                        "type": "string",
-                        "description": "Concise summary of the tool output",
-                    },
-                },
-                "required": ["tool_call_id", "summary"],
+                "properties": {},  # No arguments!
             },
         )
+
+
+# Keep old name as alias for backward compatibility
+SummarizeOutputTool = SummarizePreviousOutputTool
+
 
 
 class ContinueAnalysisTool(Tool):

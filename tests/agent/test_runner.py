@@ -376,7 +376,7 @@ class TestSummarizationRequirement:
         long_output = " ".join(["word"] * 500)
         
         # Create tool calls for exempt tools
-        for tool_name in ["summarize_tool_output", "transition_phase", "continue_analysis"]:
+        for tool_name in ["summarize_previous_tool_output", "transition_phase", "continue_analysis"]:
             tc = ToolCall(
                 tool_name=tool_name,
                 raw_output=long_output,
@@ -404,12 +404,12 @@ class TestSummarizationRequirement:
         assert agent._requires_summarization(tc) is False
     
     def test_pending_summarization_restricts_tools(self):
-        """Test that pending summarization restricts available tools to only summarize_tool_output."""
+        """Test that pending summarization restricts available tools to only summarize_previous_tool_output."""
         config = AgentConfig()
         llm = MockLLMClient()
         tools = ToolRegistry()
         
-        # Register multiple tools including summarize_tool_output
+        # Register multiple tools including summarize_previous_tool_output
         from tempo.tools.meta import SummarizeOutputTool
         from tempo.context.store import ContextStore
         
@@ -423,15 +423,15 @@ class TestSummarizationRequirement:
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         assert "dummy" in tool_names
-        assert "summarize_tool_output" in tool_names
+        assert "summarize_previous_tool_output" in tool_names
         
         # Add a pending summarization
-        agent._pending_summarization.add("test-id")
+        agent.context.add_pending_summarization("test-id")
         
-        # Now ONLY summarize_tool_output should be available
+        # Now ONLY summarize_previous_tool_output should be available
         filtered = agent._get_phase_filtered_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
-        assert tool_names == ["summarize_tool_output"]
+        assert tool_names == ["summarize_previous_tool_output"]
     
     def test_summarization_clears_pending(self):
         """Test that successful summarization clears the pending state."""
@@ -441,22 +441,13 @@ class TestSummarizationRequirement:
         
         agent = Agent(config, llm, tools)
         
-        # Add a pending summarization
-        agent._pending_summarization.add("test-tool-call-id")
-        assert len(agent._pending_summarization) == 1
+        # Add a pending summarization via context
+        agent.context.add_pending_summarization("test-tool-call-id")
+        assert agent.context.has_pending_summarization()
         
-        # Simulate successful summarization
-        from tempo.context.frame import ToolCall
-        summarize_call = ToolCall(
-            tool_name="summarize_tool_output",
-            input={"tool_call_id": "test-tool-call-id", "summary": "Test summary"},
-            success=True,
-        )
-        
-        # Manually trigger the logic that would happen in step()
-        summarized_id = summarize_call.input.get("tool_call_id")
-        if summarized_id and summarized_id in agent._pending_summarization:
-            agent._pending_summarization.discard(summarized_id)
+        # Simulate successful summarization by removing from context
+        agent.context.remove_pending_summarization("test-tool-call-id")
         
         # Pending should now be empty
-        assert len(agent._pending_summarization) == 0
+        assert not agent.context.has_pending_summarization()
+

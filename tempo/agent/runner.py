@@ -126,9 +126,8 @@ class Agent:
         self._findings: list[dict] = []
         self._hypotheses: list[dict] = []
         
-        # Pending summarization tracking - tool call IDs that require summarization
-        # before other tools become available again
-        self._pending_summarization: set[str] = set()
+        # NOTE: Pending summarization tracking is now in self.context (ContextStore)
+        # to ensure tools can access the same state. See context.add_pending_summarization()
         
         # Step handler for tool execution (delegates callback to us for context)
         self.step_handler = StepHandler(
@@ -138,7 +137,7 @@ class Agent:
     
     # Tools exempt from summarization requirement (meta tools and control tools)
     _SUMMARIZATION_EXEMPT_TOOLS: set[str] = {
-        "summarize_tool_output", "view_tool_output", "transition_phase",
+        "summarize_previous_tool_output", "view_tool_output", "transition_phase",
         "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
         "branch_to_subtasks", "finish_subtask", "complete_recon",
         "complete_browser_task",
@@ -174,7 +173,7 @@ class Agent:
         Get tool schemas filtered by current phase and summarization state.
 
         Summarization requirement takes priority:
-        - If pending summarizations exist, ONLY summarize_tool_output is available
+        - If pending summarizations exist, ONLY summarize_previous_tool_output is available
 
         Phase tool restrictions:
         - RECON: Standard tools, hide meta tools
@@ -188,18 +187,18 @@ class Agent:
 
         all_schemas = self.tools.get_schemas()
 
-        # CRITICAL: If there are pending summarizations, ONLY allow summarize_tool_output
-        if self._pending_summarization:
+        # CRITICAL: If there are pending summarizations, ONLY allow summarize_previous_tool_output
+        if self.context.has_pending_summarization():
             return [
                 s for s in all_schemas
-                if s.get("function", {}).get("name") == "summarize_tool_output"
+                if s.get("function", {}).get("name") == "summarize_previous_tool_output"
             ]
 
         phase = self.workflow.current_phase
 
         if phase == Phase.REFLECT:
-            # REFLECT: continue_analysis, add_todo, complete_todo, and summarize_tool_output
-            allowed = {"continue_analysis", "add_todo", "complete_todo", "summarize_tool_output"}
+            # REFLECT: continue_analysis, add_todo, complete_todo, and summarize_previous_tool_output
+            allowed = {"continue_analysis", "add_todo", "complete_todo", "summarize_previous_tool_output"}
             return [
                 s for s in all_schemas
                 if s.get("function", {}).get("name") in allowed
@@ -214,7 +213,7 @@ class Agent:
 
             if has_plan:
                 # Plan exists - allow todo management and phase transition
-                allowed = {"add_todo", "complete_todo", "transition_phase", "summarize_tool_output"}
+                allowed = {"add_todo", "complete_todo", "transition_phase", "summarize_previous_tool_output"}
                 return [
                     s for s in all_schemas
                     if s.get("function", {}).get("name") in allowed
@@ -466,30 +465,27 @@ class Agent:
                 
                 # Track tool calls that require summarization (>threshold tokens, non-meta)
                 if self._requires_summarization(tool_call):
-                    self._pending_summarization.add(tool_call.id)
+                    self.context.add_pending_summarization(tool_call.id)
                 
                 # Handle successful summarization - remove from pending
                 if (
-                    tool_call.tool_name == "summarize_tool_output"
+                    tool_call.tool_name == "summarize_previous_tool_output"
                     and tool_call.success
                 ):
-                    summarized_id = tool_call.input.get("tool_call_id")
-                    if summarized_id and summarized_id in self._pending_summarization:
-                        self._pending_summarization.discard(summarized_id)
+                    # Get the summarized ID from metadata (set by the tool)
+                    summarized_id = tool_call.metadata.get("summarized_tool_id") if tool_call.metadata else None
+                    if summarized_id:
+                        self.context.remove_pending_summarization(summarized_id)
 
-                # If summarization was mis-targeted, inject a short system hint listing
-                # the currently truncated IDs so the model can recover in the next step.
+                # If summarization failed, inject error hint
                 if (
-                    tool_call.tool_name == "summarize_tool_output"
+                    tool_call.tool_name == "summarize_previous_tool_output"
                     and not tool_call.success
-                    and isinstance(tool_call.metadata, dict)
-                    and tool_call.metadata.get("truncated_tool_call_ids")
                 ):
-                    truncated_ids = tool_call.metadata.get("truncated_tool_call_ids") or []
                     self.context.add_message(
                         MessageRole.SYSTEM,
-                        "[System] summarize_tool_output was called with a non-truncated tool_call_id. "
-                        f"Summarize one of these tool_call_id(s) instead: {truncated_ids}"
+                        f"[System] Summarization failed: {tool_call.error or 'Unknown error'}. "
+                        "Please try calling summarize_previous_tool_output again."
                     )
 
                 
@@ -512,12 +508,12 @@ class Agent:
         self.context.remove_summarization_prompts()
         
         # Only add new prompt if there are still pending summarizations
-        if self._pending_summarization:
-            pending_ids = list(self._pending_summarization)
+        if self.context.has_pending_summarization():
+            pending_ids = list(self.context.get_pending_summarization_ids())
             self.context.add_message(
                 MessageRole.SYSTEM,
                 f"{SUMMARIZATION_PROMPT_MARKER} {len(pending_ids)} tool output(s) exceed {SUMMARIZATION_TOKEN_THRESHOLD} tokens and require summarization. "
-                f"Call summarize_tool_output for each of these tool_call_id(s): {pending_ids}"
+                f"Call summarize_previous_tool_output to continue."
             )
 
         # Invoke step callback if provided

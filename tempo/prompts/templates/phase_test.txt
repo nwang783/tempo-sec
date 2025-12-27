@@ -29,7 +29,7 @@ For each test:
 - **Conclusion**: Vulnerable or not, with evidence
 
 ### Important Reminders
-- Summarize verbose tool outputs with `summarize_tool_output`
+- Summarize verbose tool outputs with `summarize_previous_tool_output`
 - Be thorough - test with real payloads, create accounts, query databases
 - Document your methodology
 

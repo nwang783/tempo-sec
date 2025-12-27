@@ -149,7 +149,7 @@ class PromptBuilder:
     
     # Tool-specific extended guidance injected alongside descriptions
     TOOL_GUIDANCE: dict[str, str] = {
-        "summarize_tool_output": (
+        "summarize_previous_tool_output": (
             "**MANDATORY**: This tool MUST be called immediately after any non-meta tool "
             "that returns output exceeding the token threshold. You will have no access to other "
             "tools until summarization is complete. Extract key information relevant to "
