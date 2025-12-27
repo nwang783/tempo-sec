@@ -2,6 +2,9 @@
 
 This document specifies the architecture for transitioning Tempo Sec to an orchestrator-based multi-agent system with shared findings.
 
+> **Status**: Draft specification pending implementation
+> **Last Updated**: 2025-12-27
+
 ---
 
 ## Executive Summary
@@ -110,8 +113,9 @@ A structured, persistent document that accumulates knowledge across all agent in
 ```python
 # tempo/findings/schema.py
 
-from pydantic import BaseModel
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from enum import Enum
 
 class Severity(str, Enum):
@@ -164,12 +168,16 @@ class ReconSummary(BaseModel):
     apis_discovered: int = 0
     notes: list[str] = []
 
-class FindingsDocumentSchema(BaseModel):
-    """Root schema for the findings document."""
+class FindingsDocumentSchema:
+    """
+    Root schema for the findings document.
+    
+    Persisted as YAML for token efficiency and human readability.
+    """
     version: str = "1.0"
-    target: str
-    created_at: datetime
-    updated_at: datetime
+    target: str = ""
+    created_at: datetime = None
+    updated_at: datetime = None
     
     # Accumulated data
     recon_summary: ReconSummary | None = None
@@ -286,7 +294,7 @@ class OrchestratorAgent(BaseAgentDefinition):
     """
     
     _name = "orchestrator"
-    _model = "anthropic/claude-sonnet-4-20250514"  # Smarter model for planning
+    _model = "anthropic/claude-sonnet-4.5-20250514"  # Smartest model for planning
     _initial_phase = Phase.RECON  # Starts in recon
     
     def __init__(
@@ -604,7 +612,7 @@ class ReconSubagent(BaseAgentDefinition):
     """
     
     _name = "recon_subagent"
-    _model = "openai/gpt-4o-mini"
+    _model = "openai/gpt-5-mini"  # Fast model for subagent tasks
     _initial_phase = Phase.RECON
     
     def __init__(
@@ -679,7 +687,7 @@ class TestSubagent(BaseAgentDefinition):
     """
     
     _name = "test_subagent"
-    _model = "openai/gpt-4o-mini"
+    _model = "openai/gpt-5-mini"  # Fast model for subagent tasks
     _initial_phase = Phase.TEST
     
     def __init__(
@@ -1155,26 +1163,512 @@ async def test_findings_shared_between_subagents():
 
 ---
 
-## Open Questions
+## Design Decisions
 
-> [!IMPORTANT]
-> The following decisions need your input:
+The following decisions have been made:
 
-1. **Parallel Subagents**: Should we support parallel subagent dispatch in v1, or sequential only?
-   - Parallel: More efficient, but more complex
-   - Sequential: Simpler, easier to debug
+| Decision | Choice | Rationale |
+|----------|--------|----------|
+| **Parallel Subagents** | Sequential in v1 | Simpler to implement and debug; parallel can be added later |
+| **Findings Format** | YAML | More token-efficient, more human-readable |
+| **Orchestrator Autonomy** | Auto-dispatch | Faster, more autonomous analysis |
+| **Existing Agents** | Keep for now | Backward compatibility; remove in future PR |
 
-2. **Findings Persistence Format**: JSON or YAML for findings?
-   - JSON: Better for programmatic access
-   - YAML: More human-readable
+### Parallel Subagents: Complexity Analysis
 
-3. **Orchestrator Autonomy**: Should the orchestrator auto-dispatch without asking, or confirm each dispatch?
-   - Auto: Faster, more autonomous
-   - Confirm: More control, less risk
+Adding parallel subagent support would require:
 
-4. **Existing Agent Compatibility**: Keep `ReconAgent` and `TestCycleAgent` for standalone use, or merge into subagent versions?
-   - Keep both: More code, but maintains backward compatibility
-   - Merge: Cleaner, but breaking change
+| Component | Sequential | Parallel | Delta |
+|-----------|-----------|----------|-------|
+| DispatchSubagentTool | ~50 LOC | ~120 LOC | +70 LOC |
+| FindingsDocument | Simple writes | Locking/merging | +80 LOC |
+| VisualizationCollector | Single stream | Multi-stream routing | +100 LOC |
+| UI Agent Tree | Single path | Multiple branches | +150 LOC |
+| Testing | Unit tests only | Concurrency tests | +200 LOC |
+| **Total** | **Baseline** | **+600 LOC** | |
+
+**Recommendation**: Start sequential, add parallel in Phase 4 when the orchestrator pattern is proven.
+
+---
+
+## Visualization Server Changes
+
+The visualization server needs significant updates to support the orchestrator/subagent hierarchy.
+
+### Current Architecture
+
+```mermaid
+flowchart LR
+    A["Agent"] -->|"events"| VC["VisualizationCollector"]
+    VC -->|"WebSocket"| VS["VisualizationServer"]
+    VS -->|"broadcast"| UI["Web UI"]
+    
+    subgraph UI
+        LP["Left Panel<br>Agent State"]
+        CP["Center Panel<br>Graph View"]
+        RP["Right Panel<br>Details"]
+    end
+```
+
+### Proposed Architecture
+
+```mermaid
+flowchart TB
+    subgraph Backend
+        OA["OrchestratorAgent"] -->|"events"| OC["OrchestratorCollector"]
+        OA -->|"dispatch"| SA1["ReconSubagent"]
+        OA -->|"dispatch"| SA2["TestSubagent"]
+        SA1 -->|"events"| SC1["SubagentCollector"]
+        SA2 -->|"events"| SC2["SubagentCollector"]
+        OC --> VS["VisualizationServer"]
+        SC1 --> VS
+        SC2 --> VS
+    end
+    
+    subgraph Frontend
+        VS -->|"WebSocket"| UI["Web UI"]
+        UI --> AT["Agent Tree Panel"]
+        UI --> GV["Graph View"]
+        UI --> DP["Details Panel"]
+    end
+```
+
+### UI Changes: Agent Tree Panel
+
+Replace the current "Symbol Tree" left panel with a hierarchical **Agent Tree** that shows the orchestrator and all subagent runs.
+
+#### Mockup
+
+```
+┌─────────────────────────────────────┐
+│ AGENT TREE                          │
+├─────────────────────────────────────┤
+│ ▼ 🎯 Orchestrator (example.com)     │
+│   ├─ Model: sonnet-4.5              │
+│   ├─ Phase: COORDINATING            │
+│   └─ Steps: 12                      │
+│                                     │
+│   ▼ 📡 Subagent: recon_1            │
+│     ├─ Status: ✓ Complete           │
+│     ├─ Steps: 8                     │
+│     └─ Surfaces: 5 added            │
+│                                     │
+│   ▼ 🔬 Subagent: test_1             │
+│     ├─ Status: ⏳ Running           │
+│     ├─ Steps: 3/50                  │
+│     └─ Findings: 1                  │
+│                                     │
+│   ▷ 🔬 Subagent: test_2             │
+│     └─ Status: 📋 Queued            │
+│                                     │
+├─────────────────────────────────────┤
+│ 📊 FINDINGS SUMMARY                 │
+│   Critical: 0  High: 1  Medium: 2   │
+│   Attack Surfaces: 12 (7 tested)    │
+└─────────────────────────────────────┘
+```
+
+#### Interaction
+
+- Clicking an agent/subagent switches the Graph View to show that agent's workflow
+- The orchestrator shows dispatch_subagent tool calls
+- Each subagent shows its own step/tool history
+- Findings summary updates in real-time
+
+### Backend Changes
+
+#### 1. Event Schema Updates
+
+Add new event types to `VisualizationCollector`:
+
+```python
+# tempo/visualization/collector.py
+
+class VisualizationCollector:
+    def on_subagent_start(
+        self, 
+        subagent_id: str,
+        subagent_type: str,
+        objective: str,
+        parent_id: str | None = None,  # orchestrator ID
+    ) -> None:
+        """Called when a subagent is dispatched."""
+        self.emit("subagent_start", {
+            "subagent_id": subagent_id,
+            "subagent_type": subagent_type,
+            "objective": objective,
+            "parent_id": parent_id,
+        })
+    
+    def on_subagent_finish(
+        self,
+        subagent_id: str,
+        success: bool,
+        summary: str,
+        findings_count: int,
+        surfaces_count: int,
+    ) -> None:
+        """Called when a subagent completes."""
+        self.emit("subagent_finish", {
+            "subagent_id": subagent_id,
+            "success": success,
+            "summary": summary,
+            "findings_count": findings_count,
+            "surfaces_count": surfaces_count,
+        })
+    
+    def on_findings_update(self, findings_summary: dict) -> None:
+        """Called when findings document is updated."""
+        self.emit("findings_update", findings_summary)
+```
+
+#### 2. Server Changes
+
+Add endpoints for subagent data:
+
+```python
+# tempo/visualization/server.py
+
+@app.get("/api/subagents")
+async def list_subagents():
+    """List all subagent runs for current session."""
+    return {"subagents": self._subagent_registry}
+
+@app.get("/api/subagent/{subagent_id}/context")
+async def get_subagent_context(subagent_id: str):
+    """Get context for a specific subagent."""
+    # Each subagent has its own ContextStore
+    context_store = self._subagent_contexts.get(subagent_id)
+    if not context_store:
+        return {"error": "Subagent not found"}
+    return process_context_for_ui(context_store)
+```
+
+#### 3. Subagent Context Management
+
+Track subagent contexts separately:
+
+```python
+# tempo/visualization/server.py
+
+class VisualizationServer:
+    def __init__(self, ...):
+        # ... existing init ...
+        self._subagent_contexts: dict[str, ContextStore] = {}
+        self._subagent_registry: list[dict] = []
+    
+    def register_subagent(self, subagent_id: str, context: ContextStore, metadata: dict):
+        """Register a subagent for visualization."""
+        self._subagent_contexts[subagent_id] = context
+        self._subagent_registry.append({
+            "id": subagent_id,
+            **metadata,
+        })
+```
+
+### Frontend Changes
+
+#### 1. New File: `agentTree.js`
+
+```javascript
+// tempo/visualization/ui/agentTree.js
+
+import * as state from './state.js';
+
+/**
+ * Render the hierarchical agent tree in the left panel.
+ */
+export function render() {
+    const container = document.getElementById('agent-tree-content');
+    if (!container) return;
+    
+    const { orchestrator, subagents } = state.agentHierarchy;
+    
+    let html = `
+        <div class="agent-node orchestrator ${orchestrator.active ? 'active' : ''}" 
+             data-agent-id="${orchestrator.id}">
+            <div class="agent-header">
+                <span class="agent-icon">🎯</span>
+                <span class="agent-name">Orchestrator</span>
+            </div>
+            <div class="agent-details">
+                <div>Model: ${orchestrator.model}</div>
+                <div>Steps: ${orchestrator.steps}</div>
+            </div>
+        </div>
+    `;
+    
+    for (const subagent of subagents) {
+        html += renderSubagentNode(subagent);
+    }
+    
+    // Findings summary
+    html += renderFindingsSummary(state.findingsSummary);
+    
+    container.innerHTML = html;
+    attachEventListeners();
+}
+
+function renderSubagentNode(subagent) {
+    const statusIcon = {
+        'running': '⏳',
+        'complete': '✓',
+        'failed': '✗',
+        'queued': '📋',
+    }[subagent.status] || '?';
+    
+    const typeIcon = subagent.type === 'recon' ? '📡' : '🔬';
+    
+    return `
+        <div class="agent-node subagent ${subagent.active ? 'active' : ''}" 
+             data-agent-id="${subagent.id}">
+            <div class="agent-header">
+                <span class="agent-icon">${typeIcon}</span>
+                <span class="agent-name">${subagent.name}</span>
+                <span class="status-icon">${statusIcon}</span>
+            </div>
+            <div class="agent-details">
+                <div>Steps: ${subagent.steps}</div>
+                ${subagent.findings ? `<div>Findings: ${subagent.findings}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function attachEventListeners() {
+    document.querySelectorAll('.agent-node').forEach(node => {
+        node.addEventListener('click', () => {
+            const agentId = node.dataset.agentId;
+            switchToAgentView(agentId);
+        });
+    });
+}
+
+export function switchToAgentView(agentId) {
+    // Update active state
+    state.setActiveAgent(agentId);
+    
+    // Re-render tree with new active state
+    render();
+    
+    // Load graph data for selected agent
+    if (agentId === 'orchestrator') {
+        graph.loadOrchestratorData();
+    } else {
+        graph.loadSubagentData(agentId);
+    }
+}
+```
+
+#### 2. State Updates
+
+```javascript
+// tempo/visualization/ui/state.js additions
+
+export const agentHierarchy = {
+    orchestrator: {
+        id: 'orchestrator',
+        model: '',
+        steps: 0,
+        active: true,
+    },
+    subagents: [],
+};
+
+export const findingsSummary = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    surfaces_total: 0,
+    surfaces_tested: 0,
+};
+
+export function addSubagent(subagentData) {
+    agentHierarchy.subagents.push({
+        id: subagentData.subagent_id,
+        type: subagentData.subagent_type,
+        name: `${subagentData.subagent_type}_${agentHierarchy.subagents.length + 1}`,
+        status: 'running',
+        steps: 0,
+        findings: 0,
+        active: false,
+    });
+}
+
+export function updateSubagent(subagentId, updates) {
+    const subagent = agentHierarchy.subagents.find(s => s.id === subagentId);
+    if (subagent) {
+        Object.assign(subagent, updates);
+    }
+}
+
+export function setActiveAgent(agentId) {
+    agentHierarchy.orchestrator.active = (agentId === 'orchestrator');
+    agentHierarchy.subagents.forEach(s => {
+        s.active = (s.id === agentId);
+    });
+}
+```
+
+#### 3. Event Handler Updates
+
+```javascript
+// tempo/visualization/ui/events.js additions
+
+import * as agentTree from './agentTree.js';
+
+// Add handlers for new event types
+case 'subagent_start':
+    state.addSubagent(msg.data);
+    agentTree.render();
+    break;
+
+case 'subagent_finish':
+    state.updateSubagent(msg.data.subagent_id, {
+        status: msg.data.success ? 'complete' : 'failed',
+        findings: msg.data.findings_count,
+    });
+    agentTree.render();
+    break;
+
+case 'findings_update':
+    Object.assign(state.findingsSummary, msg.data);
+    agentTree.render();
+    break;
+```
+
+#### 4. HTML Updates
+
+```html
+<!-- tempo/visualization/ui/index.html updates -->
+
+<!-- Replace Symbol Tree section with Agent Tree -->
+<div class="pane left-pane">
+    <div class="pane-header">
+        <span class="pane-title">AGENT TREE</span>
+    </div>
+    <div class="pane-content scrollable">
+        <div id="agent-tree-content" class="agent-tree">
+            <!-- Dynamically populated by agentTree.js -->
+        </div>
+        
+        <!-- Keep existing sections below the tree -->
+        <div class="tree-section expanded">
+            <div class="section-header">▼ Run Cost</div>
+            <!-- ... existing cost content ... -->
+        </div>
+    </div>
+</div>
+```
+
+#### 5. CSS Additions
+
+```css
+/* tempo/visualization/ui/style.css additions */
+
+.agent-tree {
+    padding: 10px;
+}
+
+.agent-node {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.agent-node:hover {
+    border-color: #555;
+    background: #252525;
+}
+
+.agent-node.active {
+    border-color: var(--accent-blue);
+    background: rgba(0, 122, 204, 0.1);
+}
+
+.agent-node.orchestrator .agent-header {
+    color: var(--accent-orange);
+}
+
+.agent-node.subagent {
+    margin-left: 20px;
+    font-size: 0.9em;
+}
+
+.agent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.agent-icon {
+    font-size: 16px;
+}
+
+.status-icon {
+    margin-left: auto;
+}
+
+.agent-details {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #888;
+}
+
+.findings-summary {
+    margin-top: 16px;
+    padding: 12px;
+    background: #1a1a1a;
+    border-radius: 6px;
+    border: 1px solid #333;
+}
+
+.findings-summary-title {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.findings-counts {
+    display: flex;
+    gap: 12px;
+}
+
+.finding-badge {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.finding-badge.critical { background: #d32f2f; }
+.finding-badge.high { background: #f57c00; }
+.finding-badge.medium { background: #ffc107; color: #000; }
+.finding-badge.low { background: #4caf50; }
+```
+
+### File Structure for Visualization Changes
+
+```
+tempo/visualization/
+├── collector.py           # MODIFY: Add subagent events
+├── server.py              # MODIFY: Add subagent registry, endpoints
+├── subagent_tracker.py    # NEW: Track subagent states
+└── ui/
+    ├── index.html         # MODIFY: Update left panel structure
+    ├── style.css          # MODIFY: Add agent tree styles
+    ├── state.js           # MODIFY: Add agent hierarchy state
+    ├── events.js          # MODIFY: Handle new event types
+    ├── agentTree.js       # NEW: Agent tree rendering
+    ├── graph.js           # MODIFY: Support agent switching
+    └── ... (other files unchanged)
+```
 
 ---
 
@@ -1183,10 +1677,13 @@ async def test_findings_shared_between_subagents():
 The refactor is successful when:
 
 - [ ] Orchestrator can complete a full analysis autonomously
-- [ ] Findings persist and accumulate across subagent runs
+- [ ] Findings persist in YAML and accumulate across subagent runs
 - [ ] Adding a new subagent type requires < 100 lines of code
 - [ ] All existing tests pass
 - [ ] New integration tests cover orchestrator flow
+- [ ] Visualization shows orchestrator and subagent hierarchy
+- [ ] Switching between agents in the UI shows correct context
+- [ ] Findings summary updates in real-time
 - [ ] Documentation updated
 
 ---
