@@ -249,6 +249,33 @@ class TestPersistence:
             messages = loaded.render_messages()
             assert len(messages) == 1
             assert messages[0]["content"] == "Test message"
+    
+    def test_save_and_load_preserves_pending_summarization(self):
+        """Test that pending summarization state is preserved across save/load."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create store with pending summarization
+            store = ContextStore(persistence_dir=tmpdir)
+            store.add_message(MessageRole.USER, "Test message")
+            
+            # Add pending summarization IDs
+            store.add_pending_summarization("test-tool-id-1")
+            store.add_pending_summarization("test-tool-id-2")
+            
+            assert store.has_pending_summarization()
+            assert len(store.get_pending_summarization_ids()) == 2
+            
+            # Save
+            path = store.save()
+            
+            # Load
+            loaded = ContextStore.load(path)
+            
+            # Verify pending summarizations were restored
+            assert loaded.has_pending_summarization()
+            pending_ids = loaded.get_pending_summarization_ids()
+            assert len(pending_ids) == 2
+            assert "test-tool-id-1" in pending_ids
+            assert "test-tool-id-2" in pending_ids
 
 
 class TestSummarization:

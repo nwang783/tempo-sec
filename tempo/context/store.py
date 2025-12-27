@@ -5,6 +5,7 @@ Provides operations for message management, checkpointing,
 branching, and context rendering.
 """
 
+import logging
 import uuid
 from datetime import datetime
 
@@ -739,7 +740,7 @@ class ContextStore:
                     ids.append(tc.id)
         return ids
     
-    def get_pending_summarization_id(self, max_output_chars: int = 10000) -> str | None:
+    def get_pending_summarization_id(self) -> str | None:
         """
         Get the ID of the first tool call that needs summarization.
         
@@ -748,15 +749,20 @@ class ContextStore:
         """
         # Use the tracked set of pending IDs (set by the runner)
         if self._pending_summarization:
-            return next(iter(self._pending_summarization))
+            pending_id = next(iter(self._pending_summarization))
+            logging.debug(f"Get pending summarization: returning {pending_id}")
+            return pending_id
+        logging.debug("Get pending summarization: none found")
         return None
     
     def add_pending_summarization(self, tool_call_id: str) -> None:
         """Add a tool call ID to the pending summarization set."""
+        logging.debug(f"Adding pending summarization: {tool_call_id}")
         self._pending_summarization.add(tool_call_id)
     
     def remove_pending_summarization(self, tool_call_id: str) -> None:
         """Remove a tool call ID from the pending summarization set."""
+        logging.debug(f"Removing pending summarization: {tool_call_id}")
         self._pending_summarization.discard(tool_call_id)
     
     def get_pending_summarization_ids(self) -> set[str]:
@@ -887,11 +893,16 @@ class ContextStore:
         Returns:
             The path to the saved file
         """
+        # Include pending summarization state in metadata for persistence
+        metadata = {
+            "pending_summarization": list(self._pending_summarization),
+        }
         return save_context_tree(
             session_id=self._session_id,
             frames=self._frames,
             current_frame_id=self._current_frame_id,
             persistence_dir=self._persistence_dir,
+            metadata=metadata,
         )
     
     @classmethod
@@ -913,5 +924,11 @@ class ContextStore:
         store._session_id = tree_data.session_id
         store._frames = frames
         store._current_frame_id = current_frame_id
+        
+        # Restore pending summarization state from metadata (if present)
+        pending_ids = tree_data.metadata.get("pending_summarization", [])
+        store._pending_summarization = set(pending_ids)
+        if pending_ids:
+            logging.info(f"Restored {len(pending_ids)} pending summarization(s) from session")
         
         return store

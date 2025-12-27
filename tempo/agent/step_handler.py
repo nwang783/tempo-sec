@@ -135,11 +135,11 @@ class StepHandler:
         
         if tool_call.tool_name == "continue_analysis":
             if tool_call.metadata.get("continue"):
-                # Agent wants to continue - will transition back to RECON
+                # Agent wants to continue - loop back to HYPOTHESIZE for next testing cycle
                 return SpecialToolResult(
                     tool_name="continue_analysis",
                     should_continue=True,
-                    phase_transition=Phase.RECON,
+                    phase_transition=Phase.HYPOTHESIZE,
                 )
             elif tool_call.metadata.get("finish"):
                 # Agent is done
