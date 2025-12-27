@@ -229,8 +229,15 @@ Provide ONLY the summary, no preamble."""
         )
 
 
-# Keep old name as alias for backward compatibility
+# Deprecated alias for backward compatibility.
+# New code should use SummarizePreviousOutputTool directly.
+# TODO: Remove in a future version once all usages are migrated.
 SummarizeOutputTool = SummarizePreviousOutputTool
+"""
+.. deprecated::
+    Use :class:`SummarizePreviousOutputTool` instead.
+    This alias exists only for backward compatibility and will be removed.
+"""
 
 
 
