@@ -3,6 +3,7 @@ Agent runner - main loop and step execution.
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -193,12 +194,19 @@ class Agent:
                 s for s in all_schemas
                 if s.get("function", {}).get("name") == "summarize_previous_tool_output"
             ]
+        
+        # No pending summarizations - hide summarize_previous_tool_output entirely
+        # This prevents premature/placeholder calls to the summarization tool
+        all_schemas = [
+            s for s in all_schemas
+            if s.get("function", {}).get("name") != "summarize_previous_tool_output"
+        ]
 
         phase = self.workflow.current_phase
 
         if phase == Phase.REFLECT:
-            # REFLECT: continue_analysis, add_todo, complete_todo, and summarize_previous_tool_output
-            allowed = {"continue_analysis", "add_todo", "complete_todo", "summarize_previous_tool_output"}
+            # REFLECT: continue_analysis, add_todo, complete_todo
+            allowed = {"continue_analysis", "add_todo", "complete_todo"}
             return [
                 s for s in all_schemas
                 if s.get("function", {}).get("name") in allowed
@@ -213,7 +221,7 @@ class Agent:
 
             if has_plan:
                 # Plan exists - allow todo management and phase transition
-                allowed = {"add_todo", "complete_todo", "transition_phase", "summarize_previous_tool_output"}
+                allowed = {"add_todo", "complete_todo", "transition_phase"}
                 return [
                     s for s in all_schemas
                     if s.get("function", {}).get("name") in allowed
@@ -507,6 +515,9 @@ class Agent:
         # First, remove any old summarization prompts to avoid clutter
         self.context.remove_summarization_prompts()
         
+        # Validate pending summarizations - remove stale IDs that reference non-existent tool calls
+        self._validate_pending_summarizations()
+        
         # Only add new prompt if there are still pending summarizations
         if self.context.has_pending_summarization():
             pending_ids = list(self.context.get_pending_summarization_ids())
@@ -547,6 +558,9 @@ class Agent:
             if special.should_continue and special.phase_transition:
                 # Agent wants to continue - transition to the specified phase
                 self.workflow.transition(special.phase_transition)
+                
+                # Keep persisted context state in sync with workflow for UI/debugging
+                self.context.update_state(current_phase=special.phase_transition.value)
 
                 # Build phase-specific message
                 phase_msg = f"[Continuing analysis] {tool_call.raw_output}\nYou are now back in the {special.phase_transition.value.upper()} phase."
@@ -652,6 +666,35 @@ class Agent:
         # Notify visualization
         if self._viz_collector:
             self._viz_collector.on_tool_call(tool_call, self.context.current_frame.id)
+    
+    def _validate_pending_summarizations(self) -> None:
+        """
+        Validate that all pending summarization IDs still exist in context.
+        
+        Removes any stale IDs that reference tool calls no longer in the context tree.
+        This can happen if context was optimized/summarized between tracking and summarization.
+        """
+        pending_ids = self.context.get_pending_summarization_ids()
+        if pending_ids:
+            logging.debug(f"Validating pending summarizations: {pending_ids}")
+        
+        stale_ids = set()
+        for pending_id in pending_ids:
+            tool_call = self.context.find_tool_call(pending_id)
+            if not tool_call:
+                logging.warning(
+                    f"Removing stale pending summarization: {pending_id} "
+                    f"(tool call not found in context tree)"
+                )
+                stale_ids.add(pending_id)
+            else:
+                logging.debug(
+                    f"Pending summarization {pending_id} is valid "
+                    f"(tool: {tool_call.tool_name})"
+                )
+        
+        for stale_id in stale_ids:
+            self.context.remove_pending_summarization(stale_id)
 
     
     def checkpoint(self, label: str = "") -> str:
