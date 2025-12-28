@@ -271,6 +271,12 @@ export function addSubagent(subagentData) {
         findings: 0,
         surfaces: 0,
         active: false,
+        // Per-subagent graph state for visualization
+        rootNode: { id: `${subagentData.subagent_id}-root`, name: "ROOT", type: "root", children: [] },
+        frames: new Map(),
+        stepsMap: new Map(),
+        currentFrameId: `${subagentData.subagent_id}-root`,
+        currentStepNumber: 0,
     });
 }
 

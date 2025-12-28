@@ -60,7 +60,7 @@ class DispatchSubagentTool(Tool):
         subagent_type: str,
         objective: str,
         focus_area: str = "",
-        max_steps: int = 50,
+        max_steps: int | str = 50,
         purpose: str = "",
     ) -> ToolResult:
         """
@@ -85,6 +85,9 @@ class DispatchSubagentTool(Tool):
         from tempo.prompts.builder import PromptBuilder
         from tempo.infra.llm import LiteLLMClient
 
+        # Coerce max_steps to int (LLM may pass as string)
+        max_steps = int(max_steps)
+        
         # Validate subagent type
         subagent_type_lower = subagent_type.lower()
         if subagent_type_lower not in ("recon", "test"):
@@ -151,12 +154,28 @@ class DispatchSubagentTool(Tool):
         # Add system prompt to context
         subagent_context.add_message(MessageRole.SYSTEM, system_prompt)
 
+        # Create child collector for subagent (enables real-time visualization)
+        subagent_viz = None
+        if self._visualization and hasattr(self._visualization, 'for_subagent'):
+            subagent_viz = self._visualization.for_subagent(subagent_id)
+            # Register subagent context with server for viewing
+            if hasattr(self._visualization, 'server'):
+                self._visualization.server.register_subagent(
+                    subagent_id=subagent_id,
+                    context=subagent_context,
+                    metadata={
+                        "type": subagent_type_lower,
+                        "objective": objective,
+                    },
+                )
+
         # Create and run subagent
         subagent = Agent(
             config=config,
             llm=llm,
             tools=subagent_tools,
             context=subagent_context,
+            visualization_collector=subagent_viz,
         )
 
         # Build objective

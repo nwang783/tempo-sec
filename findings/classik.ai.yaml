@@ -1,0 +1,146 @@
+version: '1.0'
+target: https://classik.ai
+created_at: 2025-12-28 03:56:22.061983
+updated_at: 2025-12-28 04:05:19.824919
+recon_summary:
+  total_endpoints: 5
+  total_forms: 2
+  total_apis: 0
+  technologies_detected:
+  - Next.js
+  - React
+  - Vercel
+  - Tailwind CSS
+  - Firebase (Auth, Firestore, Realtime DB, Storage, Functions)
+  - IndexedDB
+  - Webpack/_next static chunks
+  authentication_mechanisms:
+  - Firebase Auth (client SDK)
+  - next-auth (client references)
+  - OAuth / magic-link patterns (client-side)
+  notes: 'Confirmed Next.js site hosted on Vercel. Downloaded key _next JS chunks
+    and confirmed Firebase SDK (v11.10.0). Reachable routes: /login, /signup (forms),
+    /admin, /dashboard (pages returned 200). CORS header allows ''*'', HSTS enabled,
+    apex domain redirects to www. Further work: extract firebaseConfig from JS bundles,
+    enumerate /api/* (serverless/Vercel functions), test Firebase rules, and perform
+    access-control tests on /admin and /dashboard.'
+attack_surfaces:
+- id: 47cf3222-80b0-4861-8afc-23c9a0ebb908
+  surface_type: form
+  url: https://www.classik.ai/login
+  description: 'Login page — client-side authentication flow using React/Next.js.
+    Likely accepts credentials or supports magic link/OAuth. Client components observed:
+    RedirectIfSignedIn, HideWhenSignedIn indicating client-side state checks.'
+  parameters:
+  - email
+  - password
+  - remember_me (optional)
+  - csrf_token (maybe)
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  tested: false
+  priority: high
+  discovered_at: 2025-12-28 04:00:17.529982
+  discovered_by: shell (curl)
+- id: 97635c27-a44e-4136-aee0-9c34b6cc8684
+  surface_type: form
+  url: https://www.classik.ai/signup
+  description: Signup page — client-side registration flow built with Next.js/React.
+    Likely accepts user email, password and possibly magic-link or OAuth flows. Useful
+    for testing account creation, input validation, and authorization escalation.
+  parameters:
+  - email
+  - password
+  - confirm_password
+  - csrf_token (maybe)
+  - referrer (optional)
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  - Tailwind CSS
+  tested: false
+  priority: high
+  discovered_at: 2025-12-28 04:02:08.676087
+  discovered_by: shell (curl) and homepage HTML analysis
+- id: 56868d43-e377-46b5-abd9-e105700202bf
+  surface_type: endpoint
+  url: https://www.classik.ai/admin
+  description: Admin route returned HTTP 200 and serves a Next.js page. Potential
+    administrative interface or privileged area reachable without obvious protection
+    from initial requests — requires further authorization testing and access control
+    validation.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  tested: false
+  priority: high
+  discovered_at: 2025-12-28 04:02:28.894686
+  discovered_by: shell (curl) and homepage analysis
+- id: d841dcb9-f44e-423f-ac0e-9ce9d1bba6b4
+  surface_type: endpoint
+  url: https://www.classik.ai/dashboard
+  description: Dashboard route returned HTTP 200 and serves a Next.js page. Likely
+    protected behind authentication in-app; useful for access control and authorization
+    testing (IDOR/forceful browsing).
+  parameters: []
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  tested: false
+  priority: high
+  discovered_at: 2025-12-28 04:03:04.143306
+  discovered_by: shell (curl)
+- id: b2d2c43f-5352-4d96-8b94-7eed9ac3f341
+  surface_type: endpoint
+  url: https://www.classik.ai/bot-logo.png
+  description: Static asset (site logo) accessible at /bot-logo.png. Useful for fingerprinting
+    and confirms accessible public assets and potential metadata in image files.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - Vercel
+  tested: false
+  priority: low
+  discovered_at: 2025-12-28 04:04:05.586245
+  discovered_by: shell (curl)
+- id: b6c7633b-2d92-4420-a38d-a73b4151a60b
+  surface_type: endpoint
+  url: https://www.classik.ai/_next/static/*
+  description: Next.js static asset directory pattern serving JavaScript, CSS, fonts
+    and media. Accessible _next assets were enumerated; these files can reveal client-side
+    logic, API endpoints, keys, and other sensitive data when downloaded and analyzed.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - Vercel
+  - React
+  tested: false
+  priority: medium
+  discovered_at: 2025-12-28 04:04:24.852712
+  discovered_by: shell (curl) and JS chunk analysis
+- id: 3328adc4-01c6-4e15-a781-951d84c989d1
+  surface_type: endpoint
+  url: https://www.classik.ai/
+  description: Homepage — public entry point, redirects from apex (classik.ai -> www.classik.ai).
+    Contains navigation to login/signup and client-side JS references. Useful for
+    content discovery, fingerprinting, and initial interaction testing.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  - Tailwind CSS
+  tested: false
+  priority: medium
+  discovered_at: 2025-12-28 04:04:42.882274
+  discovered_by: shell (curl)
+findings: []
+agents_invoked:
+- recon_subagent
+total_steps_taken: 27

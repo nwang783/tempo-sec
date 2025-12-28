@@ -50,13 +50,29 @@ class VisualizationCollector:
     following the project's dependency rules.
     """
     
-    def __init__(self, server: "VisualizationServer"):
+    def __init__(self, server: "VisualizationServer", subagent_id: str | None = None):
         self.server = server
+        self._subagent_id = subagent_id
         # Cost tracking state
         self._total_cost: float = 0.0
         self._total_prompt_tokens: int = 0
         self._total_completion_tokens: int = 0
         self._total_cached_tokens: int = 0
+    
+    def for_subagent(self, subagent_id: str) -> "VisualizationCollector":
+        """
+        Create a child collector for a subagent.
+        
+        Events emitted by the child collector will include the subagent_id,
+        allowing the UI to route them to the correct agent context.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent
+            
+        Returns:
+            A new VisualizationCollector with the subagent_id set
+        """
+        return VisualizationCollector(self.server, subagent_id=subagent_id)
     
     def on_step(self, step_data: dict | Any, frame_id: str) -> None:
         """
@@ -159,6 +175,9 @@ class VisualizationCollector:
 
     def emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Send event to server."""
+        # Include subagent_id in events if this is a subagent collector
+        if self._subagent_id:
+            data = {**data, "subagent_id": self._subagent_id}
         event = VisualizationEvent.create(event_type, data)
         # Schedule on event loop since this might be called synchronously
         asyncio.create_task(self.server.broadcast(event.to_json()))

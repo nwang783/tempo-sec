@@ -30,8 +30,8 @@ class CompleteSubtaskTool(Tool):
     async def execute(
         self,
         summary: str,
-        surfaces_added: int = 0,
-        findings_added: int = 0,
+        surfaces_added: int | str = 0,
+        findings_added: int | str = 0,
         notes: str = "",
         purpose: str = "",
     ) -> ToolResult:
@@ -48,6 +48,10 @@ class CompleteSubtaskTool(Tool):
         Returns:
             ToolResult with completion metadata
         """
+        # Coerce to int (LLM may pass as string)
+        surfaces_added = int(surfaces_added)
+        findings_added = int(findings_added)
+        
         output_parts = [f"Subtask completed: {summary}"]
 
         if surfaces_added > 0:
