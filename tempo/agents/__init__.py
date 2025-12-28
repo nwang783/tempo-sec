@@ -117,3 +117,5 @@ def _ensure_builtin_agents_loaded() -> None:
         from tempo.agents import recon  # noqa: F401
         from tempo.agents import test_cycle  # noqa: F401
         from tempo.agents import browser  # noqa: F401
+        from tempo.agents import recon_subagent  # noqa: F401
+        from tempo.agents import test_subagent  # noqa: F401

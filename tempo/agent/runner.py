@@ -141,7 +141,7 @@ class Agent:
         "summarize_previous_tool_output", "view_tool_output", "transition_phase",
         "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
         "branch_to_subtasks", "finish_subtask", "complete_recon",
-        "complete_browser_task",
+        "complete_browser_task", "complete_subtask",
     }
     
     def _requires_summarization(self, tool_call: ToolCall) -> bool:
@@ -647,7 +647,16 @@ class Agent:
                     **special.findings,
                     "step": self._step_count,
                 })
-        
+
+        elif special.tool_name == "complete_subtask":
+            # Subtask complete - stop the subagent
+            step_result.should_continue = False
+            if special.findings:
+                self._findings.append({
+                    **special.findings,
+                    "step": self._step_count,
+                })
+
         return step_result
     
     def _handle_tool_call_complete(self, tool_call: ToolCall) -> None:

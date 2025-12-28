@@ -341,28 +341,28 @@ class PromptBuilder:
     ) -> str:
         """
         Build a prompt for summarizing a phase transition.
-        
+
         Includes the prompts for both the source and target phases so the
         summarizer understands what was expected and what comes next.
-        
+
         Args:
             from_phase: The phase we're leaving
             to_phase: The phase we're entering
             objective: Current agent objective
             phase_context: Extracted context from the phase (tool calls, messages, state)
-            
+
         Returns:
             Formatted transition summarization prompt
         """
         template = self._load_template("phase_transition_summary")
-        
+
         # Load the phase prompts for context
         from_phase_prompt = self.build_phase_prompt(from_phase)
         to_phase_prompt = self.build_phase_prompt(to_phase)
-        
+
         import json
         context_str = json.dumps(phase_context, indent=2, default=str)
-        
+
         return template.format(
             from_phase=from_phase.value,
             to_phase=to_phase.value,
@@ -370,4 +370,65 @@ class PromptBuilder:
             from_phase_prompt=from_phase_prompt,
             to_phase_prompt=to_phase_prompt,
             phase_context=context_str,
+        )
+
+    def build_recon_subagent_prompt(
+        self,
+        tool_schemas: list[dict],
+        objective: str,
+        findings_context: str,
+        focus_area: str = "",
+    ) -> str:
+        """
+        Build the system prompt for a ReconSubagent.
+
+        This is a focused prompt for reconnaissance subtasks,
+        designed to discover and document attack surfaces.
+
+        Args:
+            tool_schemas: List of tool schemas
+            objective: The reconnaissance objective
+            findings_context: Summary of current findings document state
+            focus_area: Optional specific area to focus on
+
+        Returns:
+            Formatted recon subagent system prompt
+        """
+        tool_descriptions = self.format_tool_descriptions(tool_schemas)
+        template = self._load_template("subagent_recon")
+
+        return template.format(
+            tools=tool_descriptions,
+            objective=objective,
+            findings_context=findings_context,
+            focus_area=focus_area or "General reconnaissance",
+        )
+
+    def build_test_subagent_prompt(
+        self,
+        tool_schemas: list[dict],
+        objective: str,
+        attack_surfaces_context: str,
+    ) -> str:
+        """
+        Build the system prompt for a TestSubagent.
+
+        This is a focused prompt for testing subtasks,
+        designed to test attack surfaces and document findings.
+
+        Args:
+            tool_schemas: List of tool schemas
+            objective: The testing objective
+            attack_surfaces_context: Summary of attack surfaces to test
+
+        Returns:
+            Formatted test subagent system prompt
+        """
+        tool_descriptions = self.format_tool_descriptions(tool_schemas)
+        template = self._load_template("subagent_test")
+
+        return template.format(
+            tools=tool_descriptions,
+            objective=objective,
+            attack_surfaces_context=attack_surfaces_context,
         )
