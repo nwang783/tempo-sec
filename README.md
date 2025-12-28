@@ -34,11 +34,24 @@ cp config.example.toml config.toml
 cp .env.example .env
 ```
 
-### 3. Run in Two Steps
+### 3. Run the Security Analysis
+
+**Recommended: Use the Orchestrator (fully autonomous)**
+
+```bash
+# Run the Orchestrator Agent - coordinates recon and testing automatically
+tempo --agent orchestrator --target https://mysouschef.com
+
+# With custom findings path and max iterations
+tempo --agent orchestrator --target https://example.com \
+    --findings ./findings/example.yaml \
+    --max-iterations 15
+```
+
+**Alternative: Run individual agents separately**
 
 ```bash
 # Run the Recon Agent
-# "https://mysouschef.com" seems be a good target to start with ;)
 tempo --agent recon --target https://mysouschef.com
 
 # Run the Test Agent

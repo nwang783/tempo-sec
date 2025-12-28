@@ -94,6 +94,44 @@ flowchart TD
 
 ## Entry Points
 
+### Orchestrator (Recommended)
+
+The **OrchestratorAgent** provides fully autonomous security analysis by coordinating subagents:
+
+```mermaid
+flowchart TB
+    subgraph Orchestrator["OrchestratorAgent"]
+        O["Strategic Loop"]
+        FD["FindingsDocument"]
+    end
+
+    subgraph Subagents
+        RS["ReconSubagent"]
+        TS["TestSubagent"]
+    end
+
+    O -->|"dispatch_subagent(recon)"| RS
+    O -->|"dispatch_subagent(test)"| TS
+    RS -->|"add_attack_surface"| FD
+    TS -->|"add_finding"| FD
+    FD -->|"read_findings"| O
+    O -->|"finalize_analysis"| Final["Final Report"]
+```
+
+```bash
+# Run orchestrator (recommended)
+tempo --agent orchestrator \
+    --target https://example.com \
+    --findings ./findings/example.yaml \
+    --max-iterations 10
+```
+
+The orchestrator:
+1. Starts with reconnaissance to discover attack surfaces
+2. Dispatches test subagents for discovered surfaces
+3. Iterates until adequate coverage is achieved
+4. Generates a comprehensive final report
+
 ### Reconnaissance Script (`recon.py`)
 Runs RECON phase only, generating a target manifest:
 

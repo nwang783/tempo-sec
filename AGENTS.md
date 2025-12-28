@@ -52,6 +52,60 @@ python -m pytest tests/ -v        # All tests
 python -m pytest tests/agent/ -v  # Agent-specific tests
 ```
 
+## Orchestrator Architecture
+
+The **OrchestratorAgent** is the recommended entry point for comprehensive security analysis. It coordinates specialized subagents and manages a shared findings document.
+
+### How It Works
+
+```
+OrchestratorAgent (claude-sonnet-4)
+    |
+    +-- dispatch_subagent("recon") --> ReconSubagent
+    |       |                              |
+    |       +-- Updates shared findings <--+
+    |
+    +-- dispatch_subagent("test") --> TestSubagent
+    |       |                              |
+    |       +-- Updates shared findings <--+
+    |
+    +-- finalize_analysis() --> Final Report
+```
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `OrchestratorAgent` | Strategic planning, subagent dispatch, final reporting |
+| `ReconSubagent` | Attack surface discovery, technology fingerprinting |
+| `TestSubagent` | Vulnerability testing, finding validation |
+| `FindingsDocument` | Shared state across all agents |
+| `FinalizeAnalysisTool` | Generates final report and stops orchestrator |
+
+### Running the Orchestrator
+
+```bash
+# Basic usage
+tempo --agent orchestrator --target https://example.com
+
+# With custom findings path
+tempo --agent orchestrator --target https://example.com \
+    --findings ./findings/example.yaml \
+    --max-iterations 15
+```
+
+### Configuration
+
+See `config.toml` for orchestrator settings:
+
+```toml
+[orchestrator]
+max_iterations = 10
+default_subagent_steps = 50
+model = "anthropic/claude-sonnet-4-20250514"
+subagent_model = "openai/gpt-5-mini"
+```
+
 ## Best Practices
 
 1. **Follow dependency rules** — No cross-imports between Context/Prompts/Tools
