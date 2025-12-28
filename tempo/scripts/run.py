@@ -318,12 +318,12 @@ async def main() -> None:
             container = ContainerManager(container_config)
             async with container:
                 # Create tools with container
-                tools = agent_def.create_tools(context, container, workflow)
+                tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector)
                 result = await run_agent(tools, workflow)
         else:
             print("⚠️  Running in LOCAL mode (no sandbox)...")
             # Create local tools
-            tools = agent_def.create_tools(context, None, workflow)
+            tools = agent_def.create_tools(context, None, workflow, visualization=viz_collector)
             result = await run_agent(tools, workflow)
             
         # Final Report

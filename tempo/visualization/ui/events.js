@@ -57,7 +57,7 @@ export function handleEvent(event) {
             break;
 
         case "tool_call":
-            graph.addToolNode(data);
+            handleToolCall(data);
             break;
 
         case "tool_call_start":
@@ -148,7 +148,13 @@ function handleToolCallStart(data) {
         pending: true,
     };
 
-    graph.addToolNode(pendingData);
+    // Route to correct agent's graph
+    const subagentId = data.subagent_id;
+    if (subagentId) {
+        graph.addToolNodeForSubagent(pendingData, subagentId);
+    } else {
+        graph.addToolNode(pendingData);
+    }
 
     // Update "Latest" timestamp
     const now = new Date();
@@ -156,6 +162,23 @@ function handleToolCallStart(data) {
     const latestEl = document.getElementById("state-latest");
     if (latestEl) {
         latestEl.textContent = `${data.tool_name} (running) @ ${timeStr}`;
+    }
+}
+
+/**
+ * Handle tool call completed event.
+ * 
+ * Routes tool calls to the correct agent's graph based on subagent_id.
+ */
+function handleToolCall(data) {
+    const subagentId = data.subagent_id;
+
+    if (subagentId) {
+        // Subagent tool call - add to subagent's graph
+        graph.addToolNodeForSubagent(data, subagentId);
+    } else {
+        // Orchestrator tool call
+        graph.addToolNode(data);
     }
 }
 

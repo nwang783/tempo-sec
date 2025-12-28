@@ -151,6 +151,60 @@ export function addToolNode(toolData) {
 }
 
 /**
+ * Add a tool call node to a specific subagent's graph.
+ * 
+ * @param {Object} toolData - Tool call data from the server
+ * @param {string} subagentId - ID of the subagent to add the tool to
+ */
+export function addToolNodeForSubagent(toolData, subagentId) {
+    const subagent = state.agentHierarchy.subagents.find(s => s.id === subagentId);
+    if (!subagent) {
+        console.warn(`Subagent ${subagentId} not found for tool node`);
+        return;
+    }
+
+    // Ensure subagent has graph state
+    if (!subagent.rootNode) {
+        subagent.rootNode = { id: `${subagentId}-root`, name: "ROOT", type: "root", children: [] };
+    }
+    if (!subagent.stepsMap) {
+        subagent.stepsMap = new Map();
+    }
+
+    // Get or create step node in subagent's tree
+    const stepNum = subagent.currentStepNumber || 1;
+    const stepKey = `${subagentId}-${stepNum}`;
+    let stepNode = subagent.stepsMap.get(stepKey);
+    if (!stepNode) {
+        stepNode = {
+            id: `step-${stepKey}`,
+            name: `STEP ${stepNum}`,
+            type: "step",
+            data: { step_number: stepNum },
+            children: []
+        };
+        subagent.rootNode.children.push(stepNode);
+        subagent.stepsMap.set(stepKey, stepNode);
+    }
+
+    const isPhase = toolData.tool_name === 'transition_phase';
+    const toolNode = {
+        id: toolData.id || `tool-${Date.now()}`,
+        name: isPhase ? (toolData.input?.phase?.toUpperCase() || "PHASE CHANGE") : toolData.tool_name,
+        type: isPhase ? "phase_marker" : "tool",
+        data: toolData,
+        children: []
+    };
+
+    stepNode.children.push(toolNode);
+
+    // Re-render if viewing this subagent
+    if (state.appState.activeAgentView === subagentId) {
+        debouncedUpdate();
+    }
+}
+
+/**
  * Add a user prompt node to the current step.
  * 
  * @param {Object} promptData - Prompt data from the server
@@ -253,7 +307,8 @@ export function debouncedUpdate() {
 export function update() {
     if (!g) return;
 
-    const { nodes, totalHeight } = computeLayout(state.appState.rootNode);
+    const activeRootNode = state.getActiveRootNode();
+    const { nodes, totalHeight } = computeLayout(activeRootNode);
     const cardWidth = 320;
     const cardHeight = 60;
 
@@ -563,33 +618,19 @@ export function showDetails(d) {
 // ============================================================================
 
 /**
- * Load orchestrator graph data (current main context).
- * Currently a no-op since main graph already shows orchestrator.
+ * Load orchestrator graph data (switch view back to orchestrator).
  */
 export function loadOrchestratorData() {
-    // The main graph already displays orchestrator data
-    // This function exists for the API contract with agentTree.js
-    console.log('Loading orchestrator context');
+    state.setActiveAgentView('orchestrator');
+    debouncedUpdate();
 }
 
 /**
- * Load subagent graph data from API.
+ * Load subagent graph data (switch view to show subagent's tools).
  * 
- * @param {string} subagentId - The subagent ID to load
+ * @param {string} subagentId - The subagent ID to show
  */
-export async function loadSubagentData(subagentId) {
-    try {
-        const response = await fetch(`/api/subagent/${subagentId}/context`);
-        if (!response.ok) {
-            console.warn(`Failed to load subagent context: ${response.status}`);
-            return;
-        }
-
-        const data = await response.json();
-        // TODO: Implement full context switching in graph view
-        // For now, this logs the loaded data for debugging
-        console.log(`Loaded context for subagent ${subagentId}:`, data);
-    } catch (error) {
-        console.error('Error loading subagent data:', error);
-    }
+export function loadSubagentData(subagentId) {
+    state.setActiveAgentView(subagentId);
+    debouncedUpdate();
 }

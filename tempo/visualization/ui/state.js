@@ -22,21 +22,25 @@
  */
 export const appState = {
     /**
-     * Root node of the visualization tree.
-     * @type {{id: string, name: string, type: string, children: Array}}
+     * Root node of the tree for the orchestrator view.
+     * This is the root of the D3 tree structure containing steps and tool calls.
+     * @type {Object}
      */
-    rootNode: {
-        id: "root",
-        name: "ROOT",
-        type: "root",
-        children: []
-    },
+    rootNode: { id: "root", name: "ROOT", type: "root", children: [] },
 
     /**
-     * Map of frame ID to frame node objects.
+     * Map of frame IDs to frame node objects.
+     * Frames represent agent execution contexts (e.g., main or sub-agents).
      * @type {Map<string, Object>}
      */
     frames: new Map(),
+
+    /**
+     * ID of the currently viewed agent ('orchestrator' or a subagent ID).
+     * Controls which graph data is displayed.
+     * @type {string}
+     */
+    activeAgentView: 'orchestrator',
 
     /**
      * Map of step key (frameId-stepNum) to step node objects.
@@ -301,6 +305,33 @@ export function setActiveAgent(agentId) {
     agentHierarchy.subagents.forEach(s => {
         s.active = (s.id === agentId);
     });
+}
+
+/**
+ * Set the active agent view for graph display.
+ * @param {string} agentId - Agent ID to view ('orchestrator' or subagent ID)
+ */
+export function setActiveAgentView(agentId) {
+    appState.activeAgentView = agentId;
+}
+
+/**
+ * Get the root node for the currently active agent view.
+ * @returns {Object} Root node for the active view
+ */
+export function getActiveRootNode() {
+    if (appState.activeAgentView === 'orchestrator') {
+        return appState.rootNode;
+    }
+
+    // Find the subagent and return its rootNode
+    const subagent = agentHierarchy.subagents.find(s => s.id === appState.activeAgentView);
+    if (subagent && subagent.rootNode) {
+        return subagent.rootNode;
+    }
+
+    // Fallback to main rootNode
+    return appState.rootNode;
 }
 
 /**
