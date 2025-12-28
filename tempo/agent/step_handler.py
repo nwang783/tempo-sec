@@ -44,16 +44,19 @@ class StepHandler:
         self,
         tools: ToolRegistry,
         on_tool_call: "Callable[[ToolCall], None] | None" = None,
+        on_tool_call_start: "Callable[[ToolCall], None] | None" = None,
     ):
         """
         Initialize the step handler.
         
         Args:
             tools: Tool registry for looking up and executing tools
-            on_tool_call: Optional callback for tool call notifications
+            on_tool_call: Optional callback for tool call completion notifications
+            on_tool_call_start: Optional callback for tool call start notifications
         """
         self.tools = tools
         self._on_tool_call = on_tool_call
+        self._on_tool_call_start = on_tool_call_start
     
     async def execute_tool_call(
         self,
@@ -84,6 +87,11 @@ class StepHandler:
             return tool_call
         
         try:
+            # Emit start event for long-running tools (like dispatch_subagent)
+            # This allows UI to show the tool card immediately
+            if self._on_tool_call_start and tool_call_request.name in ("dispatch_subagent", "browser_task"):
+                self._on_tool_call_start(tool_call)
+            
             # Execute the tool
             result: ToolResult = await tool.execute(**tool_call_request.arguments)
             

@@ -60,6 +60,11 @@ export function handleEvent(event) {
             graph.addToolNode(data);
             break;
 
+        case "tool_call_start":
+            // Show tool card immediately for long-running tools (like dispatch_subagent)
+            handleToolCallStart(data);
+            break;
+
         case "step":
             handleStep(data);
             break;
@@ -129,24 +134,75 @@ function handleStart(data) {
 }
 
 /**
+ * Handle tool call start event (for long-running tools like dispatch_subagent).
+ * 
+ * Shows the tool card immediately in the graph, before execution completes.
+ * The card will be updated when tool_call event arrives with results.
+ */
+function handleToolCallStart(data) {
+    // Add a "pending" tool node to the graph
+    const pendingData = {
+        ...data,
+        raw_output: "⏳ Running...",
+        success: true,
+        pending: true,
+    };
+
+    graph.addToolNode(pendingData);
+
+    // Update "Latest" timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+    const latestEl = document.getElementById("state-latest");
+    if (latestEl) {
+        latestEl.textContent = `${data.tool_name} (running) @ ${timeStr}`;
+    }
+}
+
+/**
  * Handle step completion event.
  */
 function handleStep(data) {
-    // Update phase display
-    if (data.phase) {
-        const phaseEl = document.getElementById("state-phase");
-        if (phaseEl) phaseEl.textContent = data.phase;
-    }
+    const subagentId = data.subagent_id;
 
-    // Update step number display
-    if (data.step_number !== undefined && data.step_number !== null) {
-        const stepEl = document.getElementById("state-step");
-        if (stepEl) stepEl.textContent = data.step_number;
-    }
+    if (subagentId) {
+        // Subagent step - update subagent state
+        const subagent = state.agentHierarchy.subagents.find(s => s.id === subagentId);
+        if (subagent) {
+            subagent.steps++;
+            subagent.currentStepNumber = data.step_number;
 
-    // Create step node and update visualization
-    graph.getOrCreateStepNode(state.appState.currentFrameId, data.step_number);
-    graph.debouncedUpdate();
+            // Update phase display if this subagent is active
+            if (subagent.active && data.phase) {
+                const phaseEl = document.getElementById("state-phase");
+                if (phaseEl) phaseEl.textContent = data.phase;
+            }
+
+            // Re-render agent tree to show updated step count
+            agentTree.render();
+        }
+    } else {
+        // Orchestrator step (existing logic)
+        // Update phase display
+        if (data.phase) {
+            const phaseEl = document.getElementById("state-phase");
+            if (phaseEl) phaseEl.textContent = data.phase;
+        }
+
+        // Update step number display
+        if (data.step_number !== undefined && data.step_number !== null) {
+            const stepEl = document.getElementById("state-step");
+            if (stepEl) stepEl.textContent = data.step_number;
+        }
+
+        // Update orchestrator step count
+        state.agentHierarchy.orchestrator.steps = data.step_number || 0;
+
+        // Create step node and update visualization
+        graph.getOrCreateStepNode(state.appState.currentFrameId, data.step_number);
+        graph.debouncedUpdate();
+        agentTree.render();
+    }
 }
 
 /**

@@ -9,6 +9,7 @@
 
 import * as state from './state.js';
 import * as graph from './graph.js';
+import * as panels from './panels.js';
 import { escapeHtml } from './utils.js';
 
 // Status icon mapping
@@ -146,11 +147,13 @@ export function switchToAgentView(agentId) {
     state.setActiveAgent(agentId);
     render();
 
-    // Update graph view for selected agent
+    // Update graph view and context for selected agent
     if (agentId === 'orchestrator') {
         graph.loadOrchestratorData();
+        panels.loadContextWindow();  // Load orchestrator's context
     } else {
         graph.loadSubagentData(agentId);
+        panels.loadSubagentContext(agentId);  // Load subagent's context
     }
 }
 

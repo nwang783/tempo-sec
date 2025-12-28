@@ -144,6 +144,33 @@ class VisualizationCollector:
             return asdict(usage) if hasattr(usage, "__dataclass_fields__") else vars(usage)
         return usage if isinstance(usage, dict) else {}
 
+    def on_tool_call_start(self, tool_data: dict | Any, frame_id: str) -> None:
+        """
+        Called when a tool execution begins (before completion).
+        
+        This is useful for long-running tools like dispatch_subagent where
+        we want to show the tool card in the UI immediately.
+        
+        Args:
+            tool_data: Tool call data dict OR ToolCall object (for compatibility).
+                       Should contain: id, tool_name, input
+            frame_id: ID of the current context frame
+        """
+        # Support both dict and object input for compatibility
+        if isinstance(tool_data, dict):
+            data = dict(tool_data)  # Copy to avoid mutation
+            data["frame_id"] = frame_id
+        else:
+            # Object-based input (ToolCall)
+            data = {
+                "id": getattr(tool_data, "id", ""),
+                "tool_name": getattr(tool_data, "tool_name", ""),
+                "input": getattr(tool_data, "input", {}),
+                "frame_id": frame_id,
+            }
+        
+        self.emit("tool_call_start", data)
+
     def on_tool_call(self, tool_data: dict | Any, frame_id: str) -> None:
         """
         Called when a tool execution completes.
