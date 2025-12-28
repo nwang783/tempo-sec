@@ -49,7 +49,7 @@ class BrowserTaskTool(Tool):
         self,
         task: str,
         url: str = "",
-        max_steps: int = 10,
+        max_steps: int | str = 10,
         **kwargs,
     ) -> ToolResult:
         """
@@ -69,6 +69,9 @@ class BrowserTaskTool(Tool):
         from tempo.agent.runner import Agent
         from tempo.context.store import ContextStore
         from tempo.prompts.builder import PromptBuilder
+        
+        # Coerce max_steps to int (LLM may pass as string)
+        max_steps = int(max_steps)
         
         # Create browser agent definition
         browser_agent_def = BrowserAgent(

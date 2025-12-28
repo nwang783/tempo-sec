@@ -165,6 +165,9 @@ class OrchestratorAgent(BaseAgentDefinition):
 
         tools = ToolRegistry()
 
+        # Extract visualization collector from kwargs (passed from run.py)
+        visualization = kwargs.get("visualization")
+
         # Core tools - orchestrator can do lightweight analysis directly
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
@@ -174,6 +177,7 @@ class OrchestratorAgent(BaseAgentDefinition):
         tools.register(DispatchSubagentTool(
             findings=self.findings,
             container_manager=container,
+            visualization=visualization,
         ))
 
         # Findings management tools

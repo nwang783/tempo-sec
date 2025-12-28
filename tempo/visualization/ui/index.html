@@ -24,12 +24,17 @@
 
         <!-- Main Workspace (3 Columns) -->
         <div class="workspace">
-            <!-- Left Pane: Symbol Tree / Program Trees -->
+            <!-- Left Pane: Agent Tree -->
             <div class="pane left-pane">
                 <div class="pane-header">
-                    <span class="pane-title">SYMBOL TREE</span>
+                    <span class="pane-title">AGENT TREE</span>
                 </div>
                 <div class="pane-content scrollable">
+                    <!-- Agent Tree Section (new) -->
+                    <div id="agent-tree-content" class="agent-tree">
+                        <div class="agent-tree-empty">Waiting for agent start...</div>
+                    </div>
+
                     <div class="tree-section expanded">
                         <div class="section-header">▼ Agent State</div>
                         <div id="agent-state-content" class="tree-content">

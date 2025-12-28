@@ -104,10 +104,12 @@ class TestSubagent(BaseAgentDefinition):
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
-        tools.register(BrowserTaskTool(
-            container_manager=container,
-            llm_client=None,  # Will create its own
-        ))
+        
+        # TODO: Re-enable BrowserTaskTool once the browser agent has been upgraded
+        # tools.register(BrowserTaskTool(
+        #     container_manager=container,
+        #     llm_client=None,  # Will create its own
+        # ))
 
         # Findings document tools - pass the findings reference
         tools.register(AddFindingTool(findings_updater=self.findings))
