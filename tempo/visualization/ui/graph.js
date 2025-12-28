@@ -557,3 +557,39 @@ export function showDetails(d) {
     html += `</div>`;
     detailsContent.innerHTML = html;
 }
+
+// ============================================================================
+// Context Switching (for Orchestrator mode)
+// ============================================================================
+
+/**
+ * Load orchestrator graph data (current main context).
+ * Currently a no-op since main graph already shows orchestrator.
+ */
+export function loadOrchestratorData() {
+    // The main graph already displays orchestrator data
+    // This function exists for the API contract with agentTree.js
+    console.log('Loading orchestrator context');
+}
+
+/**
+ * Load subagent graph data from API.
+ * 
+ * @param {string} subagentId - The subagent ID to load
+ */
+export async function loadSubagentData(subagentId) {
+    try {
+        const response = await fetch(`/api/subagent/${subagentId}/context`);
+        if (!response.ok) {
+            console.warn(`Failed to load subagent context: ${response.status}`);
+            return;
+        }
+
+        const data = await response.json();
+        // TODO: Implement full context switching in graph view
+        // For now, this logs the loaded data for debugging
+        console.log(`Loaded context for subagent ${subagentId}:`, data);
+    } catch (error) {
+        console.error('Error loading subagent data:', error);
+    }
+}

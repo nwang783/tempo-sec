@@ -12,6 +12,7 @@ import * as state from './state.js';
 import * as graph from './graph.js';
 import * as panels from './panels.js';
 import * as ws from './ws.js';
+import * as agentTree from './agentTree.js';
 
 // ============================================================================
 // Event Dispatch
@@ -94,6 +95,18 @@ export function handleEvent(event) {
         case "available_tools":
             panels.updateAvailableToolsPanel(data.tools);
             break;
+
+        case "subagent_start":
+            handleSubagentStart(data);
+            break;
+
+        case "subagent_finish":
+            handleSubagentFinish(data);
+            break;
+
+        case "findings_update":
+            handleFindingsUpdate(data);
+            break;
     }
 }
 
@@ -108,6 +121,10 @@ function handleStart(data) {
     if (data.model) {
         const modelEl = document.getElementById("state-model");
         if (modelEl) modelEl.textContent = data.model;
+
+        // Update orchestrator state for agent tree
+        state.agentHierarchy.orchestrator.model = data.model;
+        agentTree.render();
     }
 }
 
@@ -195,6 +212,34 @@ function handleFinish(data) {
         statusEl.textContent = data.success ? "FINISHED" : "FAILED";
         statusEl.className = "status " + (data.success ? "connected" : "disconnected");
     }
+}
+
+/**
+ * Handle subagent start event.
+ */
+function handleSubagentStart(data) {
+    state.addSubagent(data);
+    agentTree.render();
+}
+
+/**
+ * Handle subagent finish event.
+ */
+function handleSubagentFinish(data) {
+    state.updateSubagent(data.subagent_id, {
+        status: data.success ? 'complete' : 'failed',
+        findings: data.findings_count || 0,
+        surfaces: data.surfaces_count || 0,
+    });
+    agentTree.render();
+}
+
+/**
+ * Handle findings update event.
+ */
+function handleFindingsUpdate(data) {
+    state.updateFindingsSummary(data);
+    agentTree.render();
 }
 
 // ============================================================================

@@ -211,3 +211,59 @@ class VisualizationCollector:
         ]
         self.emit("available_tools", {"tools": tool_names})
 
+    def on_subagent_start(
+        self,
+        subagent_id: str,
+        subagent_type: str,
+        objective: str,
+        parent_id: str | None = None,
+    ) -> None:
+        """Called when a subagent is dispatched.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent run
+            subagent_type: Type of subagent (e.g., "recon", "test")
+            objective: What the subagent should accomplish
+            parent_id: ID of the parent orchestrator (if any)
+        """
+        self.emit("subagent_start", {
+            "subagent_id": subagent_id,
+            "subagent_type": subagent_type,
+            "objective": objective,
+            "parent_id": parent_id,
+        })
+
+    def on_subagent_finish(
+        self,
+        subagent_id: str,
+        success: bool,
+        summary: str,
+        findings_count: int,
+        surfaces_count: int,
+    ) -> None:
+        """Called when a subagent completes.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent run
+            success: Whether the subagent completed successfully
+            summary: Summary of what the subagent accomplished
+            findings_count: Number of findings added
+            surfaces_count: Number of attack surfaces added
+        """
+        self.emit("subagent_finish", {
+            "subagent_id": subagent_id,
+            "success": success,
+            "summary": summary,
+            "findings_count": findings_count,
+            "surfaces_count": surfaces_count,
+        })
+
+    def on_findings_update(self, findings_summary: dict) -> None:
+        """Called when the findings document is updated.
+        
+        Args:
+            findings_summary: Dict with severity counts and surface stats
+                Expected keys: critical, high, medium, low, surfaces_total, surfaces_tested
+        """
+        self.emit("findings_update", findings_summary)
+

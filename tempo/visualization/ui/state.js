@@ -222,6 +222,98 @@ export function toggleExpandedItem(index) {
     }
 }
 
+// ============================================================================
+// Agent Hierarchy State (for Orchestrator mode)
+// ============================================================================
+
+/**
+ * Tracks the orchestrator and all subagent runs.
+ */
+export const agentHierarchy = {
+    orchestrator: {
+        id: 'orchestrator',
+        model: '',
+        steps: 0,
+        active: true,
+    },
+    subagents: [],
+};
+
+/**
+ * Aggregated findings summary across all agents.
+ */
+export const findingsSummary = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    surfaces_total: 0,
+    surfaces_tested: 0,
+};
+
+// ============================================================================
+// Agent Hierarchy Mutation Functions
+// ============================================================================
+
+/**
+ * Add a new subagent to the hierarchy.
+ * @param {Object} subagentData - Subagent data from event
+ */
+export function addSubagent(subagentData) {
+    const count = agentHierarchy.subagents.length + 1;
+    agentHierarchy.subagents.push({
+        id: subagentData.subagent_id,
+        type: subagentData.subagent_type,
+        name: `${subagentData.subagent_type}_${count}`,
+        objective: subagentData.objective || '',
+        status: 'running',
+        steps: 0,
+        findings: 0,
+        surfaces: 0,
+        active: false,
+    });
+}
+
+/**
+ * Update a subagent's properties.
+ * @param {string} subagentId - Subagent ID
+ * @param {Object} updates - Properties to update
+ */
+export function updateSubagent(subagentId, updates) {
+    const subagent = agentHierarchy.subagents.find(s => s.id === subagentId);
+    if (subagent) {
+        Object.assign(subagent, updates);
+    }
+}
+
+/**
+ * Set which agent is currently active (selected in UI).
+ * @param {string} agentId - Agent ID to activate
+ */
+export function setActiveAgent(agentId) {
+    agentHierarchy.orchestrator.active = (agentId === 'orchestrator');
+    agentHierarchy.subagents.forEach(s => {
+        s.active = (s.id === agentId);
+    });
+}
+
+/**
+ * Update findings summary.
+ * @param {Object} summary - Findings summary data
+ */
+export function updateFindingsSummary(summary) {
+    Object.assign(findingsSummary, summary);
+}
+
+/**
+ * Reset agent hierarchy (call on new session).
+ */
+export function resetAgentHierarchy() {
+    agentHierarchy.orchestrator = { id: 'orchestrator', model: '', steps: 0, active: true };
+    agentHierarchy.subagents = [];
+    Object.assign(findingsSummary, { critical: 0, high: 0, medium: 0, low: 0, surfaces_total: 0, surfaces_tested: 0 });
+}
+
 /**
  * Reset all state to initial values.
  * Useful for starting a fresh session.
@@ -239,4 +331,5 @@ export function resetState() {
     appState.contextData = null;
     appState.expandedItems.clear();
     appState.availableTools = [];
+    resetAgentHierarchy();
 }

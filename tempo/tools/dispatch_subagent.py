@@ -11,7 +11,7 @@ from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
-    from tempo.infra.protocols import FindingsUpdater
+    from tempo.infra.protocols import FindingsUpdater, VisualizationObserver
 
 
 class DispatchSubagentTool(Tool):
@@ -41,6 +41,7 @@ class DispatchSubagentTool(Tool):
         self,
         findings: "FindingsUpdater",
         container_manager: "ContainerManager | None" = None,
+        visualization: "VisualizationObserver | None" = None,
     ):
         """
         Initialize the dispatch subagent tool.
@@ -48,9 +49,11 @@ class DispatchSubagentTool(Tool):
         Args:
             findings: FindingsDocument instance for shared state
             container_manager: Optional container for sandboxed execution
+            visualization: Optional visualization observer for UI events
         """
         self._findings = findings
         self._container_manager = container_manager
+        self._visualization = visualization
 
     async def execute(
         self,
@@ -89,6 +92,19 @@ class DispatchSubagentTool(Tool):
                 success=False,
                 output="",
                 error=f"Invalid subagent_type: {subagent_type}. Must be 'recon' or 'test'.",
+            )
+
+        # Generate unique ID for this subagent run
+        import uuid
+        subagent_id = str(uuid.uuid4())[:8]
+        
+        # Emit subagent start event for visualization
+        if self._visualization and hasattr(self._visualization, 'on_subagent_start'):
+            self._visualization.on_subagent_start(
+                subagent_id=subagent_id,
+                subagent_type=subagent_type_lower,
+                objective=objective,
+                parent_id="orchestrator",
             )
 
         # Map to agent class
@@ -194,6 +210,16 @@ class DispatchSubagentTool(Tool):
                         if notes:
                             output_parts.append(f"\nNotes: {notes}")
 
+                        # Emit subagent finish event
+                        if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
+                            self._visualization.on_subagent_finish(
+                                subagent_id=subagent_id,
+                                success=True,
+                                summary=summary,
+                                findings_count=findings_added,
+                                surfaces_count=surfaces_added,
+                            )
+
                         return ToolResult(
                             success=True,
                             output="\n".join(output_parts),
@@ -220,6 +246,15 @@ class DispatchSubagentTool(Tool):
                 )
 
             elif result.success:
+                # Emit subagent finish event
+                if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
+                    self._visualization.on_subagent_finish(
+                        subagent_id=subagent_id,
+                        success=True,
+                        summary="Completed with no specific findings",
+                        findings_count=0,
+                        surfaces_count=0,
+                    )
                 return ToolResult(
                     success=True,
                     output=f"Subagent ({subagent_type}) completed in {result.steps_taken} steps (no specific findings).",
@@ -230,6 +265,15 @@ class DispatchSubagentTool(Tool):
                 )
 
             else:
+                # Emit subagent finish event for failure
+                if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
+                    self._visualization.on_subagent_finish(
+                        subagent_id=subagent_id,
+                        success=False,
+                        summary=result.error or "Unknown error",
+                        findings_count=0,
+                        surfaces_count=0,
+                    )
                 return ToolResult(
                     success=False,
                     output=f"Subagent ({subagent_type}) failed: {result.error or 'Unknown error'}",
@@ -241,6 +285,15 @@ class DispatchSubagentTool(Tool):
                 )
 
         except Exception as e:
+            # Emit subagent finish event for exception
+            if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
+                self._visualization.on_subagent_finish(
+                    subagent_id=subagent_id,
+                    success=False,
+                    summary=str(e),
+                    findings_count=0,
+                    surfaces_count=0,
+                )
             return ToolResult(
                 success=False,
                 output=f"Error running {subagent_type} subagent: {str(e)}",
