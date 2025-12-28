@@ -222,4 +222,17 @@ class StepHandler:
                     },
                 )
 
+        elif tool_call.tool_name == "finalize_analysis":
+            # Analysis finalized - stop the orchestrator
+            if tool_call.metadata.get("finalize_complete"):
+                return SpecialToolResult(
+                    tool_name="finalize_analysis",
+                    should_continue=False,
+                    findings={
+                        "risk_level": tool_call.metadata.get("risk_level", "medium"),
+                        "executive_summary": tool_call.metadata.get("executive_summary", ""),
+                        "final_report": tool_call.metadata.get("final_report", ""),
+                    },
+                )
+
         return None

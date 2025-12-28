@@ -432,3 +432,36 @@ class PromptBuilder:
             objective=objective,
             attack_surfaces_context=attack_surfaces_context,
         )
+
+    def build_orchestrator_prompt(
+        self,
+        tool_schemas: list[dict],
+        target: str,
+        findings_summary: str = "",
+    ) -> str:
+        """
+        Build the system prompt for the OrchestratorAgent.
+
+        This prompt enables strategic coordination of security analysis
+        by dispatching specialized subagents and managing shared findings.
+
+        Args:
+            tool_schemas: List of tool schemas
+            target: The target being analyzed
+            findings_summary: Current findings summary (from FindingsDocument)
+
+        Returns:
+            Formatted orchestrator system prompt
+        """
+        tool_descriptions = self.format_tool_descriptions(tool_schemas)
+        template = self._load_template("orchestrator")
+
+        # Provide a default message if no findings yet
+        if not findings_summary:
+            findings_summary = "No findings yet. Start with reconnaissance to discover attack surfaces."
+
+        return template.format(
+            target=target,
+            findings_summary=findings_summary,
+            tools=tool_descriptions,
+        )
