@@ -207,5 +207,19 @@ class StepHandler:
                         "extracted_data": tool_call.metadata.get("extracted_data", ""),
                     },
                 )
-        
+
+        elif tool_call.tool_name == "complete_subtask":
+            # Subtask complete - stop the subagent
+            if tool_call.metadata.get("subtask_complete"):
+                return SpecialToolResult(
+                    tool_name="complete_subtask",
+                    should_continue=False,
+                    findings={
+                        "summary": tool_call.metadata.get("summary", ""),
+                        "surfaces_added": tool_call.metadata.get("surfaces_added", 0),
+                        "findings_added": tool_call.metadata.get("findings_added", 0),
+                        "notes": tool_call.metadata.get("notes", ""),
+                    },
+                )
+
         return None

@@ -436,12 +436,48 @@ class AgentDefinition(Protocol):
     def build_objective(self, target: str, **kwargs: Any) -> str:
         """
         Build the user objective from runtime parameters.
-        
+
         Args:
             target: Primary target (URL, path, etc.)
             **kwargs: Additional agent-specific parameters
-            
+
         Returns:
             Formatted objective string
+        """
+        ...
+
+
+class SubagentDispatcher(Protocol):
+    """
+    Protocol for components that can dispatch subagents.
+
+    This allows the orchestrator to delegate work to specialized subagents
+    (ReconSubagent, TestSubagent) while maintaining a clean interface.
+    """
+
+    async def dispatch(
+        self,
+        subagent_type: str,
+        objective: str,
+        focus_area: str = "",
+        max_steps: int = 50,
+    ) -> dict[str, Any]:
+        """
+        Dispatch a subagent to perform a specific task.
+
+        Args:
+            subagent_type: Type of subagent to dispatch ("recon" or "test")
+            objective: The objective for the subagent to accomplish
+            focus_area: Optional specific area to focus on
+            max_steps: Maximum steps the subagent can take
+
+        Returns:
+            Dictionary with subagent results:
+                - success: bool
+                - summary: str
+                - surfaces_added: int (for recon)
+                - findings_added: int (for test)
+                - steps_taken: int
+                - error: str | None
         """
         ...
