@@ -382,7 +382,13 @@ export function initTabs() {
                 document.getElementById('testplan-container')?.classList.add('active');
             } else if (tabName === 'context') {
                 document.getElementById('context-container')?.classList.add('active');
-                loadContextWindow();
+                // Load context for the currently active agent
+                const activeAgent = state.appState.activeAgentView;
+                if (activeAgent && activeAgent !== 'orchestrator') {
+                    loadSubagentContext(activeAgent);
+                } else {
+                    loadContextWindow();
+                }
             }
         });
     });
