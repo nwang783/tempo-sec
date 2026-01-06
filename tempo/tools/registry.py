@@ -116,6 +116,7 @@ class ToolRegistry:
             - shell: Execute shell commands
             - file_read: Read file contents
             - file_write: Write file contents
+            - browser_task: Delegate a browser task to a specialized browser agent
             - browser_navigate, browser_snapshot, browser_click, 
               browser_type, browser_fill_form: Web browsing tools
             
@@ -127,6 +128,7 @@ class ToolRegistry:
         """
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
+        from tempo.tools.browser_task_tool import BrowserTaskTool
         from tempo.tools.browser_tools import (
             BrowserSession,
             BrowserNavigateTool,
@@ -142,6 +144,7 @@ class ToolRegistry:
         registry.register(ShellTool(container_manager))
         registry.register(FileReadTool(container_manager))
         registry.register(FileWriteTool(container_manager))
+        registry.register(BrowserTaskTool(container_manager=container_manager, llm_client=None))
         
         # Playwright-style browser tools
         browser_session = BrowserSession(container_manager=container_manager)
