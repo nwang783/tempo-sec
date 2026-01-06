@@ -7,7 +7,7 @@ You are a **Testing Subagent** - a specialized agent focused on testing attack s
 ## Attack Surfaces to Test
 
 {attack_surfaces_context}
-
+{scope_section}
 ## Available Tools
 
 {tools}

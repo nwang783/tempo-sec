@@ -243,6 +243,10 @@ class PromptBuilder:
             s for s in schemas
             if s.get("function", {}).get("name") not in excluded_tools
         ]
+
+    def _build_scope_section(self, scope_content: str | None) -> str:
+        """Build a formatted scope constraints section for prompts."""
+        return f"\n## Scope Constraints\n\n{scope_content}\n" if scope_content else ""
     
     def build_phase_prompt(self, phase: Phase, has_test_plan: bool = False) -> str:
         """
@@ -312,6 +316,7 @@ class PromptBuilder:
         objective: str,
         findings_context: str,
         focus_area: str = "",
+        scope_content: str | None = None,
     ) -> str:
         """
         Build the system prompt for a ReconSubagent.
@@ -324,6 +329,7 @@ class PromptBuilder:
             objective: The reconnaissance objective
             findings_context: Summary of current findings document state
             focus_area: Optional specific area to focus on
+            scope_content: Optional scope constraints for the subagent
 
         Returns:
             Formatted recon subagent system prompt
@@ -331,11 +337,15 @@ class PromptBuilder:
         tool_descriptions = self.format_tool_descriptions(tool_schemas)
         template = self._load_template("subagent_recon")
 
+        # Build scope section if provided
+        scope_section = self._build_scope_section(scope_content)
+
         return template.format(
             tools=tool_descriptions,
             objective=objective,
             findings_context=findings_context,
             focus_area=focus_area or "General reconnaissance",
+            scope_section=scope_section,
         )
 
     def build_test_subagent_prompt(
@@ -343,6 +353,7 @@ class PromptBuilder:
         tool_schemas: list[dict],
         objective: str,
         attack_surfaces_context: str,
+        scope_content: str | None = None,
     ) -> str:
         """
         Build the system prompt for a TestSubagent.
@@ -354,6 +365,7 @@ class PromptBuilder:
             tool_schemas: List of tool schemas
             objective: The testing objective
             attack_surfaces_context: Summary of attack surfaces to test
+            scope_content: Optional scope constraints for the subagent
 
         Returns:
             Formatted test subagent system prompt
@@ -361,10 +373,14 @@ class PromptBuilder:
         tool_descriptions = self.format_tool_descriptions(tool_schemas)
         template = self._load_template("subagent_test")
 
+        # Build scope section if provided
+        scope_section = self._build_scope_section(scope_content)
+
         return template.format(
             tools=tool_descriptions,
             objective=objective,
             attack_surfaces_context=attack_surfaces_context,
+            scope_section=scope_section,
         )
 
     def build_orchestrator_prompt(
@@ -372,6 +388,7 @@ class PromptBuilder:
         tool_schemas: list[dict],
         target: str,
         findings_summary: str = "",
+        scope_content: str | None = None,
     ) -> str:
         """
         Build the system prompt for the OrchestratorAgent.
@@ -383,6 +400,7 @@ class PromptBuilder:
             tool_schemas: List of tool schemas
             target: The target being analyzed
             findings_summary: Current findings summary (from FindingsDocument)
+            scope_content: Optional scope constraints from scope file
 
         Returns:
             Formatted orchestrator system prompt
@@ -394,8 +412,12 @@ class PromptBuilder:
         if not findings_summary:
             findings_summary = "No findings yet. Start with reconnaissance to discover attack surfaces."
 
+        # Build scope section if provided
+        scope_section = self._build_scope_section(scope_content)
+
         return template.format(
             target=target,
             findings_summary=findings_summary,
             tools=tool_descriptions,
+            scope_section=scope_section,
         )

@@ -15,6 +15,10 @@ while the actual implementations remain in agent/ or context/.
 from typing import Protocol, Any
 
 
+# Default scope placeholder values that should not be passed to prompts
+DEFAULT_SCOPE_PLACEHOLDERS = frozenset({"Subagent task", "No specific scope constraints."})
+
+
 class PhaseTransitioner(Protocol):
     """Protocol for components that can transition workflow phases."""
     
