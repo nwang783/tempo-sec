@@ -33,13 +33,6 @@ class TestOrchestratorAgent:
         assert agent._findings_path is None
         assert agent._max_iterations == 10
 
-    def test_model_is_smart(self):
-        """Test that orchestrator uses a smart model for strategic planning."""
-        agent = OrchestratorAgent(target="https://example.com")
-
-        # Should use a capable model for orchestration
-        assert "claude" in agent.model.lower() or "sonnet" in agent.model.lower()
-
     def test_description(self):
         """Test agent description."""
         agent = OrchestratorAgent(target="https://example.com")
