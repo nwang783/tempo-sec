@@ -316,6 +316,18 @@ async def main() -> None:
                 timeout=config.container_timeout,
             )
             container = ContainerManager(container_config)
+            
+            # Early Docker connectivity check
+            try:
+                container.client.ping()
+            except Exception as docker_err:
+                print(f"\n❌ Docker connection failed: {docker_err}")
+                print("\nPossible fixes:")
+                print("  1. Start Docker Desktop")
+                print("  2. Run with --local flag to skip containerization")
+                print("  3. Set TEMPO_LOCAL_MODE=true in environment")
+                sys.exit(1)
+            
             async with container:
                 # Create tools with container
                 tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector)
