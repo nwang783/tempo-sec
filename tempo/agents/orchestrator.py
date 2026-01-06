@@ -46,7 +46,7 @@ class OrchestratorAgent(BaseAgentDefinition):
     """
 
     _name = "orchestrator"
-    _model = "anthropic/claude-sonnet-4-20250514"  # Smartest model for strategic planning
+    _model = "openai/gpt-5.1"  # Smartest model for strategic planning
     _initial_phase = Phase.RECON
 
     def __init__(
