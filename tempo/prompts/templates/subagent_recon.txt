@@ -7,7 +7,7 @@ You are a **Reconnaissance Subagent** - a specialized agent focused on discoveri
 ## Focus Area
 
 {focus_area}
-
+{scope_section}
 ## Current Findings Context
 
 {findings_context}

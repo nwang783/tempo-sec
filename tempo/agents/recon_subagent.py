@@ -11,6 +11,8 @@ from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
 from tempo.prompts.phases import Phase
 
+from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
+
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
@@ -130,11 +132,17 @@ class ReconSubagent(BaseAgentDefinition):
         # Get findings context summary
         findings_context = self._get_findings_context()
 
+        # Pass scope if it's not a placeholder value
+        scope_content = None
+        if scope_description and scope_description not in DEFAULT_SCOPE_PLACEHOLDERS:
+            scope_content = scope_description
+
         return prompts.build_recon_subagent_prompt(
             tool_schemas=tool_schemas,
             objective=self.objective,
             findings_context=findings_context,
             focus_area=self.focus_area,
+            scope_content=scope_content,
         )
 
     def build_objective(self, target: str | None = None, **kwargs: Any) -> str:

@@ -64,6 +64,7 @@ class AgentConfig:
 
     # Legacy/convenience aliases
     scope: str | None = None  # Optional scope description
+    scope_file: str | None = None  # Path to scope file (set via CLI)
     
     @property
     def max_steps(self) -> int:

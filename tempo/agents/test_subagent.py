@@ -11,6 +11,8 @@ from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
 from tempo.prompts.phases import Phase
 
+from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
+
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
@@ -130,10 +132,16 @@ class TestSubagent(BaseAgentDefinition):
         # Get attack surfaces context
         attack_surfaces_context = self._get_attack_surfaces_context()
 
+        # Pass scope if it's not a placeholder value
+        scope_content = None
+        if scope_description and scope_description not in DEFAULT_SCOPE_PLACEHOLDERS:
+            scope_content = scope_description
+
         return prompts.build_test_subagent_prompt(
             tool_schemas=tool_schemas,
             objective=self.objective,
             attack_surfaces_context=attack_surfaces_context,
+            scope_content=scope_content,
         )
 
     def build_objective(self, target: str | None = None, **kwargs: Any) -> str:

@@ -1,12 +1,10 @@
 """
-Dispatch Subagent Tools.
+Dispatch Subagent Tool.
 
-Tools for the orchestrator to dispatch specialized subagents (ReconSubagent, TestSubagent)
+Tool for the orchestrator to dispatch specialized subagents (ReconSubagent, TestSubagent)
 to perform focused tasks with access to the shared findings document.
 
-Includes:
-- DispatchSubagentTool: Dispatch a single subagent
-- DispatchSubagentsTool: Dispatch multiple subagents in parallel with concurrency control
+Supports both single dispatch and parallel dispatch with concurrency control.
 """
 
 import asyncio
@@ -22,26 +20,30 @@ if TYPE_CHECKING:
 
 class DispatchSubagentTool(Tool):
     """
-    Dispatch a specialized subagent to perform a focused task.
+    Dispatch specialized subagents to perform focused tasks.
 
     This tool allows the orchestrator to delegate work to ReconSubagent
     or TestSubagent, which operate with access to the shared findings document.
+
+    Supports two modes:
+    - Single dispatch: Pass subagent_type, objective, etc. directly
+    - Parallel dispatch: Pass dispatch_requests array for concurrent execution
     """
 
     name = "dispatch_subagent"
-    description = """Dispatch a specialized subagent to perform a focused task.
+    description = """Dispatch specialized subagents to perform focused tasks.
 
-    Available subagent types:
-    - "recon": ReconSubagent for discovering attack surfaces
-    - "test": TestSubagent for testing attack surfaces and finding vulnerabilities
+Available subagent types:
+- "recon": ReconSubagent for discovering attack surfaces
+- "test": TestSubagent for testing attack surfaces and finding vulnerabilities
 
-    The subagent will:
-    1. Execute with its own context and tools
-    2. Update the shared findings document
-    3. Return a summary of its work
+The subagent will:
+1. Execute with its own context and tools
+2. Update the shared findings document
+3. Return a summary of its work
 
-    Use this to focus on specific objectives. For parallel dispatch of multiple subagents,
-    use dispatch_subagents instead."""
+**Single dispatch**: Pass subagent_type and objective directly.
+**Parallel dispatch**: Pass dispatch_requests array to run multiple subagents concurrently."""
     category = ToolCategory.META
 
     def __init__(
@@ -70,17 +72,16 @@ class DispatchSubagentTool(Tool):
         subagent_type: str,
         objective: str,
         focus_area: str,
+        scope: str = "",
     ) -> ToolResult:
         """
         Core subagent execution logic.
-
-        This method contains the shared logic used by both single dispatch
-        and parallel dispatch operations.
 
         Args:
             subagent_type: Type of subagent ("recon" or "test")
             objective: What the subagent should accomplish
             focus_area: Optional specific area to focus on
+            scope: Optional scope constraints for the subagent
 
         Returns:
             ToolResult with the subagent's findings
@@ -143,7 +144,7 @@ class DispatchSubagentTool(Tool):
         system_prompt = subagent_def.build_system_prompt(
             prompts=prompts,
             tool_schemas=tool_schemas,
-            scope_description="Subagent task",
+            scope_description=scope if scope else "No specific scope constraints.",
         )
 
         # Add system prompt to context
@@ -330,145 +331,62 @@ class DispatchSubagentTool(Tool):
                 },
             )
 
-    async def execute(
+    async def _execute_parallel(
         self,
-        subagent_type: str,
-        objective: str,
-        focus_area: str = "",
-        purpose: str = "",
+        dispatch_requests: list[dict],
     ) -> ToolResult:
         """
-        Dispatch a subagent to perform a task.
+        Execute multiple subagents in parallel with concurrency control.
 
         Args:
-            subagent_type: Type of subagent ("recon" or "test")
-            objective: What the subagent should accomplish
-            focus_area: Optional specific area to focus on
-            purpose: Why this tool is being called
+            dispatch_requests: List of dicts with subagent_type, objective, focus_area, scope
 
         Returns:
-            ToolResult with the subagent's findings
+            Aggregated ToolResult with all subagent outcomes
         """
-        # Validate subagent type
-        subagent_type_lower = subagent_type.lower()
-        if subagent_type_lower not in ("recon", "test"):
-            return ToolResult(
-                success=False,
-                output="",
-                error=f"Invalid subagent_type: {subagent_type}. Must be 'recon' or 'test'.",
-            )
+        # Validate all requests first
+        for i, req in enumerate(dispatch_requests):
+            if not isinstance(req, dict):
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Request {i} is not a dictionary: {type(req).__name__}",
+                )
+            subagent_type = req.get("subagent_type", "").lower()
+            if subagent_type not in ("recon", "test"):
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Request {i} has invalid subagent_type: {req.get('subagent_type')}. Must be 'recon' or 'test'.",
+                )
+            if not req.get("objective"):
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Request {i} is missing required 'objective' field.",
+                )
 
-        return await self._run_subagent(
-            subagent_type=subagent_type_lower,
-            objective=objective,
-            focus_area=focus_area,
-        )
+        # Create semaphore for concurrency limiting
+        semaphore = asyncio.Semaphore(self._max_concurrent)
 
-    def get_schema(self) -> ToolSchema:
-        return ToolSchema(
-            name=self.name,
-            description=self.description,
-            parameters={
-                "type": "object",
-                "properties": {
-                    "subagent_type": {
-                        "type": "string",
-                        "enum": ["recon", "test"],
-                        "description": "Type of subagent to dispatch: 'recon' for reconnaissance, 'test' for vulnerability testing",
-                    },
-                    "objective": {
-                        "type": "string",
-                        "description": "What the subagent should accomplish",
-                    },
-                    "focus_area": {
-                        "type": "string",
-                        "description": "Optional specific area or surfaces to focus on",
-                        "default": "",
-                    },
-                },
-                "required": ["subagent_type", "objective"],
-            },
-        )
+        async def run_with_semaphore(req: dict) -> ToolResult:
+            async with semaphore:
+                return await self._run_subagent(
+                    subagent_type=req["subagent_type"].lower(),
+                    objective=req["objective"],
+                    focus_area=req.get("focus_area", ""),
+                    scope=req.get("scope", ""),
+                )
 
+        # Execute all subagents in parallel with TaskGroup
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(run_with_semaphore(req)) for req in dispatch_requests]
 
-class DispatchSubagentsTool(Tool):
-    """
-    Dispatch multiple specialized subagents in parallel.
+        # Collect results
+        results = [task.result() for task in tasks]
 
-    This tool allows the orchestrator to dispatch multiple subagents concurrently,
-    with configurable concurrency limits. Use this for efficient parallel testing
-    of multiple independent attack surfaces.
-    """
-
-    name = "dispatch_subagents"
-    description = """Dispatch multiple specialized subagents in parallel for efficient concurrent testing.
-
-    Use this when you have multiple independent objectives that can run concurrently:
-    - Testing multiple attack surfaces simultaneously
-    - Parallel reconnaissance of different application areas
-    - Validating multiple findings concurrently
-
-    Each dispatch request contains:
-    - "subagent_type": "recon" or "test"
-    - "objective": What the subagent should accomplish
-    - "focus_area": Optional specific area to focus on
-
-    Results are aggregated from all subagents when complete."""
-    category = ToolCategory.META
-
-    def __init__(
-        self,
-        findings: "FindingsUpdater",
-        container_manager: "ContainerManager | None" = None,
-        visualization: "VisualizationObserver | None" = None,
-        max_concurrent: int = 3,
-    ):
-        """
-        Initialize the batch dispatch subagent tool.
-
-        Args:
-            findings: FindingsDocument instance for shared state
-            container_manager: Optional container for sandboxed execution
-            visualization: Optional visualization observer for UI events
-            max_concurrent: Maximum concurrent subagent dispatches (default: 3)
-        """
-        self._findings = findings
-        self._container_manager = container_manager
-        self._visualization = visualization
-        self._max_concurrent = max_concurrent
-        # Create internal single dispatch tool for reuse
-        self._single_dispatch = DispatchSubagentTool(
-            findings=findings,
-            container_manager=container_manager,
-            visualization=visualization,
-            max_concurrent=max_concurrent,
-        )
-
-    async def _execute_single_with_semaphore(
-        self,
-        semaphore: asyncio.Semaphore,
-        subagent_type: str,
-        objective: str,
-        focus_area: str,
-    ) -> ToolResult:
-        """
-        Execute a single subagent with semaphore-based concurrency control.
-
-        Args:
-            semaphore: Semaphore for concurrency limiting
-            subagent_type: Type of subagent
-            objective: What the subagent should accomplish
-            focus_area: Optional specific area to focus on
-
-        Returns:
-            ToolResult with the subagent's findings
-        """
-        async with semaphore:
-            return await self._single_dispatch._run_subagent(
-                subagent_type=subagent_type,
-                objective=objective,
-                focus_area=focus_area,
-            )
+        # Aggregate and return
+        return self._aggregate_results(results)
 
     def _aggregate_results(self, results: list[ToolResult]) -> ToolResult:
         """
@@ -549,75 +467,75 @@ class DispatchSubagentsTool(Tool):
 
     async def execute(
         self,
-        dispatch_requests: list[dict],
+        subagent_type: str | None = None,
+        objective: str | None = None,
+        focus_area: str = "",
+        scope: str = "",
+        dispatch_requests: list[dict] | None = None,
         purpose: str = "",
     ) -> ToolResult:
         """
-        Dispatch multiple subagents in parallel.
+        Dispatch subagent(s) to perform tasks.
+
+        Two modes of operation:
+        - Single dispatch: Pass subagent_type and objective
+        - Parallel dispatch: Pass dispatch_requests array
 
         Args:
-            dispatch_requests: List of dicts, each with:
+            subagent_type: Type of subagent ("recon" or "test") - for single dispatch
+            objective: What the subagent should accomplish - for single dispatch
+            focus_area: Optional specific area to focus on - for single dispatch
+            scope: Optional scope constraints - for single dispatch
+            dispatch_requests: List of dicts for parallel dispatch, each with:
                 - subagent_type: "recon" or "test"
                 - objective: What to accomplish
                 - focus_area: Optional focus (default: "")
+                - scope: Optional scope constraints (default: "")
             purpose: Why this tool is being called
 
         Returns:
-            Aggregated ToolResult with all subagent outcomes
+            ToolResult with the subagent's findings
         """
-        if not dispatch_requests:
+        # Determine mode based on which parameters are provided
+        if dispatch_requests is not None:
+            # Parallel dispatch mode
+            if not dispatch_requests:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="dispatch_requests must be a non-empty list.",
+                )
+            return await self._execute_parallel(dispatch_requests)
+
+        # Single dispatch mode - validate required parameters
+        if not subagent_type:
             return ToolResult(
                 success=False,
                 output="",
-                error="No dispatch requests provided. dispatch_requests must be a non-empty list.",
+                error="subagent_type is required for single dispatch. Use dispatch_requests for parallel dispatch.",
+            )
+        if not objective:
+            return ToolResult(
+                success=False,
+                output="",
+                error="objective is required for single dispatch.",
             )
 
-        # Validate all requests first
-        for i, req in enumerate(dispatch_requests):
-            if not isinstance(req, dict):
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error=f"Request {i} is not a dictionary: {type(req).__name__}",
-                )
-            subagent_type = req.get("subagent_type", "").lower()
-            if subagent_type not in ("recon", "test"):
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error=f"Request {i} has invalid subagent_type: {req.get('subagent_type')}. Must be 'recon' or 'test'.",
-                )
-            if not req.get("objective"):
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error=f"Request {i} is missing required 'objective' field.",
-                )
+        # Validate subagent type
+        subagent_type_lower = subagent_type.lower()
+        if subagent_type_lower not in ("recon", "test"):
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Invalid subagent_type: {subagent_type}. Must be 'recon' or 'test'.",
+            )
 
-        # Create semaphore for concurrency limiting
-        semaphore = asyncio.Semaphore(self._max_concurrent)
-
-        # Execute all subagents in parallel with TaskGroup
-        results: list[ToolResult] = []
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = []
-            for req in dispatch_requests:
-                task = tg.create_task(
-                    self._execute_single_with_semaphore(
-                        semaphore=semaphore,
-                        subagent_type=req["subagent_type"].lower(),
-                        objective=req["objective"],
-                        focus_area=req.get("focus_area", ""),
-                    )
-                )
-                tasks.append(task)
-
-        # Collect results
-        results = [task.result() for task in tasks]
-
-        # Aggregate and return
-        return self._aggregate_results(results)
+        return await self._run_subagent(
+            subagent_type=subagent_type_lower,
+            objective=objective,
+            focus_area=focus_area,
+            scope=scope,
+        )
 
     def get_schema(self) -> ToolSchema:
         return ToolSchema(
@@ -626,16 +544,35 @@ class DispatchSubagentsTool(Tool):
             parameters={
                 "type": "object",
                 "properties": {
+                    "subagent_type": {
+                        "type": "string",
+                        "enum": ["recon", "test"],
+                        "description": "Type of subagent (for single dispatch): 'recon' for reconnaissance, 'test' for vulnerability testing",
+                    },
+                    "objective": {
+                        "type": "string",
+                        "description": "What the subagent should accomplish (for single dispatch)",
+                    },
+                    "focus_area": {
+                        "type": "string",
+                        "description": "Optional specific area or surfaces to focus on (for single dispatch)",
+                        "default": "",
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "Optional scope constraints (e.g., 'Only test /api/* endpoints')",
+                        "default": "",
+                    },
                     "dispatch_requests": {
                         "type": "array",
-                        "description": "List of subagent dispatch requests to execute in parallel",
+                        "description": "For parallel dispatch: array of subagent requests to execute concurrently",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "subagent_type": {
                                     "type": "string",
                                     "enum": ["recon", "test"],
-                                    "description": "Type of subagent: 'recon' for reconnaissance, 'test' for vulnerability testing",
+                                    "description": "Type of subagent",
                                 },
                                 "objective": {
                                     "type": "string",
@@ -643,7 +580,12 @@ class DispatchSubagentsTool(Tool):
                                 },
                                 "focus_area": {
                                     "type": "string",
-                                    "description": "Optional specific area or surfaces to focus on",
+                                    "description": "Optional focus area",
+                                    "default": "",
+                                },
+                                "scope": {
+                                    "type": "string",
+                                    "description": "Optional scope constraints",
                                     "default": "",
                                 },
                             },
@@ -651,6 +593,9 @@ class DispatchSubagentsTool(Tool):
                         },
                     },
                 },
-                "required": ["dispatch_requests"],
+                "oneOf": [
+                    {"required": ["subagent_type", "objective"]},
+                    {"required": ["dispatch_requests"]},
+                ],
             },
         )

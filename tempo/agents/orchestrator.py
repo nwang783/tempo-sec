@@ -54,6 +54,7 @@ class OrchestratorAgent(BaseAgentDefinition):
         target: str,
         findings_path: str | None = None,
         max_iterations: int = 10,
+        scope_content: str | None = None,
         **kwargs: Any,
     ):
         """
@@ -66,11 +67,13 @@ class OrchestratorAgent(BaseAgentDefinition):
                           If provided but doesn't exist: creates new at that path.
                           If None: auto-generates path from target.
             max_iterations: Maximum orchestrator iterations (default: 10)
+            scope_content: Optional scope constraints from scope file
             **kwargs: Ignored additional args (for compatibility)
         """
         self.target = target
         self._findings_path = findings_path
         self._max_iterations = max_iterations
+        self._scope_content = scope_content
         self._findings: "FindingsDocument | None" = None
         self._session_id = kwargs.get("session_id", "")
 
@@ -152,7 +155,7 @@ class OrchestratorAgent(BaseAgentDefinition):
         from tempo.tools.registry import ToolRegistry
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.dispatch_subagent import DispatchSubagentTool, DispatchSubagentsTool
+        from tempo.tools.dispatch_subagent import DispatchSubagentTool
         from tempo.tools.findings_tools import (
             ReadFindingsTool,
             AddFindingTool,
@@ -175,14 +178,8 @@ class OrchestratorAgent(BaseAgentDefinition):
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
 
-        # Subagent dispatch - single and parallel dispatch tools
+        # Subagent dispatch - combined single/parallel dispatch tool
         tools.register(DispatchSubagentTool(
-            findings=self.findings,
-            container_manager=container,
-            visualization=visualization,
-            max_concurrent=max_concurrent,
-        ))
-        tools.register(DispatchSubagentsTool(
             findings=self.findings,
             container_manager=container,
             visualization=visualization,
@@ -219,6 +216,7 @@ class OrchestratorAgent(BaseAgentDefinition):
             tool_schemas=tool_schemas,
             target=self.target,
             findings_summary=findings_summary,
+            scope_content=self._scope_content,
         )
 
     def build_objective(self, target: str | None = None, **kwargs: Any) -> str:

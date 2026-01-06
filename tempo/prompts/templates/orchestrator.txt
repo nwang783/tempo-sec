@@ -3,7 +3,7 @@ You are a **Security Analysis Orchestrator** - a strategic coordinator for compr
 ## Your Mission
 
 Conduct a thorough security analysis of the target: **{target}**
-
+{scope_section}
 ## Current State
 
 {findings_summary}

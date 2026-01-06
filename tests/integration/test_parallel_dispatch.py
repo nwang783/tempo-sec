@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
-from tempo.tools.dispatch_subagent import DispatchSubagentsTool, DispatchSubagentTool, ToolResult
+from tempo.tools.dispatch_subagent import DispatchSubagentTool, ToolResult
 from tempo.findings.document import FindingsDocument
 from tempo.findings.schema import Severity
 
@@ -22,12 +22,12 @@ class TestParallelDispatchIntegration:
         safely updates the shared findings document.
         """
         # Create a tool with high concurrency
-        tool = DispatchSubagentsTool(findings=findings_doc, max_concurrent=10)
+        tool = DispatchSubagentTool(findings=findings_doc, max_concurrent=10)
         
         # We need to simulate subagents that actually take time and update findings
         # We'll monkeypatch the _run_subagent method of the internal tool to simulate this
         
-        async def simulated_subagent(subagent_type, objective, focus_area):
+        async def simulated_subagent(subagent_type, objective, focus_area, scope=""):
             # Simulate work
             await asyncio.sleep(0.01)
             
@@ -67,7 +67,7 @@ class TestParallelDispatchIntegration:
             )
             
         # Patch the method on the instance
-        tool._single_dispatch._run_subagent = simulated_subagent
+        tool._run_subagent = simulated_subagent
         
         # Create many requests
         count = 20
@@ -100,7 +100,7 @@ class TestParallelDispatchIntegration:
     async def test_concurrency_limiting(self, findings_doc):
         """Verify that max_concurrent actually limits active tasks."""
         # Set max concurrent to 2
-        tool = DispatchSubagentsTool(findings=findings_doc, max_concurrent=2)
+        tool = DispatchSubagentTool(findings=findings_doc, max_concurrent=2)
         
         active_tasks = 0
         max_seen_active = 0
@@ -120,7 +120,7 @@ class TestParallelDispatchIntegration:
                 
             return ToolResult(success=True, output="ok", metadata={})
             
-        tool._single_dispatch._run_subagent = tracked_subagent
+        tool._run_subagent = tracked_subagent
         
         requests = [{"subagent_type": "recon", "objective": "test"} for _ in range(10)]
         

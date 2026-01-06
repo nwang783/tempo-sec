@@ -1,13 +1,13 @@
-"""Tests for DispatchSubagentsTool (Parallel Dispatch)."""
+"""Tests for DispatchSubagentTool parallel dispatch mode."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from tempo.tools.dispatch_subagent import DispatchSubagentsTool, ToolResult
+from tempo.tools.dispatch_subagent import DispatchSubagentTool, ToolResult
 from tempo.findings.document import FindingsDocument
 from tempo.tools.base import ToolCategory
 
-class TestDispatchSubagentsTool:
-    """Tests for DispatchSubagentsTool."""
+class TestDispatchSubagentToolParallel:
+    """Tests for DispatchSubagentTool parallel dispatch functionality."""
 
     @pytest.fixture
     def findings_doc(self):
@@ -17,11 +17,11 @@ class TestDispatchSubagentsTool:
     @pytest.fixture
     def tool(self, findings_doc):
         """Create the tool instance."""
-        return DispatchSubagentsTool(findings=findings_doc, max_concurrent=2)
+        return DispatchSubagentTool(findings=findings_doc, max_concurrent=2)
 
     def test_tool_properties(self, tool):
         """Test tool properties."""
-        assert tool.name == "dispatch_subagents"
+        assert tool.name == "dispatch_subagent"
         assert tool.category == ToolCategory.META
         assert tool._max_concurrent == 2
         assert "parallel" in tool.description.lower()
@@ -82,8 +82,8 @@ class TestDispatchSubagentsTool:
             }
         )
         
-        # We mock _run_subagent on the internal single dispatch tool
-        tool._single_dispatch._run_subagent = AsyncMock(side_effect=[mock_result_1, mock_result_2])
+        # Mock _run_subagent on the tool directly
+        tool._run_subagent = AsyncMock(side_effect=[mock_result_1, mock_result_2])
 
         requests = [
             {"subagent_type": "recon", "objective": "Recon task"},
@@ -105,7 +105,7 @@ class TestDispatchSubagentsTool:
         assert result.metadata["total_findings_added"] == 1
         
         # Verify calls
-        assert tool._single_dispatch._run_subagent.call_count == 2
+        assert tool._run_subagent.call_count == 2
 
     @pytest.mark.asyncio
     async def test_execute_parallel_partial_failure(self, tool):
@@ -122,7 +122,7 @@ class TestDispatchSubagentsTool:
             metadata={"steps_taken": 2}
         )
         
-        tool._single_dispatch._run_subagent = AsyncMock(side_effect=[mock_result_success, mock_result_failure])
+        tool._run_subagent = AsyncMock(side_effect=[mock_result_success, mock_result_failure])
         
         requests = [
             {"subagent_type": "recon", "objective": "Task 1"},
@@ -131,8 +131,7 @@ class TestDispatchSubagentsTool:
         
         result = await tool.execute(dispatch_requests=requests)
         
-        # Overall success is False if any subagent failed (based on implementation)
-        # Wait, implementation says: success=len(failed) == 0
+        # Overall success is False if any subagent failed
         assert result.success is False
         assert "1 subagent(s) failed" in result.error
         
@@ -140,12 +139,17 @@ class TestDispatchSubagentsTool:
         assert "Failed:** 1" in result.output
         assert "Something broke" in result.output
 
-    def test_get_schema(self, tool):
-        """Test schema generation."""
+    def test_get_schema_includes_parallel_option(self, tool):
+        """Test schema includes dispatch_requests for parallel dispatch."""
         schema = tool.get_schema()
-        assert schema.name == "dispatch_subagents"
+        assert schema.name == "dispatch_subagent"
         
         props = schema.parameters["properties"]
+        # Single dispatch params
+        assert "subagent_type" in props
+        assert "objective" in props
+        assert "focus_area" in props
+        # Parallel dispatch param
         assert "dispatch_requests" in props
         assert props["dispatch_requests"]["type"] == "array"
         
@@ -153,4 +157,29 @@ class TestDispatchSubagentsTool:
         assert "subagent_type" in item_props
         assert "objective" in item_props
         assert "focus_area" in item_props
+        assert "scope" in item_props
 
+    @pytest.mark.asyncio
+    async def test_single_dispatch_still_works(self, tool):
+        """Test that single dispatch mode still works."""
+        mock_result = ToolResult(
+            success=True,
+            output="Single subagent done",
+            metadata={"subagent_id": "id-1", "subagent_type": "recon"}
+        )
+        tool._run_subagent = AsyncMock(return_value=mock_result)
+        
+        result = await tool.execute(
+            subagent_type="recon",
+            objective="Single recon task"
+        )
+        
+        assert result.success is True
+        tool._run_subagent.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_requires_either_mode(self, tool):
+        """Test that either single dispatch params or dispatch_requests is required."""
+        result = await tool.execute()
+        assert result.success is False
+        assert "subagent_type is required" in result.error

@@ -102,6 +102,12 @@ def parse_args() -> argparse.Namespace:
         help="Maximum iterations for orchestrator",
     )
 
+    parser.add_argument(
+        "--scope-file",
+        type=str,
+        help="Path to text file containing scope constraints for analysis",
+    )
+
     # Parse known args first to allow agents to add their own?
     # For now, we take all args and pass relevant ones
     return parser.parse_args()
@@ -166,6 +172,15 @@ async def main() -> None:
             agent_kwargs["findings_path"] = args.findings
         if args.max_iterations:
             agent_kwargs["max_iterations"] = args.max_iterations
+        
+        # Load scope file content if provided
+        if args.scope_file:
+            from pathlib import Path
+            scope_path = Path(args.scope_file)
+            if not scope_path.exists():
+                print(f"Error: Scope file not found: {args.scope_file}")
+                sys.exit(1)
+            agent_kwargs["scope_content"] = scope_path.read_text().strip()
 
         agent_def = get_agent(args.agent, **agent_kwargs)
     except KeyError as e:
