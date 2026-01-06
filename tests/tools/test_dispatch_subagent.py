@@ -7,6 +7,9 @@ import sys
 from tempo.tools.dispatch_subagent import DispatchSubagentTool
 from tempo.tools.base import ToolCategory
 from tempo.findings.document import FindingsDocument
+# Import these to ensure they are in sys.modules for mocking
+import tempo.agents.recon_subagent
+import tempo.agents.test_subagent
 
 
 class TestDispatchSubagentTool:

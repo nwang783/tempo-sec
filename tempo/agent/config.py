@@ -58,7 +58,10 @@ class AgentConfig:
     visualization_port: int = 8080
     visualization_host: str = "127.0.0.1"
     auto_open_browser: bool = True
-    
+
+    # Orchestrator settings
+    max_concurrent_subagents: int = 3  # Max parallel subagent dispatches
+
     # Legacy/convenience aliases
     scope: str | None = None  # Optional scope description
     
@@ -201,5 +204,12 @@ class AgentConfig:
                 kwargs["manifest_path"] = m["path"]
             if "output_dir" in m:
                 kwargs["manifest_output_dir"] = m["output_dir"]
-        
+
+        # [orchestrator] section
+        if "orchestrator" in data:
+            orch = data["orchestrator"]
+            if "max_concurrent" in orch:
+                kwargs["max_concurrent_subagents"] = orch["max_concurrent"]
+
         return cls(**kwargs)
+

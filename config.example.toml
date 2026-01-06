@@ -53,6 +53,10 @@ level = "INFO"
 # Enable verbose output
 verbose = false
 
+[orchestrator]
+# Maximum concurrent subagent dispatches for parallel execution
+max_concurrent = 3
+
 [manifest]
 # Path to target manifest (for test_cycle.py)
 # Uncomment and set when using the split recon/testing workflow
