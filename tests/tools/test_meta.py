@@ -1,6 +1,8 @@
 """Tests for tempo/tools/meta.py."""
 
 import pytest
+from unittest.mock import patch, mock_open, MagicMock
+from pathlib import Path
 
 from tempo.tools.meta import (
     FinishSubtaskTool,
@@ -373,3 +375,38 @@ class TestFinalizeAnalysisTool:
             assert result.success is True
             assert result.metadata["risk_level"] == level
             assert level.upper() in result.output
+            assert result.metadata["risk_level"] == level
+            assert level.upper() in result.output
+
+    @pytest.mark.asyncio
+    async def test_execute_saves_report_file(self, findings_doc):
+        """Test that report is saved to a file."""
+        tool = FinalizeAnalysisTool(findings_updater=findings_doc)
+        
+        # Mock Path and open to prevent actual file system writes
+        with patch("tempo.tools.meta.open", mock_open()) as m_open, \
+             patch("tempo.tools.meta.Path.mkdir") as m_mkdir:
+            
+            result = await tool.execute(
+                final_report="# Final Report\nContent here.",
+                purpose="Testing save",
+            )
+            
+            # Check success
+            assert result.success is True
+            assert result.metadata["finalize_complete"] is True
+            assert "Report saved to" in result.output
+            
+            # Check directory creation - expect findings/example_com
+            # (target is https://example.com in fixture -> example_com)
+            m_mkdir.assert_called()
+            
+            # Check file write
+            m_open.assert_called()
+            handle = m_open()
+            handle.write.assert_called()
+            
+            # Verify content availability in metadata
+            assert "report_path" in result.metadata
+            # Dot is preserved in filename
+            assert "findings/example.com/report.md" in result.metadata["report_path"]
