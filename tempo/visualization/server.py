@@ -63,6 +63,10 @@ class VisualizationServer:
         # Reference to the live context store (for real-time context viewing)
         self._context_store: Optional["ContextStore"] = None
         
+        # Subagent tracking for orchestrator mode
+        self._subagent_contexts: dict[str, "ContextStore"] = {}
+        self._subagent_registry: list[dict] = []
+        
         # Determine UI directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.ui_dir = os.path.join(current_dir, "ui")
@@ -95,6 +99,35 @@ class VisualizationServer:
         """Set the live context store for real-time context viewing."""
         self._context_store = context_store
         self._current_session_id = context_store.session_id
+
+    def register_subagent(
+        self,
+        subagent_id: str,
+        context: "ContextStore",
+        metadata: dict,
+    ) -> None:
+        """Register a subagent for visualization.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent
+            context: The subagent's context store
+            metadata: Additional metadata (type, objective, etc.)
+        """
+        self._subagent_contexts[subagent_id] = context
+        self._subagent_registry.append({
+            "id": subagent_id,
+            "type": metadata.get("type", "unknown"),
+            "objective": metadata.get("objective", ""),
+            "status": "running",
+            "steps": 0,
+            "findings": 0,
+            "surfaces": 0,
+        })
+
+    def clear_subagent_registry(self) -> None:
+        """Clear all subagent data (call when orchestrator finishes)."""
+        self._subagent_contexts.clear()
+        self._subagent_registry.clear()
 
     def _setup_routes(self):
         """Configure FastAPI routes."""
@@ -212,6 +245,26 @@ class VisualizationServer:
             try:
                 with open(context_path, "r") as f:
                     context_data = json.load(f)
+                model = self._agent_state.get("model", "")
+                processed_data = process_context_for_ui(context_data, model=model)
+                return JSONResponse(content=processed_data)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.get("/api/subagents")
+        async def list_subagents():
+            """List all subagent runs for current session."""
+            return JSONResponse(content={"subagents": self._subagent_registry})
+        
+        @self.app.get("/api/subagent/{subagent_id}/context")
+        async def get_subagent_context(subagent_id: str):
+            """Get context for a specific subagent."""
+            context_store = self._subagent_contexts.get(subagent_id)
+            if not context_store:
+                raise HTTPException(status_code=404, detail="Subagent not found")
+            
+            try:
+                context_data = build_context_data_from_store(context_store)
                 model = self._agent_state.get("model", "")
                 processed_data = process_context_for_ui(context_data, model=model)
                 return JSONResponse(content=processed_data)

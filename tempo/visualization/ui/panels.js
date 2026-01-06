@@ -200,6 +200,48 @@ export async function loadContextWindow() {
 }
 
 /**
+ * Load and display context for a specific subagent.
+ * 
+ * @param {string} subagentId - The subagent ID to load context for
+ */
+export async function loadSubagentContext(subagentId) {
+    const container = document.getElementById('context-items');
+    const totalTokensEl = document.getElementById('context-total-tokens');
+    const messageCountEl = document.getElementById('context-message-count');
+
+    if (!container) return;
+
+    container.innerHTML = '<div class="context-empty">Loading subagent context...</div>';
+
+    try {
+        const response = await fetch(`/api/subagent/${subagentId}/context`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                container.innerHTML = '<div class="context-empty">Subagent context not available yet.</div>';
+                return;
+            }
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        state.setContextData(data);
+        renderContextWindow();
+
+        // Update stats
+        if (totalTokensEl) {
+            totalTokensEl.textContent = `${data.total_tokens.toLocaleString()} tokens`;
+        }
+        if (messageCountEl) {
+            const msgCount = data.messages.length;
+            messageCountEl.textContent = `${msgCount} items`;
+        }
+    } catch (error) {
+        console.error('Failed to load subagent context:', error);
+        container.innerHTML = `<div class="context-empty">Failed to load subagent context: ${error.message}</div>`;
+    }
+}
+
+/**
  * Render the context window panel.
  */
 export function renderContextWindow() {
@@ -340,7 +382,13 @@ export function initTabs() {
                 document.getElementById('testplan-container')?.classList.add('active');
             } else if (tabName === 'context') {
                 document.getElementById('context-container')?.classList.add('active');
-                loadContextWindow();
+                // Load context for the currently active agent
+                const activeAgent = state.appState.activeAgentView;
+                if (activeAgent && activeAgent !== 'orchestrator') {
+                    loadSubagentContext(activeAgent);
+                } else {
+                    loadContextWindow();
+                }
             }
         });
     });

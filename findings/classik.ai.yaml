@@ -1,0 +1,281 @@
+version: '1.0'
+target: https://classik.ai
+created_at: 2025-12-28 03:56:22.061983
+updated_at: 2026-01-06 13:01:24.135370
+recon_summary:
+  total_endpoints: 5
+  total_forms: 2
+  total_apis: 0
+  technologies_detected:
+  - Next.js
+  - React
+  - Vercel
+  - Tailwind CSS
+  - Firebase (Auth, Firestore, Realtime DB, Storage, Functions)
+  - IndexedDB
+  - Webpack/_next static chunks
+  authentication_mechanisms:
+  - Firebase Auth (client SDK)
+  - next-auth (client references)
+  - OAuth / magic-link patterns (client-side)
+  notes: 'Confirmed Next.js site hosted on Vercel. Downloaded key _next JS chunks
+    and confirmed Firebase SDK (v11.10.0). Reachable routes: /login, /signup (forms),
+    /admin, /dashboard (pages returned 200). CORS header allows ''*'', HSTS enabled,
+    apex domain redirects to www. Further work: extract firebaseConfig from JS bundles,
+    enumerate /api/* (serverless/Vercel functions), test Firebase rules, and perform
+    access-control tests on /admin and /dashboard.'
+attack_surfaces:
+- id: 47cf3222-80b0-4861-8afc-23c9a0ebb908
+  surface_type: form
+  url: https://www.classik.ai/login
+  description: 'Login page — client-side authentication flow using React/Next.js.
+    Likely accepts credentials or supports magic link/OAuth. Client components observed:
+    RedirectIfSignedIn, HideWhenSignedIn indicating client-side state checks.'
+  parameters:
+  - email
+  - password
+  - remember_me (optional)
+  - csrf_token (maybe)
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  tested: true
+  priority: high
+  discovered_at: 2025-12-28 04:00:17.529982
+  discovered_by: shell (curl)
+- id: 97635c27-a44e-4136-aee0-9c34b6cc8684
+  surface_type: form
+  url: https://www.classik.ai/signup
+  description: Signup page — client-side registration flow built with Next.js/React.
+    Likely accepts user email, password and possibly magic-link or OAuth flows. Useful
+    for testing account creation, input validation, and authorization escalation.
+  parameters:
+  - email
+  - password
+  - confirm_password
+  - csrf_token (maybe)
+  - referrer (optional)
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  - Tailwind CSS
+  tested: true
+  priority: high
+  discovered_at: 2025-12-28 04:02:08.676087
+  discovered_by: shell (curl) and homepage HTML analysis
+- id: 56868d43-e377-46b5-abd9-e105700202bf
+  surface_type: endpoint
+  url: https://www.classik.ai/admin
+  description: Admin route returned HTTP 200 and serves a Next.js page. Potential
+    administrative interface or privileged area reachable without obvious protection
+    from initial requests — requires further authorization testing and access control
+    validation.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  tested: true
+  priority: high
+  discovered_at: 2025-12-28 04:02:28.894686
+  discovered_by: shell (curl) and homepage analysis
+- id: d841dcb9-f44e-423f-ac0e-9ce9d1bba6b4
+  surface_type: endpoint
+  url: https://www.classik.ai/dashboard
+  description: Dashboard route returned HTTP 200 and serves a Next.js page. Likely
+    protected behind authentication in-app; useful for access control and authorization
+    testing (IDOR/forceful browsing).
+  parameters: []
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  tested: true
+  priority: high
+  discovered_at: 2025-12-28 04:03:04.143306
+  discovered_by: shell (curl)
+- id: b2d2c43f-5352-4d96-8b94-7eed9ac3f341
+  surface_type: endpoint
+  url: https://www.classik.ai/bot-logo.png
+  description: Static asset (site logo) accessible at /bot-logo.png. Useful for fingerprinting
+    and confirms accessible public assets and potential metadata in image files.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - Vercel
+  tested: true
+  priority: low
+  discovered_at: 2025-12-28 04:04:05.586245
+  discovered_by: shell (curl)
+- id: b6c7633b-2d92-4420-a38d-a73b4151a60b
+  surface_type: endpoint
+  url: https://www.classik.ai/_next/static/*
+  description: Next.js static asset directory pattern serving JavaScript, CSS, fonts
+    and media. Accessible _next assets were enumerated; these files can reveal client-side
+    logic, API endpoints, keys, and other sensitive data when downloaded and analyzed.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - Vercel
+  - React
+  tested: true
+  priority: medium
+  discovered_at: 2025-12-28 04:04:24.852712
+  discovered_by: shell (curl) and JS chunk analysis
+- id: 3328adc4-01c6-4e15-a781-951d84c989d1
+  surface_type: endpoint
+  url: https://www.classik.ai/
+  description: Homepage — public entry point, redirects from apex (classik.ai -> www.classik.ai).
+    Contains navigation to login/signup and client-side JS references. Useful for
+    content discovery, fingerprinting, and initial interaction testing.
+  parameters: []
+  technology_hints:
+  - Next.js
+  - React
+  - Vercel
+  - Tailwind CSS
+  tested: true
+  priority: medium
+  discovered_at: 2025-12-28 04:04:42.882274
+  discovered_by: shell (curl)
+findings:
+- id: a974f3e6-1699-4b0c-9466-f9e55315c1bb
+  title: Client-side access control for /admin allows unauthenticated HTML shell (potential
+    auth bypass)
+  severity: high
+  status: suspected
+  attack_surface_id: 56868d43-e377-46b5-abd9-e105700202bf
+  description: The /admin path returns an HTTP 200 and serves a client-side rendered
+    shell (Next.js) rather than performing a server-side authentication check / redirect.
+    This indicates access control is enforced client-side and may allow unauthenticated
+    users to load the administrative UI skeleton. While no sensitive admin data was
+    confirmed accessible in the initial HTML, reliance on client-side checks is a
+    risky pattern and can lead to unauthorized API access if backend endpoints lack
+    proper server-side authorization.
+  evidence: "curl -s -i -L https://www.classik.ai/admin returned HTTP 200 and HTML\
+    \ containing 'Loading...' and client-side scripts. Response headers show Next.js/Vercel\
+    \ and presence of Next.js chunks. The page body includes references to an AuthProvider\
+    \ in the hydration scripts. Example (truncated):\n\nHTTP/2 200\ncontent-type:\
+    \ text/html; charset=utf-8\n...\n<body>\n  <!-- Loading state -->\n  <div>Loading...</div>\n\
+    \  <script src=\"/_next/static/chunks/app/layout-...js\"></script>\n  ...\n</body>\n\
+    \n(Recorded during automated curl session.)"
+  reproduction_steps:
+  - 'Run: curl -s -i -L https://www.classik.ai/admin -H "User-Agent: testing-agent/1.0"'
+  - Observe HTTP 200 (no 302/401/403) and HTML body containing a client-side loading
+    state and Next.js chunk references
+  - Inspect served JS chunks for client-side AuthProvider (e.g., app/layout or app/admin
+    chunk) to confirm client-side enforcement
+  remediation: Enforce server-side authentication and authorization for /admin. Return
+    401/403 or redirect to login for unauthenticated requests. Ensure any API endpoints
+    backing admin pages perform server-side authorization checks regardless of client
+    state.
+  discovered_at: 2025-12-28 04:41:52.936902
+  discovered_by: Testing Subagent (shell)
+  validated_by: shell
+- id: e8856dd7-a346-4983-9e94-f5fc25d72e1e
+  title: Unauthenticated dashboard shell served (client-side auth enforcement)
+  severity: high
+  status: suspected
+  attack_surface_id: d841dcb9-f44e-423f-ac0e-9ce9d1bba6b4
+  description: The /dashboard path returns an HTTP 200 and serves a client-side rendered
+    shell (Next.js) that shows a "Checking authentication" loading state. This indicates
+    the application relies on client-side checks for access control instead of enforcing
+    server-side authentication. Serving the dashboard shell to unauthenticated clients
+    is risky because if any API endpoints used by the dashboard lack proper server-side
+    authorization, sensitive data or actions may be accessible via direct API calls.
+  evidence: 'curl -s -i -L https://www.classik.ai/dashboard -H "User-Agent: testing-agent/1.0"
+    returned HTTP/2 200 with HTML body containing ''Checking authentication'' and
+    references to Next.js chunks (e.g., app/dashboard/page-13efdf71ced7d9ea.js). No
+    302/401/403 redirect was observed. (Recorded during automated curl session.)'
+  reproduction_steps:
+  - 'Run: curl -s -i -L https://www.classik.ai/dashboard -H "User-Agent: testing-agent/1.0"'
+  - Observe HTTP 200 and HTML body containing 'Checking authentication' and links
+    to _next static chunks
+  - Inspect client-side JS (dashboard app chunks) to determine what API endpoints
+    are called and verify whether those endpoints enforce server-side authorization
+  remediation: 'Enforce server-side authentication/authorization for the dashboard
+    route and any API endpoints it uses. Return 401/403 or redirect to login for unauthenticated
+    requests. Apply the principle of defense-in-depth: do not rely solely on client-side
+    checks.'
+  discovered_at: 2025-12-28 04:43:34.940021
+  discovered_by: Testing Subagent (shell)
+  validated_by: null
+- id: 336251eb-8295-4c18-9a81-228c2d21c5c7
+  title: 'Overly permissive CORS header (Access-Control-Allow-Origin: *) on public
+    pages'
+  severity: medium
+  status: suspected
+  attack_surface_id: 3328adc4-01c6-4e15-a781-951d84c989d1
+  description: 'Multiple responses from the application include the header Access-Control-Allow-Origin:
+    *. While this is common for public static assets, returning a wildcard CORS policy
+    on pages that may expose authentication or user-specific API endpoints increases
+    the risk that a malicious site could perform cross-origin requests and read responses
+    if other misconfigurations (e.g., Access-Control-Allow-Credentials: true) are
+    present or if API endpoints improperly trust the Origin header.'
+  evidence: 'Observed header in responses for /login, /signup, /bot-logo.png and others.
+    Example header excerpt captured during curl sessions:
+
+
+    Access-Control-Allow-Origin: *
+
+
+    Recorded during automated curl sessions to https://www.classik.ai/login, https://www.classik.ai/signup
+    and https://www.classik.ai/bot-logo.png.'
+  reproduction_steps:
+  - 'Run: curl -s -i -L https://www.classik.ai/login -H "User-Agent: testing-agent/1.0"
+    and inspect response headers for Access-Control-Allow-Origin'
+  - 'Run: curl -s -i -L https://www.classik.ai/signup -H "User-Agent: testing-agent/1.0"
+    and inspect response headers'
+  - 'Run: curl -s -I https://www.classik.ai/bot-logo.png and inspect response headers'
+  remediation: 'Restrict CORS to a specific set of trusted origins for any endpoints
+    that return sensitive information or perform authenticated actions. If wildcard
+    CORS is necessary for public static assets, ensure API endpoints that handle credentials
+    or user data do not return Access-Control-Allow-Origin: * and require proper authentication
+    and CSRF protections.'
+  discovered_at: 2025-12-28 04:44:17.328609
+  discovered_by: Testing Subagent (shell)
+  validated_by: shell
+- id: c1f35cd5-6011-4f8e-89e0-6d079c617b2e
+  title: Missing security headers (CSP, X-Frame-Options, X-Content-Type-Options) on
+    root and pages
+  severity: low
+  status: suspected
+  attack_surface_id: 3328adc4-01c6-4e15-a781-951d84c989d1
+  description: 'Responses from the root and multiple application pages are missing
+    several recommended security headers: Content-Security-Policy, X-Frame-Options
+    (or frame-ancestors via CSP), and X-Content-Type-Options. The absence of these
+    headers increases the risk of clickjacking, MIME-sniffing attacks, and makes XSS
+    exploitation easier or more impactful.'
+  evidence: 'curl -s -I https://www.classik.ai returned headers including Strict-Transport-Security
+    and Access-Control-Allow-Origin: *, but did not include Content-Security-Policy,
+    X-Frame-Options, or X-Content-Type-Options. Example header excerpt:
+
+
+    HTTP/2 200
+
+    server: Vercel
+
+    strict-transport-security: max-age=63072000; includeSubDomains; preload
+
+    access-control-allow-origin: *
+
+
+    (Missing: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options)'
+  reproduction_steps:
+  - 'Run: curl -s -I https://www.classik.ai -H "User-Agent: testing-agent/1.0"'
+  - Inspect response headers for the presence/absence of CSP, X-Frame-Options, and
+    X-Content-Type-Options
+  remediation: 'Add a restrictive Content-Security-Policy appropriate to the application
+    (disallow inline scripts/styles unless necessary, set frame-ancestors to prevent
+    clickjacking). Add X-Frame-Options: DENY (or use CSP frame-ancestors). Add X-Content-Type-Options:
+    nosniff. Ensure these headers are applied to all responses, especially authentication
+    and API endpoints.'
+  discovered_at: 2025-12-28 04:46:12.646222
+  discovered_by: Testing Subagent (shell)
+  validated_by: shell
+agents_invoked:
+- recon_subagent
+- test_subagent
+total_steps_taken: 69

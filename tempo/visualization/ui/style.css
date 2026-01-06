@@ -977,3 +977,139 @@ svg:active {
     padding-top: 10px;
     border-top: 1px dashed var(--border-color);
 }
+
+/* ============================================================================
+   Agent Tree Styles
+   ============================================================================ */
+
+.agent-tree {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.agent-tree-empty {
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 8px;
+    font-style: italic;
+}
+
+.agent-node {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.agent-node:hover {
+    border-color: #555;
+    background: #252525;
+}
+
+.agent-node.active {
+    border-color: var(--accent-color);
+    background: rgba(0, 122, 204, 0.1);
+}
+
+.agent-node.orchestrator .agent-header {
+    color: var(--ghidra-orange);
+}
+
+.agent-node.subagent {
+    margin-left: 20px;
+    font-size: 0.9em;
+}
+
+.agent-node.status-failed {
+    border-color: #f48771;
+}
+
+.agent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.agent-icon {
+    font-size: 16px;
+}
+
+.agent-name {
+    flex: 1;
+}
+
+.status-icon {
+    font-size: 14px;
+}
+
+.agent-details {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.agent-details div {
+    margin-top: 2px;
+}
+
+/* Findings Summary */
+.findings-summary {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-color);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.findings-summary-title {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.findings-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.finding-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.finding-badge.critical {
+    background: #d32f2f;
+    color: #fff;
+}
+
+.finding-badge.high {
+    background: #f57c00;
+    color: #fff;
+}
+
+.finding-badge.medium {
+    background: #ffc107;
+    color: #000;
+}
+
+.finding-badge.low {
+    background: #4caf50;
+    color: #fff;
+}
+
+.surfaces-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+}

@@ -12,6 +12,7 @@ import * as state from './state.js';
 import * as graph from './graph.js';
 import * as panels from './panels.js';
 import * as ws from './ws.js';
+import * as agentTree from './agentTree.js';
 
 // ============================================================================
 // Event Dispatch
@@ -56,7 +57,12 @@ export function handleEvent(event) {
             break;
 
         case "tool_call":
-            graph.addToolNode(data);
+            handleToolCall(data);
+            break;
+
+        case "tool_call_start":
+            // Show tool card immediately for long-running tools (like dispatch_subagent)
+            handleToolCallStart(data);
             break;
 
         case "step":
@@ -94,6 +100,18 @@ export function handleEvent(event) {
         case "available_tools":
             panels.updateAvailableToolsPanel(data.tools);
             break;
+
+        case "subagent_start":
+            handleSubagentStart(data);
+            break;
+
+        case "subagent_finish":
+            handleSubagentFinish(data);
+            break;
+
+        case "findings_update":
+            handleFindingsUpdate(data);
+            break;
     }
 }
 
@@ -108,6 +126,59 @@ function handleStart(data) {
     if (data.model) {
         const modelEl = document.getElementById("state-model");
         if (modelEl) modelEl.textContent = data.model;
+
+        // Update orchestrator state for agent tree
+        state.agentHierarchy.orchestrator.model = data.model;
+        agentTree.render();
+    }
+}
+
+/**
+ * Handle tool call start event (for long-running tools like dispatch_subagent).
+ * 
+ * Shows the tool card immediately in the graph, before execution completes.
+ * The card will be updated when tool_call event arrives with results.
+ */
+function handleToolCallStart(data) {
+    // Add a "pending" tool node to the graph
+    const pendingData = {
+        ...data,
+        raw_output: "⏳ Running...",
+        success: true,
+        pending: true,
+    };
+
+    // Route to correct agent's graph
+    const subagentId = data.subagent_id;
+    if (subagentId) {
+        graph.addToolNodeForSubagent(pendingData, subagentId);
+    } else {
+        graph.addToolNode(pendingData);
+    }
+
+    // Update "Latest" timestamp
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString();
+    const latestEl = document.getElementById("state-latest");
+    if (latestEl) {
+        latestEl.textContent = `${data.tool_name} (running) @ ${timeStr}`;
+    }
+}
+
+/**
+ * Handle tool call completed event.
+ * 
+ * Routes tool calls to the correct agent's graph based on subagent_id.
+ */
+function handleToolCall(data) {
+    const subagentId = data.subagent_id;
+
+    if (subagentId) {
+        // Subagent tool call - add to subagent's graph
+        graph.addToolNodeForSubagent(data, subagentId);
+    } else {
+        // Orchestrator tool call
+        graph.addToolNode(data);
     }
 }
 
@@ -115,21 +186,46 @@ function handleStart(data) {
  * Handle step completion event.
  */
 function handleStep(data) {
-    // Update phase display
-    if (data.phase) {
-        const phaseEl = document.getElementById("state-phase");
-        if (phaseEl) phaseEl.textContent = data.phase;
-    }
+    const subagentId = data.subagent_id;
 
-    // Update step number display
-    if (data.step_number !== undefined && data.step_number !== null) {
-        const stepEl = document.getElementById("state-step");
-        if (stepEl) stepEl.textContent = data.step_number;
-    }
+    if (subagentId) {
+        // Subagent step - update subagent state
+        const subagent = state.agentHierarchy.subagents.find(s => s.id === subagentId);
+        if (subagent) {
+            subagent.steps++;
+            subagent.currentStepNumber = data.step_number;
 
-    // Create step node and update visualization
-    graph.getOrCreateStepNode(state.appState.currentFrameId, data.step_number);
-    graph.debouncedUpdate();
+            // Update phase display if this subagent is active
+            if (subagent.active && data.phase) {
+                const phaseEl = document.getElementById("state-phase");
+                if (phaseEl) phaseEl.textContent = data.phase;
+            }
+
+            // Re-render agent tree to show updated step count
+            agentTree.render();
+        }
+    } else {
+        // Orchestrator step (existing logic)
+        // Update phase display
+        if (data.phase) {
+            const phaseEl = document.getElementById("state-phase");
+            if (phaseEl) phaseEl.textContent = data.phase;
+        }
+
+        // Update step number display
+        if (data.step_number !== undefined && data.step_number !== null) {
+            const stepEl = document.getElementById("state-step");
+            if (stepEl) stepEl.textContent = data.step_number;
+        }
+
+        // Update orchestrator step count
+        state.agentHierarchy.orchestrator.steps = data.step_number || 0;
+
+        // Create step node and update visualization
+        graph.getOrCreateStepNode(state.appState.currentFrameId, data.step_number);
+        graph.debouncedUpdate();
+        agentTree.render();
+    }
 }
 
 /**
@@ -195,6 +291,34 @@ function handleFinish(data) {
         statusEl.textContent = data.success ? "FINISHED" : "FAILED";
         statusEl.className = "status " + (data.success ? "connected" : "disconnected");
     }
+}
+
+/**
+ * Handle subagent start event.
+ */
+function handleSubagentStart(data) {
+    state.addSubagent(data);
+    agentTree.render();
+}
+
+/**
+ * Handle subagent finish event.
+ */
+function handleSubagentFinish(data) {
+    state.updateSubagent(data.subagent_id, {
+        status: data.success ? 'complete' : 'failed',
+        findings: data.findings_count || 0,
+        surfaces: data.surfaces_count || 0,
+    });
+    agentTree.render();
+}
+
+/**
+ * Handle findings update event.
+ */
+function handleFindingsUpdate(data) {
+    state.updateFindingsSummary(data);
+    agentTree.render();
 }
 
 // ============================================================================

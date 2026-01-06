@@ -6,6 +6,7 @@ Falls back to a character-based heuristic if tokenization fails.
 """
 
 from typing import TYPE_CHECKING
+import os
 
 if TYPE_CHECKING:
     pass
@@ -35,9 +36,16 @@ def count_tokens(text: str, model: str | None = None) -> int:
     
     model_to_use = model or DEFAULT_TOKENIZER_MODEL
     
-    try:
-        import litellm
-        return litellm.token_counter(model=model_to_use, text=text)
-    except Exception:
-        # Fallback to heuristic if tokenizer fails (import error, unsupported model, etc.)
-        return len(text) // 4
+    # NOTE: Importing litellm has side effects (registers async atexit cleanup).
+    # Tests can disable via TEMPO_USE_LITELLM_TOKENIZER=0.
+    use_litellm = os.getenv("TEMPO_USE_LITELLM_TOKENIZER", "1").lower() not in ("0", "false", "no")
+    if use_litellm:
+        try:
+            import litellm
+            return litellm.token_counter(model=model_to_use, text=text)
+        except Exception:
+            # Fall through to heuristic if tokenizer fails (import error, unsupported model, etc.)
+            pass
+
+    # Heuristic fallback: ~4 chars/token is a common rough estimate for English text.
+    return len(text) // 4

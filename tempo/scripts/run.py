@@ -89,8 +89,20 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Output path (for recon manifest, etc.)",
     )
-    
-    # Parse known args first to allow agents to add their own? 
+
+    parser.add_argument(
+        "--findings",
+        type=str,
+        help="Path to findings document (for orchestrator)",
+    )
+
+    parser.add_argument(
+        "--max-iterations",
+        type=int,
+        help="Maximum iterations for orchestrator",
+    )
+
+    # Parse known args first to allow agents to add their own?
     # For now, we take all args and pass relevant ones
     return parser.parse_args()
 
@@ -141,13 +153,21 @@ async def main() -> None:
     
     # Load Agent Definition
     try:
-        agent_def = get_agent(
-            args.agent,
-            target=args.target,
-            manifest_path=args.manifest,
-            output_path=args.output,
-            session_id=str(uuid.uuid4())
-        )
+        # Build kwargs for agent constructor
+        agent_kwargs = {
+            "target": args.target,
+            "manifest_path": args.manifest,
+            "output_path": args.output,
+            "session_id": str(uuid.uuid4()),
+        }
+
+        # Add orchestrator-specific arguments
+        if args.findings:
+            agent_kwargs["findings_path"] = args.findings
+        if args.max_iterations:
+            agent_kwargs["max_iterations"] = args.max_iterations
+
+        agent_def = get_agent(args.agent, **agent_kwargs)
     except KeyError as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -158,6 +178,8 @@ async def main() -> None:
             print("Hint: 'recon' agent requires --target")
         if args.agent == "test_cycle" and not args.manifest:
             print("Hint: 'test_cycle' agent requires --manifest")
+        if args.agent == "orchestrator" and not args.target:
+            print("Hint: 'orchestrator' agent requires --target")
         sys.exit(1)
 
     # Resolve Model
@@ -294,14 +316,26 @@ async def main() -> None:
                 timeout=config.container_timeout,
             )
             container = ContainerManager(container_config)
+            
+            # Early Docker connectivity check
+            try:
+                container.client.ping()
+            except Exception as docker_err:
+                print(f"\n❌ Docker connection failed: {docker_err}")
+                print("\nPossible fixes:")
+                print("  1. Start Docker Desktop")
+                print("  2. Run with --local flag to skip containerization")
+                print("  3. Set TEMPO_LOCAL_MODE=true in environment")
+                sys.exit(1)
+            
             async with container:
                 # Create tools with container
-                tools = agent_def.create_tools(context, container, workflow)
+                tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector)
                 result = await run_agent(tools, workflow)
         else:
             print("⚠️  Running in LOCAL mode (no sandbox)...")
             # Create local tools
-            tools = agent_def.create_tools(context, None, workflow)
+            tools = agent_def.create_tools(context, None, workflow, visualization=viz_collector)
             result = await run_agent(tools, workflow)
             
         # Final Report

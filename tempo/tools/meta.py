@@ -9,6 +9,7 @@ from tempo.infra.protocols import (
     PhaseTransitioner,
     ContextSummarizer,
     BranchSpawner,
+    FindingsUpdater,
 )
 
 
@@ -394,19 +395,150 @@ class BranchToSubtasksTool(Tool):
         )
 
 
+class FinalizeAnalysisTool(Tool):
+    """Finalize the security analysis and generate the final report."""
+
+    name = "finalize_analysis"
+    description = """Finalize the security analysis and generate the final report.
+
+    Call this tool when:
+    - Sufficient reconnaissance has been performed
+    - Attack surfaces have been adequately tested
+    - You are ready to conclude the security assessment
+
+    Provide:
+    - final_report: Comprehensive summary of findings
+    - executive_summary: Brief overview for stakeholders (optional)
+    - risk_level: Overall risk assessment (optional)
+
+    This tool saves the findings document and terminates the orchestrator."""
+    category = ToolCategory.META
+
+    def __init__(self, findings_updater: "FindingsUpdater"):
+        """
+        Initialize the finalize analysis tool.
+
+        Args:
+            findings_updater: Component implementing FindingsUpdater protocol
+        """
+        self.findings = findings_updater
+
+    async def execute(
+        self,
+        final_report: str,
+        executive_summary: str = "",
+        risk_level: str = "medium",
+        purpose: str = "",
+    ) -> ToolResult:
+        """
+        Finalize the security analysis.
+
+        Args:
+            final_report: Comprehensive summary of findings
+            executive_summary: Brief overview for stakeholders
+            risk_level: Overall risk assessment (low, medium, high, critical)
+            purpose: Why this tool is being called
+
+        Returns:
+            ToolResult with finalize_complete flag in metadata
+        """
+        # Validate risk level
+        valid_risk_levels = {"low", "medium", "high", "critical"}
+        if risk_level.lower() not in valid_risk_levels:
+            risk_level = "medium"
+
+        # Save the findings document if it has a save method
+        try:
+            if hasattr(self.findings, 'save') and hasattr(self.findings, 'file_path'):
+                if self.findings.file_path:
+                    self.findings.save()
+        except Exception:
+            pass  # Non-critical if save fails
+
+        # Get final summary for output
+        try:
+            summary = self.findings.get_summary()
+            findings_summary = (
+                f"Total attack surfaces: {summary.get('total_surfaces', 0)} "
+                f"({summary.get('tested_surfaces', 0)} tested)\n"
+                f"Total findings: {summary.get('total_findings', 0)}\n"
+                f"  Critical: {summary.get('findings_by_severity', {}).get('critical', 0)}\n"
+                f"  High: {summary.get('findings_by_severity', {}).get('high', 0)}\n"
+                f"  Medium: {summary.get('findings_by_severity', {}).get('medium', 0)}\n"
+                f"  Low: {summary.get('findings_by_severity', {}).get('low', 0)}\n"
+                f"  Info: {summary.get('findings_by_severity', {}).get('info', 0)}"
+            )
+        except Exception:
+            findings_summary = "Unable to retrieve findings summary."
+
+        output_parts = [
+            "## Analysis Complete",
+            "",
+            f"**Risk Level**: {risk_level.upper()}",
+            "",
+            "### Findings Summary",
+            findings_summary,
+            "",
+            "### Final Report",
+            final_report,
+        ]
+
+        if executive_summary:
+            output_parts.insert(3, "### Executive Summary")
+            output_parts.insert(4, executive_summary)
+            output_parts.insert(5, "")
+
+        return ToolResult(
+            success=True,
+            output="\n".join(output_parts),
+            metadata={
+                "finalize_complete": True,
+                "risk_level": risk_level.lower(),
+                "executive_summary": executive_summary,
+                "final_report": final_report,
+            },
+        )
+
+    def get_schema(self) -> ToolSchema:
+        """Return the JSON schema for this tool's parameters."""
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "final_report": {
+                        "type": "string",
+                        "description": "Comprehensive summary of the security analysis findings.",
+                    },
+                    "executive_summary": {
+                        "type": "string",
+                        "description": "Brief overview suitable for stakeholders (optional).",
+                    },
+                    "risk_level": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high", "critical"],
+                        "description": "Overall risk assessment for the target.",
+                    },
+                },
+                "required": ["final_report"],
+            },
+        )
+
+
 class FinishSubtaskTool(Tool):
     """Signal completion of a subtask (used by subagents)."""
-    
+
     name = "finish_subtask"
     description = """Signal that your subtask is complete. Provide a summary of:
     - What you investigated
-    - What actions you took  
+    - What actions you took
     - Key findings or results
-    
+
     Your summary will be merged with other subagent results and returned
     to the main agent."""
     category = ToolCategory.META
-    
+
     async def execute(
         self,
         summary: str,

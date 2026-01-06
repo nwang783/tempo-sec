@@ -134,6 +134,7 @@ class Agent:
         self.step_handler = StepHandler(
             tools=tools,
             on_tool_call=self._handle_tool_call_complete,
+            on_tool_call_start=self._handle_tool_call_start,
         )
     
     # Tools exempt from summarization requirement (meta tools and control tools)
@@ -141,7 +142,7 @@ class Agent:
         "summarize_previous_tool_output", "view_tool_output", "transition_phase",
         "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
         "branch_to_subtasks", "finish_subtask", "complete_recon",
-        "complete_browser_task",
+        "complete_browser_task", "complete_subtask",
     }
     
     def _requires_summarization(self, tool_call: ToolCall) -> bool:
@@ -647,7 +648,16 @@ class Agent:
                     **special.findings,
                     "step": self._step_count,
                 })
-        
+
+        elif special.tool_name == "complete_subtask":
+            # Subtask complete - stop the subagent
+            step_result.should_continue = False
+            if special.findings:
+                self._findings.append({
+                    **special.findings,
+                    "step": self._step_count,
+                })
+
         return step_result
     
     def _handle_tool_call_complete(self, tool_call: ToolCall) -> None:
@@ -666,6 +676,20 @@ class Agent:
         # Notify visualization
         if self._viz_collector:
             self._viz_collector.on_tool_call(tool_call, self.context.current_frame.id)
+    
+    def _handle_tool_call_start(self, tool_call: ToolCall) -> None:
+        """
+        Callback invoked when a tool call starts (before execution completes).
+        
+        Used for long-running tools like dispatch_subagent to show the tool
+        card in the UI immediately.
+        
+        Args:
+            tool_call: The starting tool call (not yet executed)
+        """
+        # Notify visualization of tool start
+        if self._viz_collector:
+            self._viz_collector.on_tool_call_start(tool_call, self.context.current_frame.id)
     
     def _validate_pending_summarizations(self) -> None:
         """

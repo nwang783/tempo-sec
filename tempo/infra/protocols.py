@@ -217,6 +217,135 @@ class VisualizationObserver(Protocol):
         ...
 
 
+class FindingsUpdater(Protocol):
+    """
+    Protocol for components that can update findings documents.
+
+    This allows tools to interact with the findings document without
+    importing from the findings module directly, following the
+    dependency rules.
+    """
+
+    def add_attack_surface(
+        self,
+        surface_id: str,
+        surface_type: str,
+        url: str,
+        description: str,
+        discovered_by: str,
+        parameters: list[str] | None = None,
+        technology_hints: list[str] | None = None,
+        priority: str = "medium",
+    ) -> Any:
+        """
+        Add a new attack surface to the findings document.
+
+        Args:
+            surface_id: Unique identifier (UUID)
+            surface_type: Type of surface (endpoint, form, api, etc.)
+            url: Full URL or location
+            description: Detailed description
+            discovered_by: Agent or tool that discovered it
+            parameters: Optional list of parameters
+            technology_hints: Optional technology indicators
+            priority: Priority level (high, medium, low)
+
+        Returns:
+            The created AttackSurface object
+        """
+        ...
+
+    def add_finding(
+        self,
+        finding_id: str,
+        title: str,
+        severity: str,
+        status: str,
+        description: str,
+        evidence: str,
+        discovered_by: str,
+        attack_surface_id: str | None = None,
+        reproduction_steps: list[str] | None = None,
+        remediation: str = "",
+        validated_by: str | None = None,
+    ) -> Any:
+        """
+        Add a new security finding to the findings document.
+
+        Args:
+            finding_id: Unique identifier (UUID)
+            title: Short descriptive title
+            severity: Severity level (critical, high, medium, low, info)
+            status: Confirmation status (suspected, confirmed, false_positive, needs_manual)
+            description: Detailed description
+            evidence: Supporting evidence
+            discovered_by: Agent or tool that discovered it
+            attack_surface_id: Optional ID of related attack surface
+            reproduction_steps: Optional reproduction steps
+            remediation: Optional remediation guidance
+            validated_by: Optional validator
+
+        Returns:
+            The created Finding object
+        """
+        ...
+
+    def mark_surface_tested(self, surface_id: str) -> bool:
+        """
+        Mark an attack surface as tested.
+
+        Args:
+            surface_id: ID of the surface to mark
+
+        Returns:
+            True if surface was found and updated, False otherwise
+        """
+        ...
+
+    def update_recon_summary(
+        self,
+        total_endpoints: int | None = None,
+        total_forms: int | None = None,
+        total_apis: int | None = None,
+        technologies_detected: list[str] | None = None,
+        authentication_mechanisms: list[str] | None = None,
+        notes: str | None = None,
+    ) -> Any:
+        """
+        Update or create the reconnaissance summary.
+
+        Args:
+            total_endpoints: Number of endpoints discovered
+            total_forms: Number of forms found
+            total_apis: Number of API endpoints
+            technologies_detected: List of detected technologies
+            authentication_mechanisms: List of auth mechanisms
+            notes: General observations
+
+        Returns:
+            The updated ReconSummary object
+        """
+        ...
+
+    def get_summary(self) -> dict:
+        """
+        Get a summary of the findings document.
+
+        Returns:
+            Dictionary with summary statistics
+        """
+        ...
+
+    def get_untested_surfaces(self) -> list[Any]:
+        """
+        Get all attack surfaces that haven't been tested yet.
+
+        Returns:
+            List of untested attack surfaces
+        """
+        ...
+
+
 class AgentDefinition(Protocol):
     """
     Protocol for modular agent definitions.
@@ -307,12 +436,48 @@ class AgentDefinition(Protocol):
     def build_objective(self, target: str, **kwargs: Any) -> str:
         """
         Build the user objective from runtime parameters.
-        
+
         Args:
             target: Primary target (URL, path, etc.)
             **kwargs: Additional agent-specific parameters
-            
+
         Returns:
             Formatted objective string
+        """
+        ...
+
+
+class SubagentDispatcher(Protocol):
+    """
+    Protocol for components that can dispatch subagents.
+
+    This allows the orchestrator to delegate work to specialized subagents
+    (ReconSubagent, TestSubagent) while maintaining a clean interface.
+    """
+
+    async def dispatch(
+        self,
+        subagent_type: str,
+        objective: str,
+        focus_area: str = "",
+        max_steps: int = 50,
+    ) -> dict[str, Any]:
+        """
+        Dispatch a subagent to perform a specific task.
+
+        Args:
+            subagent_type: Type of subagent to dispatch ("recon" or "test")
+            objective: The objective for the subagent to accomplish
+            focus_area: Optional specific area to focus on
+            max_steps: Maximum steps the subagent can take
+
+        Returns:
+            Dictionary with subagent results:
+                - success: bool
+                - summary: str
+                - surfaces_added: int (for recon)
+                - findings_added: int (for test)
+                - steps_taken: int
+                - error: str | None
         """
         ...
