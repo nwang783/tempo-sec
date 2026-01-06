@@ -57,15 +57,21 @@ class TestDispatchSubagentTool:
         schema = tool.get_schema()
 
         assert schema.name == "dispatch_subagent"
-        required = schema.parameters.get("required", [])
-        assert "subagent_type" in required
-        assert "objective" in required
+        
+        # Schema uses oneOf to support both single and parallel dispatch
+        one_of = schema.parameters.get("oneOf", [])
+        assert len(one_of) == 2
+        # Single dispatch requires subagent_type and objective
+        assert {"required": ["subagent_type", "objective"]} in one_of
+        # Parallel dispatch requires dispatch_requests
+        assert {"required": ["dispatch_requests"]} in one_of
 
         props = schema.parameters["properties"]
         assert "subagent_type" in props
         assert props["subagent_type"]["enum"] == ["recon", "test"]
         assert "objective" in props
         assert "focus_area" in props
+        assert "dispatch_requests" in props
 
     def test_schema_defaults(self, findings_doc):
         """Test schema has correct defaults."""
