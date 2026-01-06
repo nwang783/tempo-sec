@@ -3,8 +3,6 @@
 import pytest
 
 from tempo.tools.meta import (
-    ContinueAnalysisTool,
-    FinishTaskTool,
     FinishSubtaskTool,
     SummarizeOutputTool,
     FinalizeAnalysisTool,
@@ -12,77 +10,6 @@ from tempo.tools.meta import (
 from tempo.context.store import ContextStore
 from tempo.context.frame import ToolCall
 from tempo.findings.document import FindingsDocument
-
-
-class TestContinueAnalysisTool:
-    """Tests for ContinueAnalysisTool class."""
-    
-    def test_name_and_category(self):
-        """Test tool name and category are set."""
-        tool = ContinueAnalysisTool()
-        assert tool.name == "continue_analysis"
-        assert tool.category.value == "meta"
-    
-    def test_get_schema(self):
-        """Test schema generation."""
-        tool = ContinueAnalysisTool()
-        schema = tool.get_schema().to_openai_format()
-        
-        assert schema["function"]["name"] == "continue_analysis"
-        assert "should_continue" in schema["function"]["parameters"]["properties"]
-        assert "reasoning" in schema["function"]["parameters"]["properties"]
-        assert "findings" in schema["function"]["parameters"]["properties"]
-    
-    @pytest.mark.asyncio
-    async def test_execute_continue(self):
-        """Test continuing analysis."""
-        tool = ContinueAnalysisTool()
-        
-        result = await tool.execute(
-            should_continue=True,
-            reasoning="More endpoints to investigate",
-        )
-        
-        assert result.success is True
-        assert result.metadata["continue"] is True
-        assert "Continuing" in result.output
-    
-    @pytest.mark.asyncio
-    async def test_execute_finish(self):
-        """Test finishing analysis with findings."""
-        tool = ContinueAnalysisTool()
-        
-        result = await tool.execute(
-            should_continue=False,
-            reasoning="All phases complete",
-            findings="Found SQL injection vulnerability",
-        )
-        
-        assert result.success is True
-        assert result.metadata["finish"] is True
-        assert "Analysis complete" in result.output
-    
-    @pytest.mark.asyncio
-    async def test_execute_finish_requires_findings(self):
-        """Test that finishing requires findings."""
-        tool = ContinueAnalysisTool()
-        
-        result = await tool.execute(
-            should_continue=False,
-            reasoning="Done",
-            findings="",  # Empty findings
-        )
-        
-        assert result.success is False
-        assert "must provide findings" in result.error
-
-
-class TestFinishTaskToolAlias:
-    """Tests for FinishTaskTool backward compatibility alias."""
-    
-    def test_alias_exists(self):
-        """Test that FinishTaskTool is an alias for ContinueAnalysisTool."""
-        assert FinishTaskTool is ContinueAnalysisTool
 
 
 class TestFinishSubtaskTool:

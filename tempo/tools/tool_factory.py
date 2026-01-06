@@ -19,9 +19,7 @@ from tempo.tools.browser_tools import (
     BrowserFillFormTool,
 )
 from tempo.tools.meta import (
-    TransitionPhaseTool,
     SummarizeOutputTool,
-    FinishTaskTool,
     BranchToSubtasksTool,
     FinishSubtaskTool,
 )
@@ -30,14 +28,12 @@ from tempo.tools.view_output import ViewToolOutputTool
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
     from tempo.context.store import ContextStore
-    from tempo.agent.workflow import WorkflowManager
     from tempo.agent.branch_coordinator import BranchCoordinator
 
 
 def create_sandboxed_tools(
     container: "ContainerManager",
     context_store: "ContextStore",
-    workflow_manager: "WorkflowManager | None" = None,
     branch_coordinator: "BranchCoordinator | None" = None,
 ) -> ToolRegistry:
     """
@@ -49,7 +45,6 @@ def create_sandboxed_tools(
     Args:
         container: Container manager for sandboxed execution (required)
         context_store: Context store for summarization tool
-        workflow_manager: Optional workflow manager for phase transitions
         branch_coordinator: Optional branch coordinator for subtasks
         
     Returns:
@@ -71,11 +66,8 @@ def create_sandboxed_tools(
     tools.register(BrowserFillFormTool(browser_session))
     
     # Meta tools
-    tools.register(FinishTaskTool())
     tools.register(SummarizeOutputTool(context_store=context_store))
     tools.register(ViewToolOutputTool(context_store=context_store))
-    if workflow_manager:
-        tools.register(TransitionPhaseTool(workflow_manager=workflow_manager))
     
     if branch_coordinator:
         tools.register(BranchToSubtasksTool(branch_coordinator=branch_coordinator))
@@ -86,7 +78,6 @@ def create_sandboxed_tools(
 
 def create_local_tools(
     context_store: "ContextStore",
-    workflow_manager: "WorkflowManager | None" = None,
 ) -> ToolRegistry:
     """
     Create a tool registry for local (non-containerized) execution.
@@ -96,7 +87,6 @@ def create_local_tools(
     
     Args:
         context_store: Context store for summarization tool
-        workflow_manager: Optional workflow manager for phase transitions
         
     Returns:
         ToolRegistry with tools configured for local execution
@@ -123,10 +113,8 @@ def create_local_tools(
     tools.register(BrowserFillFormTool(browser_session))
     
     # Meta tools
-    tools.register(FinishTaskTool())
     tools.register(SummarizeOutputTool(context_store=context_store))
     tools.register(ViewToolOutputTool(context_store=context_store))
-    if workflow_manager:
-        tools.register(TransitionPhaseTool(workflow_manager=workflow_manager))
     
     return tools
+

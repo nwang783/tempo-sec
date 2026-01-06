@@ -108,8 +108,8 @@ class TestIntegration:
         assert "shell" in names
         assert "file_read" in names
     
-    def test_prompt_builder_full_prompt(self):
-        """Test prompt builder generates complete prompts."""
+    def test_prompt_builder_orchestrator_prompt(self):
+        """Test prompt builder generates orchestrator prompts."""
         builder = PromptBuilder()
         
         schemas = [
@@ -123,12 +123,12 @@ class TestIntegration:
             }
         ]
         
-        prompt = builder.build_full_prompt(
-            current_phase=Phase.RECON,
+        prompt = builder.build_orchestrator_prompt(
             tool_schemas=schemas,
+            target="https://example.com",
         )
         
-        assert "RECON" in prompt
+        assert "example.com" in prompt
         assert "test_tool" in prompt
     
     @pytest.mark.asyncio

@@ -5,7 +5,7 @@ Prompt builder for assembling prompts from templates.
 from pathlib import Path
 from typing import Any
 
-from tempo.prompts.phases import Phase, PHASE_CONFIGS
+from tempo.prompts.phases import Phase
 
 
 # Default template directory
@@ -72,24 +72,6 @@ class PromptBuilder:
             findings_count=findings_count,
         )
     
-    def build_phase_prompt(self, phase: Phase, has_test_plan: bool = False) -> str:
-        """
-        Build the phase-specific prompt.
-
-        Args:
-            phase: The workflow phase
-            has_test_plan: Whether a test plan already exists (for HYPOTHESIZE phase)
-
-        Returns:
-            Formatted phase prompt
-        """
-        # Special handling for HYPOTHESIZE phase based on plan existence
-        if phase == Phase.HYPOTHESIZE and has_test_plan:
-            template_name = "phase_hypothesize_existing"
-        else:
-            template_name = f"phase_{phase.value}"
-        return self._load_template(template_name)
-    
     def build_summarization_prompt(
         self,
         tool_name: str,
@@ -155,28 +137,21 @@ class PromptBuilder:
             "tools until summarization is complete. Extract key information relevant to "
             "your objective and discard verbose details."
         ),
-        "transition_phase": (
-            "Use this to move between workflow phases (RECON → HYPOTHESIZE → TEST → REFLECT). "
-            "You must provide justification for each transition."
-        ),
         "branch_to_subtasks": (
             "Use when investigating multiple things independently. Each subtask spawns "
             "a subagent that works in parallel. Subagents call `finish_subtask` when done."
         ),
-        "finish_task": (
-            "Call this when your overall objective is complete. Provide a summary of findings."
+        "dispatch_subagent": (
+            "Dispatch a specialized subagent for focused investigation. Subagents have "
+            "access to the shared findings document and return a summary when complete."
         ),
-        "complete_recon": (
-            "Call this when reconnaissance is complete. This saves the target manifest."
+        "finalize_analysis": (
+            "Call this when the security analysis is complete. This saves findings and "
+            "terminates the orchestrator with a final report."
         ),
-        "create_test_plan": (
-            "Use this to create a structured test plan with prioritized hypotheses. "
-            "The agent will automatically transition to TEST phase after creating a plan."
-        ),
-        "continue_analysis": (
-            "Use this in the REFLECT phase to either continue with more testing "
-            "(should_continue=true → returns to HYPOTHESIZE) or finish analysis "
-            "(should_continue=false → provides final findings)."
+        "complete_subtask": (
+            "Call this when your subtask is complete. Provide a summary of what you "
+            "accomplished and any attack surfaces or findings discovered."
         ),
         "view_tool_output": (
             "Use this to view specific character ranges of truncated tool outputs. "
@@ -226,34 +201,6 @@ class PromptBuilder:
         
         return "\n".join(lines)
     
-    def build_recon_prompt(
-        self,
-        objective: str,
-        tool_schemas: list[dict],
-        scope_description: str = "No specific scope defined.",
-    ) -> str:
-        """
-        Build the system prompt for standalone recon agent.
-        
-        This prompt does NOT include phase transition instructions.
-        
-        Args:
-            objective: The target/objective for recon
-            tool_schemas: List of tool schemas
-            scope_description: Scope/limits for testing
-            
-        Returns:
-            Formatted recon system prompt
-        """
-        tool_descriptions = self.format_tool_descriptions(tool_schemas)
-        template = self._load_template("recon_system")
-        
-        return template.format(
-            objective=objective,
-            tool_descriptions=tool_descriptions,
-            scope_description=scope_description,
-        )
-    
     def build_browser_prompt(
         self,
         tool_schemas: list[dict],
@@ -297,6 +244,30 @@ class PromptBuilder:
             if s.get("function", {}).get("name") not in excluded_tools
         ]
     
+    def build_phase_prompt(self, phase: Phase, has_test_plan: bool = False) -> str:
+        """
+        Build a minimal phase-specific prompt.
+        
+        NOTE: Full phase templates have been removed as part of legacy cleanup.
+        This method now returns a simple phase identifier for the Agent runner.
+        The orchestrator architecture uses specialized subagent prompts instead.
+        
+        Args:
+            phase: The workflow phase
+            has_test_plan: Whether a test plan exists (unused, kept for compatibility)
+            
+        Returns:
+            Simple phase identifier string
+        """
+        # Return minimal phase guidance - full prompts are in orchestrator/subagent templates
+        phase_guidance = {
+            Phase.RECON: "Focus on discovering attack surfaces and understanding the target.",
+            Phase.HYPOTHESIZE: "Create a structured test plan based on discovered surfaces.",
+            Phase.TEST: "Execute tests against identified attack surfaces.",
+            Phase.REFLECT: "Analyze results and decide whether to continue or finalize.",
+        }
+        return f"## Current Phase: {phase.value.upper()}\n\n{phase_guidance.get(phase, '')}"
+    
     def build_full_prompt(
         self,
         current_phase: Phase,
@@ -307,6 +278,9 @@ class PromptBuilder:
     ) -> str:
         """
         Build the complete system prompt with phase instructions.
+        
+        NOTE: This is a backward compatibility method for the base Agent runner.
+        The orchestrator uses build_orchestrator_prompt instead.
         
         Args:
             current_phase: Current workflow phase
@@ -331,46 +305,6 @@ class PromptBuilder:
         phase_prompt = self.build_phase_prompt(current_phase)
         
         return f"{system_prompt}\n\n---\n\n{phase_prompt}"
-    
-    def build_phase_transition_prompt(
-        self,
-        from_phase: Phase,
-        to_phase: Phase,
-        objective: str,
-        phase_context: dict,
-    ) -> str:
-        """
-        Build a prompt for summarizing a phase transition.
-
-        Includes the prompts for both the source and target phases so the
-        summarizer understands what was expected and what comes next.
-
-        Args:
-            from_phase: The phase we're leaving
-            to_phase: The phase we're entering
-            objective: Current agent objective
-            phase_context: Extracted context from the phase (tool calls, messages, state)
-
-        Returns:
-            Formatted transition summarization prompt
-        """
-        template = self._load_template("phase_transition_summary")
-
-        # Load the phase prompts for context
-        from_phase_prompt = self.build_phase_prompt(from_phase)
-        to_phase_prompt = self.build_phase_prompt(to_phase)
-
-        import json
-        context_str = json.dumps(phase_context, indent=2, default=str)
-
-        return template.format(
-            from_phase=from_phase.value,
-            to_phase=to_phase.value,
-            objective=objective,
-            from_phase_prompt=from_phase_prompt,
-            to_phase_prompt=to_phase_prompt,
-            phase_context=context_str,
-        )
 
     def build_recon_subagent_prompt(
         self,
