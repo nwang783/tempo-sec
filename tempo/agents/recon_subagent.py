@@ -37,7 +37,7 @@ class ReconSubagent(BaseAgentDefinition):
     """
 
     _name = "recon_subagent"
-    _model = "openai/gpt-5-mini"  # Fast model for subagent tasks
+    _model = "openai/gpt-5.1"  # Smart model for subagent tasks
     _initial_phase = Phase.RECON
 
     def __init__(

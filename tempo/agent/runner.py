@@ -143,6 +143,7 @@ class Agent:
         "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
         "branch_to_subtasks", "finish_subtask", "complete_recon",
         "complete_browser_task", "complete_subtask", "finalize_analysis",
+        "dispatch_subagent", "read_findings", 
     }
     
     def _requires_summarization(self, tool_call: ToolCall) -> bool:
@@ -651,6 +652,15 @@ class Agent:
 
         elif special.tool_name == "complete_subtask":
             # Subtask complete - stop the subagent
+            step_result.should_continue = False
+            if special.findings:
+                self._findings.append({
+                    **special.findings,
+                    "step": self._step_count,
+                })
+
+        elif special.tool_name == "finalize_analysis":
+            # Analysis finalized - stop the orchestrator
             step_result.should_continue = False
             if special.findings:
                 self._findings.append({

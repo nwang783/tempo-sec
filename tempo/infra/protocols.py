@@ -345,6 +345,24 @@ class FindingsUpdater(Protocol):
         """
         ...
 
+    def get_all_findings(self) -> list[Any]:
+        """
+        Get all findings.
+
+        Returns:
+            List of all finding objects
+        """
+        ...
+
+    def get_all_surfaces(self) -> list[Any]:
+        """
+        Get all attack surfaces.
+
+        Returns:
+            List of all attack surface objects
+        """
+        ...
+
 
 class AsyncFindingsUpdater(Protocol):
     """

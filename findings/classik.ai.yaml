@@ -1,7 +1,7 @@
 version: '1.0'
 target: https://classik.ai
 created_at: 2025-12-28 03:56:22.061983
-updated_at: 2026-01-06 13:01:24.135370
+updated_at: 2026-01-06 20:43:57.791881
 recon_summary:
   total_endpoints: 5
   total_forms: 2
@@ -275,7 +275,71 @@ findings:
   discovered_at: 2025-12-28 04:46:12.646222
   discovered_by: Testing Subagent (shell)
   validated_by: shell
+- id: 542391c4-2208-45dc-ada6-9e6d2ff1838e
+  title: Missing CSP and clickjacking protections across Classik.ai key pages
+  severity: medium
+  status: confirmed
+  attack_surface_id: null
+  description: Multiple key endpoints on https://www.classik.ai/ are served without
+    modern security headers that protect against cross-site scripting (XSS), clickjacking,
+    and MIME-sniffing. In particular, the site-wide responses lack a Content-Security-Policy
+    (CSP), X-Frame-Options (or CSP frame-ancestors), and X-Content-Type-Options. This
+    affects the main landing page and an apparent authentication-related path, meaning
+    that both marketing and potentially sensitive flows can be framed by attackers
+    and do not benefit from CSP-based XSS mitigation. While no active XSS payload
+    was confirmed in this task, the absence of these headers significantly reduces
+    the overall hardening posture and leaves the application more susceptible to successful
+    exploitation of any XSS or UI-redressing bugs that exist at the application layer.
+  evidence: "Using curl -I against several endpoints on the site shows consistent\
+    \ absence of hardening headers:\n\n1) Main page\n\n  curl -k -I https://www.classik.ai/\n\
+    \  - No Content-Security-Policy header present\n  - No X-Frame-Options header\
+    \ present\n  - No X-Content-Type-Options header present\n  - Strict-Transport-Security:\
+    \ max-age=63072000 present\n  - Access-Control-Allow-Origin: * present\n\n2) Login-like\
+    \ page\n\n  curl -k -I https://www.classik.ai/login\n  - No Content-Security-Policy\
+    \ header present\n  - No X-Frame-Options header present\n  - No X-Content-Type-Options\
+    \ header present\n  - Strict-Transport-Security present\n  - Access-Control-Allow-Origin:\
+    \ * present\n\n3) Other routes (/pricing, /app) including 404 responses also lack\
+    \ CSP, X-Frame-Options, X-Content-Type-Options and Referrer-Policy, while still\
+    \ sending HSTS and Access-Control-Allow-Origin: *.\n\nThis indicates that the\
+    \ missing headers are a global configuration issue rather than an isolated route\
+    \ misconfiguration."
+  reproduction_steps:
+  - 'Run: curl -k -I https://www.classik.ai/ and observe that there is no Content-Security-Policy,
+    X-Frame-Options, or X-Content-Type-Options header in the response.'
+  - 'Run: curl -k -I https://www.classik.ai/login and confirm that the same headers
+    (CSP, X-Frame-Options, X-Content-Type-Options) are also absent on this path.'
+  - Optionally, repeat with other routes such as /pricing or /app to confirm that
+    even error responses lack these headers, suggesting a site-wide configuration
+    gap.
+  remediation: 'At the platform (Vercel/Next.js) configuration or edge middleware
+    layer, implement a set of security headers applied consistently to all HTML responses:
+
+
+    - Define a strict-but-workable Content-Security-Policy, for example restricting
+    script sources to self and known CDNs, disallowing inline scripts unless properly
+    nonce- or hash-based, and setting an explicit frame-ancestors directive to control
+    who can frame the site.
+
+    - Add X-Frame-Options: DENY or SAMEORIGIN (or rely on CSP frame-ancestors) to
+    mitigate clickjacking, especially on any authenticated or sensitive pages.
+
+    - Add X-Content-Type-Options: nosniff to prevent MIME-sniffing.
+
+    - Add a Referrer-Policy header such as strict-origin-when-cross-origin to reduce
+    information leakage via Referer headers.
+
+    - Review the necessity of Access-Control-Allow-Origin: *; for non-API HTML responses,
+    this header is typically unnecessary. For APIs, restrict allowed origins to those
+    that genuinely require cross-origin access.
+
+
+    In Next.js on Vercel, these headers can typically be configured via next.config.js
+    headers() configuration or via Vercel project settings or middleware so they apply
+    uniformly across all routes, including 404/500 pages.'
+  discovered_at: 2026-01-06 20:42:36.478127
+  discovered_by: Testing Subagent
+  validated_by: Testing Subagent
 agents_invoked:
 - recon_subagent
 - test_subagent
-total_steps_taken: 69
+total_steps_taken: 97

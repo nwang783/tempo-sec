@@ -105,6 +105,24 @@ class FindingsDocument:
         """
         return [surface for surface in self._data.attack_surfaces if not surface.tested]
 
+    def get_all_findings(self) -> list[Finding]:
+        """
+        Get all findings.
+
+        Returns:
+            List of all finding objects
+        """
+        return self._data.findings
+
+    def get_all_surfaces(self) -> list[AttackSurface]:
+        """
+        Get all attack surfaces.
+
+        Returns:
+            List of all attack surface objects
+        """
+        return self._data.attack_surfaces
+
     def get_findings_by_severity(self, severity: Severity) -> list[Finding]:
         """
         Get all findings of a specific severity level.

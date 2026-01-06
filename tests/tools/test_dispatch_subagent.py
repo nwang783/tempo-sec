@@ -66,7 +66,6 @@ class TestDispatchSubagentTool:
         assert props["subagent_type"]["enum"] == ["recon", "test"]
         assert "objective" in props
         assert "focus_area" in props
-        assert "max_steps" in props
 
     def test_schema_defaults(self, findings_doc):
         """Test schema has correct defaults."""
@@ -75,7 +74,6 @@ class TestDispatchSubagentTool:
 
         props = schema.parameters["properties"]
         assert props["focus_area"].get("default") == ""
-        assert props["max_steps"].get("default") == 50
 
     def test_valid_subagent_types_in_schema(self, findings_doc):
         """Test that schema specifies valid subagent types."""

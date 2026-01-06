@@ -35,7 +35,7 @@ class BrowserAgent(BaseAgentDefinition):
     """
     
     _name = "browser"
-    _model = "openai/gpt-5-mini"  # Fast model for browser tasks
+    _model = "openai/gpt-5.1"  # Smart model for browser tasks
     _initial_phase = Phase.RECON  # Single phase, no transitions
     
     def __init__(

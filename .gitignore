@@ -214,7 +214,7 @@ logs/
 config.toml
 
 manifests/
-findings/
+/findings/
 
 # AMP
 .agents
