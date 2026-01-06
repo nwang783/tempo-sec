@@ -31,7 +31,7 @@ class FileReadTool(Tool):
         self,
         path: str,
         encoding: str = "utf-8",
-        max_bytes: int | None = None,
+        max_bytes: int | str | None = None,
         purpose: str = "",
     ) -> ToolResult:
         """
@@ -46,6 +46,10 @@ class FileReadTool(Tool):
         Returns:
             ToolResult with file contents
         """
+        # Coerce max_bytes to int if provided (LLM may pass as string)
+        if max_bytes is not None:
+            max_bytes = int(max_bytes)
+        
         try:
             if self.container is None:
                 # Local filesystem

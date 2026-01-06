@@ -19,6 +19,7 @@ import * as graph from './graph.js';
 import * as panels from './panels.js';
 import * as events from './events.js';
 import * as ws from './ws.js';
+import * as agentTree from './agentTree.js';
 
 // ============================================================================
 // Initialization
@@ -45,6 +46,9 @@ function init() {
     events.initPromptInput();
     events.initStopButton();
     events.initContextRefresh();
+
+    // Initialize agent tree
+    agentTree.init();
 
     // Wire up WebSocket to event handler
     ws.setOnMessage(events.handleEvent);

@@ -30,7 +30,7 @@ class ShellTool(Tool):
     async def execute(
         self,
         command: str,
-        timeout: int = 60,
+        timeout: int | str = 60,
         working_dir: str = "/workspace",
         purpose: str = "",
     ) -> ToolResult:
@@ -46,6 +46,9 @@ class ShellTool(Tool):
         Returns:
             ToolResult with command output
         """
+        # Coerce timeout to int (LLM may pass as string)
+        timeout = int(timeout)
+        
         if self.container is None:
             # Fallback to local execution (for testing)
             import asyncio

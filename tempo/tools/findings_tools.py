@@ -177,6 +177,11 @@ class AddAttackSurfaceTool(Tool):
                 priority=priority.lower(),
             )
 
+            # Persist to disk immediately
+            if hasattr(self.findings, 'save') and hasattr(self.findings, 'file_path'):
+                if self.findings.file_path:
+                    self.findings.save()
+
             return ToolResult(
                 success=True,
                 output=f"Added attack surface: {surface_type} at {url} (ID: {surface_id})",
@@ -337,6 +342,11 @@ class AddFindingTool(Tool):
                 validated_by=validated_by,
             )
 
+            # Persist to disk immediately
+            if hasattr(self.findings, 'save') and hasattr(self.findings, 'file_path'):
+                if self.findings.file_path:
+                    self.findings.save()
+
             return ToolResult(
                 success=True,
                 output=f"Added {severity} finding: {title} (ID: {finding_id})",
@@ -451,6 +461,11 @@ class MarkSurfaceTestedTool(Tool):
                     error=f"Attack surface not found: {surface_id}",
                 )
 
+            # Persist to disk immediately
+            if hasattr(self.findings, 'save') and hasattr(self.findings, 'file_path'):
+                if self.findings.file_path:
+                    self.findings.save()
+
             return ToolResult(
                 success=True,
                 output=f"Marked attack surface {surface_id} as tested",
@@ -555,6 +570,11 @@ class UpdateReconSummaryTool(Tool):
                 updates.append(f"auth mechanisms: {len(authentication_mechanisms)}")
             if notes:
                 updates.append("notes updated")
+
+            # Persist to disk immediately
+            if hasattr(self.findings, 'save') and hasattr(self.findings, 'file_path'):
+                if self.findings.file_path:
+                    self.findings.save()
 
             return ToolResult(
                 success=True,

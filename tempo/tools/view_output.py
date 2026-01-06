@@ -30,8 +30,8 @@ class ViewToolOutputTool(Tool):
     async def execute(
         self,
         tool_call_id: str,
-        start_char: int = 0,
-        end_char: int = 10000,
+        start_char: int | str = 0,
+        end_char: int | str = 10000,
         purpose: str = "",
     ) -> ToolResult:
         """
@@ -46,6 +46,10 @@ class ViewToolOutputTool(Tool):
         Returns:
             ToolResult with the requested character range
         """
+        # Coerce to int (LLM may pass as string)
+        start_char = int(start_char)
+        end_char = int(end_char)
+        
         # Search for the tool call in context
         tool_call = self._find_tool_call(tool_call_id)
         

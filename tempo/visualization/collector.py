@@ -50,13 +50,29 @@ class VisualizationCollector:
     following the project's dependency rules.
     """
     
-    def __init__(self, server: "VisualizationServer"):
+    def __init__(self, server: "VisualizationServer", subagent_id: str | None = None):
         self.server = server
+        self._subagent_id = subagent_id
         # Cost tracking state
         self._total_cost: float = 0.0
         self._total_prompt_tokens: int = 0
         self._total_completion_tokens: int = 0
         self._total_cached_tokens: int = 0
+    
+    def for_subagent(self, subagent_id: str) -> "VisualizationCollector":
+        """
+        Create a child collector for a subagent.
+        
+        Events emitted by the child collector will include the subagent_id,
+        allowing the UI to route them to the correct agent context.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent
+            
+        Returns:
+            A new VisualizationCollector with the subagent_id set
+        """
+        return VisualizationCollector(self.server, subagent_id=subagent_id)
     
     def on_step(self, step_data: dict | Any, frame_id: str) -> None:
         """
@@ -128,6 +144,33 @@ class VisualizationCollector:
             return asdict(usage) if hasattr(usage, "__dataclass_fields__") else vars(usage)
         return usage if isinstance(usage, dict) else {}
 
+    def on_tool_call_start(self, tool_data: dict | Any, frame_id: str) -> None:
+        """
+        Called when a tool execution begins (before completion).
+        
+        This is useful for long-running tools like dispatch_subagent where
+        we want to show the tool card in the UI immediately.
+        
+        Args:
+            tool_data: Tool call data dict OR ToolCall object (for compatibility).
+                       Should contain: id, tool_name, input
+            frame_id: ID of the current context frame
+        """
+        # Support both dict and object input for compatibility
+        if isinstance(tool_data, dict):
+            data = dict(tool_data)  # Copy to avoid mutation
+            data["frame_id"] = frame_id
+        else:
+            # Object-based input (ToolCall)
+            data = {
+                "id": getattr(tool_data, "id", ""),
+                "tool_name": getattr(tool_data, "tool_name", ""),
+                "input": getattr(tool_data, "input", {}),
+                "frame_id": frame_id,
+            }
+        
+        self.emit("tool_call_start", data)
+
     def on_tool_call(self, tool_data: dict | Any, frame_id: str) -> None:
         """
         Called when a tool execution completes.
@@ -159,6 +202,9 @@ class VisualizationCollector:
 
     def emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Send event to server."""
+        # Include subagent_id in events if this is a subagent collector
+        if self._subagent_id:
+            data = {**data, "subagent_id": self._subagent_id}
         event = VisualizationEvent.create(event_type, data)
         # Schedule on event loop since this might be called synchronously
         asyncio.create_task(self.server.broadcast(event.to_json()))
@@ -210,4 +256,60 @@ class VisualizationCollector:
             for s in tool_schemas
         ]
         self.emit("available_tools", {"tools": tool_names})
+
+    def on_subagent_start(
+        self,
+        subagent_id: str,
+        subagent_type: str,
+        objective: str,
+        parent_id: str | None = None,
+    ) -> None:
+        """Called when a subagent is dispatched.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent run
+            subagent_type: Type of subagent (e.g., "recon", "test")
+            objective: What the subagent should accomplish
+            parent_id: ID of the parent orchestrator (if any)
+        """
+        self.emit("subagent_start", {
+            "subagent_id": subagent_id,
+            "subagent_type": subagent_type,
+            "objective": objective,
+            "parent_id": parent_id,
+        })
+
+    def on_subagent_finish(
+        self,
+        subagent_id: str,
+        success: bool,
+        summary: str,
+        findings_count: int,
+        surfaces_count: int,
+    ) -> None:
+        """Called when a subagent completes.
+        
+        Args:
+            subagent_id: Unique identifier for the subagent run
+            success: Whether the subagent completed successfully
+            summary: Summary of what the subagent accomplished
+            findings_count: Number of findings added
+            surfaces_count: Number of attack surfaces added
+        """
+        self.emit("subagent_finish", {
+            "subagent_id": subagent_id,
+            "success": success,
+            "summary": summary,
+            "findings_count": findings_count,
+            "surfaces_count": surfaces_count,
+        })
+
+    def on_findings_update(self, findings_summary: dict) -> None:
+        """Called when the findings document is updated.
+        
+        Args:
+            findings_summary: Dict with severity counts and surface stats
+                Expected keys: critical, high, medium, low, surfaces_total, surfaces_tested
+        """
+        self.emit("findings_update", findings_summary)
 
