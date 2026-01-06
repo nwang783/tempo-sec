@@ -48,16 +48,6 @@ tempo --agent orchestrator --target https://example.com \
     --max-iterations 15
 ```
 
-**Alternative: Run individual agents separately**
-
-```bash
-# Run the Recon Agent
-tempo --agent recon --target https://mysouschef.com
-
-# Run the Test Agent
-tempo --agent test_cycle --manifest manifests/souschefhub_com_manifest.json
-```
-
 ---
 
 ## Documentation

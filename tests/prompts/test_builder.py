@@ -68,15 +68,6 @@ class TestPromptBuilder:
         assert "shell" in prompt
         assert "example.com" in prompt
     
-    def test_build_phase_prompt(self):
-        """Test building phase-specific prompts."""
-        builder = PromptBuilder()
-        
-        for phase in Phase:
-            prompt = builder.build_phase_prompt(phase)
-            assert len(prompt) > 0
-            assert phase.value.upper() in prompt.upper()
-    
     def test_build_summarization_prompt(self):
         """Test building summarization prompt."""
         builder = PromptBuilder()
@@ -147,7 +138,7 @@ class TestPromptBuilder:
         
         schemas = [
             {"type": "function", "function": {"name": "summarize_previous_tool_output", "description": "Summarize output"}},
-            {"type": "function", "function": {"name": "transition_phase", "description": "Transition phase"}},
+            {"type": "function", "function": {"name": "finalize_analysis", "description": "Finalize analysis"}},
         ]
         
         formatted = builder.format_tool_descriptions(schemas)
@@ -156,9 +147,8 @@ class TestPromptBuilder:
         assert "MANDATORY" in formatted
         assert "token threshold" in formatted
         
-        # Guidance for transition_phase
-        assert "workflow phases" in formatted
-        assert "justification" in formatted
+        # Guidance for finalize_analysis
+        assert "terminates the orchestrator" in formatted
     
     def test_tool_guidance_not_injected_for_unknown_tools(self):
         """Test that unknown tools don't get extra guidance."""
@@ -173,48 +163,8 @@ class TestPromptBuilder:
         # Should just have the description, no extra guidance
         assert "custom_unknown_tool" in formatted
         assert "A custom tool" in formatted
-        assert "CRITICAL" not in formatted  # No guidance keywords
-        assert "workflow phases" not in formatted
-    
-    def test_tool_guidance_for_recon_agent(self):
-        """Test guidance for recon agent tools (complete_recon instead of finish_task)."""
-        builder = PromptBuilder()
-        
-        schemas = [
-            {"type": "function", "function": {"name": "complete_recon", "description": "Complete recon"}},
-            {"type": "function", "function": {"name": "summarize_tool_output", "description": "Summarize"}},
-        ]
-        
-        formatted = builder.format_tool_descriptions(schemas)
-        
-        assert "reconnaissance is complete" in formatted.lower()
-        assert "saves the target manifest" in formatted.lower()
-        assert "finish_task" not in formatted  # Not available for recon agent
+        assert "MANDATORY" not in formatted  # No guidance keywords
 
-    
-    def test_build_full_prompt(self):
-        """Test building complete prompt."""
-        builder = PromptBuilder()
-        
-        schemas = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "browser",
-                    "description": "Browse a URL",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            },
-        ]
-        
-        prompt = builder.build_full_prompt(
-            current_phase=Phase.RECON,
-            tool_schemas=schemas,
-        )
-        
-        # Should contain both system and phase content
-        assert "RECON" in prompt
-        assert "browser" in prompt
     def test_filter_schemas_for_subagent(self):
         """Test that subagent tool filtering excludes main-agent-only tools."""
         builder = PromptBuilder()
@@ -234,39 +184,18 @@ class TestPromptBuilder:
         assert "branch_to_subtasks" not in names
         assert "finish_task" not in names
 
+    def test_build_orchestrator_prompt(self):
+        """Test building orchestrator prompt."""
+        builder = PromptBuilder()
+        
+        prompt = builder.build_orchestrator_prompt(
+            tool_schemas=[
+                {"type": "function", "function": {"name": "dispatch_subagent", "description": "Dispatch a subagent"}},
+            ],
+            target="https://example.com",
+            findings_summary="No findings yet",
+        )
+        
+        assert "example.com" in prompt
+        assert "dispatch_subagent" in prompt
 
-class TestPhasePrompts:
-    """Tests for individual phase prompts."""
-    
-    def test_recon_prompt_content(self):
-        """Test recon prompt has key guidance."""
-        builder = PromptBuilder()
-        prompt = builder.build_phase_prompt(Phase.RECON)
-        
-        assert "surface" in prompt.lower() or "discovery" in prompt.lower()
-        assert "transition_phase" in prompt
-    
-    def test_hypothesize_prompt_content(self):
-        """Test hypothesize prompt has key guidance."""
-        builder = PromptBuilder()
-        prompt = builder.build_phase_prompt(Phase.HYPOTHESIZE)
-        
-        # Updated to use create_test_plan tool
-        assert "create_test_plan" in prompt
-        assert "investigation" in prompt.lower() or "test plan" in prompt.lower()
-    
-    def test_test_prompt_content(self):
-        """Test test prompt has key guidance."""
-        builder = PromptBuilder()
-        prompt = builder.build_phase_prompt(Phase.TEST)
-        
-        assert "payload" in prompt.lower() or "testing" in prompt.lower()
-    
-    def test_reflect_prompt_content(self):
-        """Test reflect prompt has key guidance."""
-        builder = PromptBuilder()
-        prompt = builder.build_phase_prompt(Phase.REFLECT)
-        
-        # Updated to use continue_analysis tool
-        assert "continue_analysis" in prompt
-        assert "findings" in prompt.lower()

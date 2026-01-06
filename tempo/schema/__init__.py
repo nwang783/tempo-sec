@@ -1,30 +1,9 @@
 """
 Schema module for structured outputs.
 
-Provides Pydantic models for structured LLM outputs, particularly
-the target manifest used between recon and testing phases.
+Provides schema definitions and models used by the agent system.
 """
 
-from tempo.schema.manifest import (
-    ActionType,
-    RiskLevel,
-    AttackSurfaceType,
-    ReconAction,
-    SitemapEntry,
-    AttackSurface,
-    TechnologyFingerprint,
-    ManifestMetadata,
-    TargetManifest,
-)
+# No exports currently - legacy manifest module has been removed.
+# New schema types are defined in tempo/findings/schema.py
 
-__all__ = [
-    "ActionType",
-    "RiskLevel",
-    "AttackSurfaceType",
-    "ReconAction",
-    "SitemapEntry",
-    "AttackSurface",
-    "TechnologyFingerprint",
-    "ManifestMetadata",
-    "TargetManifest",
-]

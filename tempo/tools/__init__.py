@@ -9,8 +9,7 @@ Exports:
     - ToolRegistry: Registry for managing tools
     - Built-in tools: ShellTool, FileReadTool, FileWriteTool
     - Playwright-style browser tools: BrowserSession, BrowserNavigateTool, etc.
-    - Meta tools: TransitionPhaseTool, SummarizeOutputTool, FinishTaskTool,
-                  BranchToSubtasksTool, FinishSubtaskTool
+    - Meta tools: SummarizeOutputTool, BranchToSubtasksTool, FinishSubtaskTool, FinalizeAnalysisTool
 """
 
 from tempo.tools.base import (
@@ -31,11 +30,10 @@ from tempo.tools.browser_tools import (
     BrowserFillFormTool,
 )
 from tempo.tools.meta import (
-    TransitionPhaseTool,
     SummarizeOutputTool,
-    FinishTaskTool,
     BranchToSubtasksTool,
     FinishSubtaskTool,
+    FinalizeAnalysisTool,
 )
 from tempo.tools.testplan_tools import (
     CreateTestPlanTool,
@@ -63,13 +61,13 @@ __all__ = [
     "BrowserTypeTool",
     "BrowserFillFormTool",
     # Meta tools
-    "TransitionPhaseTool",
     "SummarizeOutputTool",
-    "FinishTaskTool",
     "BranchToSubtasksTool",
     "FinishSubtaskTool",
+    "FinalizeAnalysisTool",
     # Test plan tools
     "CreateTestPlanTool",
     "AddTodoTool",
     "CompleteTodoTool",
 ]
+

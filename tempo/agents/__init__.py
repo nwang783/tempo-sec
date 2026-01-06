@@ -13,10 +13,10 @@ Usage:
     from tempo.agents import get_agent, list_agents
     
     # List available agents
-    agents = list_agents()  # ["recon", "test_cycle"]
+    agents = list_agents()  # ["orchestrator", "browser", "recon_subagent", "test_subagent"]
     
-    # Get a specific agent definition
-    agent_def = get_agent("recon", target="example.com", output_path="./manifest.json")
+    # Get the orchestrator agent
+    agent_def = get_agent("orchestrator", target="https://example.com")
 """
 
 from typing import TYPE_CHECKING
@@ -77,7 +77,7 @@ def get_agent_class(name: str) -> type["BaseAgentDefinition"]:
     Get an agent definition class by name.
     
     Args:
-        name: Agent name (e.g., 'recon', 'test_cycle')
+        name: Agent name (e.g., 'orchestrator', 'browser')
         
     Returns:
         Agent definition class
@@ -97,7 +97,7 @@ def get_agent(name: str, **kwargs) -> "BaseAgentDefinition":
     Get an instantiated agent definition by name.
     
     Args:
-        name: Agent name (e.g., 'recon', 'test_cycle')
+        name: Agent name (e.g., 'orchestrator', 'browser')
         **kwargs: Arguments to pass to agent constructor
         
     Returns:
@@ -114,8 +114,6 @@ def _ensure_builtin_agents_loaded() -> None:
     """Ensure builtin agent modules are imported for registration."""
     if not _AGENT_REGISTRY:
         # Import builtin agents to trigger registration
-        from tempo.agents import recon  # noqa: F401
-        from tempo.agents import test_cycle  # noqa: F401
         from tempo.agents import browser  # noqa: F401
         from tempo.agents import recon_subagent  # noqa: F401
         from tempo.agents import test_subagent  # noqa: F401
