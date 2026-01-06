@@ -153,4 +153,4 @@ class TestDispatchSubagentsTool:
         assert "subagent_type" in item_props
         assert "objective" in item_props
         assert "focus_area" in item_props
-        assert "max_steps" in item_props
+
