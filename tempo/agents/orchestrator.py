@@ -152,7 +152,7 @@ class OrchestratorAgent(BaseAgentDefinition):
         from tempo.tools.registry import ToolRegistry
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.dispatch_subagent import DispatchSubagentTool
+        from tempo.tools.dispatch_subagent import DispatchSubagentTool, DispatchSubagentsTool
         from tempo.tools.findings_tools import (
             ReadFindingsTool,
             AddFindingTool,
@@ -165,19 +165,28 @@ class OrchestratorAgent(BaseAgentDefinition):
 
         tools = ToolRegistry()
 
-        # Extract visualization collector from kwargs (passed from run.py)
+        # Extract visualization collector and config from kwargs (passed from run.py)
         visualization = kwargs.get("visualization")
+        config = kwargs.get("config")
+        max_concurrent = getattr(config, "max_concurrent_subagents", 3) if config else 3
 
         # Core tools - orchestrator can do lightweight analysis directly
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
 
-        # Subagent dispatch - the key orchestration tool
+        # Subagent dispatch - single and parallel dispatch tools
         tools.register(DispatchSubagentTool(
             findings=self.findings,
             container_manager=container,
             visualization=visualization,
+            max_concurrent=max_concurrent,
+        ))
+        tools.register(DispatchSubagentsTool(
+            findings=self.findings,
+            container_manager=container,
+            visualization=visualization,
+            max_concurrent=max_concurrent,
         ))
 
         # Findings management tools

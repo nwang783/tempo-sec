@@ -617,11 +617,24 @@ export function showDetails(d) {
 // Context Switching (for Orchestrator mode)
 // ============================================================================
 
+// ============================================================================
+// Context Switching (for Orchestrator mode)
+// ============================================================================
+
+/**
+ * Reset zoom and pan to initial state (top center).
+ */
+export function resetZoom() {
+    if (!svg || !zoomBehavior) return;
+    svg.call(zoomBehavior.transform, d3.zoomIdentity.translate(0, 0));
+}
+
 /**
  * Load orchestrator graph data (switch view back to orchestrator).
  */
 export function loadOrchestratorData() {
     state.setActiveAgentView('orchestrator');
+    resetZoom();
     debouncedUpdate();
 }
 
@@ -632,5 +645,6 @@ export function loadOrchestratorData() {
  */
 export function loadSubagentData(subagentId) {
     state.setActiveAgentView(subagentId);
+    resetZoom();
     debouncedUpdate();
 }

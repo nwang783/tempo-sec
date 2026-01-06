@@ -119,7 +119,29 @@ class SubagentTracker:
             }
             for s in self.subagents.values()
         ]
-    
+
+    def get_running_subagents(self) -> list[SubagentState]:
+        """Get all currently running subagents.
+        
+        Useful for tracking parallel execution progress.
+        
+        Returns:
+            List of SubagentState objects that are currently running
+        """
+        return [
+            s for s in self.subagents.values()
+            if s.status == SubagentStatus.RUNNING
+        ]
+
+    def count_by_status(self) -> dict[str, int]:
+        """Get counts by status for UI display.
+        
+        Returns:
+            Dictionary mapping status values to their counts
+        """
+        from collections import Counter
+        return dict(Counter(s.status.value for s in self.subagents.values()))
+
     def clear(self) -> None:
         """Clear all tracked subagents."""
         self.subagents.clear()

@@ -346,6 +346,63 @@ class FindingsUpdater(Protocol):
         ...
 
 
+class AsyncFindingsUpdater(Protocol):
+    """
+    Protocol for async-safe findings updates during parallel subagent execution.
+
+    This extends FindingsUpdater with async methods that use locking to ensure
+    thread-safe concurrent access. Use these methods when multiple subagents
+    may be updating the findings document simultaneously.
+    """
+
+    async def add_attack_surface_async(
+        self,
+        surface_id: str,
+        surface_type: str,
+        url: str,
+        description: str,
+        discovered_by: str,
+        parameters: list[str] | None = None,
+        technology_hints: list[str] | None = None,
+        priority: str = "medium",
+    ) -> Any:
+        """Add a new attack surface with async locking."""
+        ...
+
+    async def add_finding_async(
+        self,
+        finding_id: str,
+        title: str,
+        severity: str,
+        status: str,
+        description: str,
+        evidence: str,
+        discovered_by: str,
+        attack_surface_id: str | None = None,
+        reproduction_steps: list[str] | None = None,
+        remediation: str = "",
+        validated_by: str | None = None,
+    ) -> Any:
+        """Add a new finding with async locking."""
+        ...
+
+    async def mark_surface_tested_async(self, surface_id: str) -> bool:
+        """Mark a surface as tested with async locking."""
+        ...
+
+    async def save_async(self, file_path: str | None = None) -> None:
+        """Save findings with async locking."""
+        ...
+
+    async def add_agent_invocation_async(self, agent_name: str) -> None:
+        """Record agent invocation with async locking."""
+        ...
+
+    async def increment_steps_async(self, count: int = 1) -> None:
+        """Increment step count with async locking."""
+        ...
+
+
 class AgentDefinition(Protocol):
     """
     Protocol for modular agent definitions.

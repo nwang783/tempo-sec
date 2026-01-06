@@ -3,8 +3,12 @@ FindingsDocument class for managing security testing findings.
 
 Provides a high-level interface for querying and updating findings documents,
 with automatic persistence to YAML files.
+
+Supports both synchronous and asynchronous operations. Async methods use
+asyncio.Lock for thread-safe concurrent access during parallel subagent execution.
 """
 
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -44,6 +48,8 @@ class FindingsDocument:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
+        # Lock for async-safe operations during parallel subagent execution
+        self._lock = asyncio.Lock()
 
     @classmethod
     def load(cls, file_path: str) -> "FindingsDocument":
@@ -333,3 +339,136 @@ class FindingsDocument:
     def data(self) -> FindingsDocumentSchema:
         """Get the underlying Pydantic model."""
         return self._data
+
+    # Async-safe methods for parallel subagent execution
+    # These use asyncio.Lock to ensure thread-safe concurrent access
+
+    async def add_attack_surface_async(
+        self,
+        surface_id: str,
+        surface_type: str,
+        url: str,
+        description: str,
+        discovered_by: str,
+        parameters: list[str] | None = None,
+        technology_hints: list[str] | None = None,
+        priority: str = "medium",
+    ) -> AttackSurface:
+        """
+        Thread-safe async version of add_attack_surface.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            return self.add_attack_surface(
+                surface_id=surface_id,
+                surface_type=surface_type,
+                url=url,
+                description=description,
+                discovered_by=discovered_by,
+                parameters=parameters,
+                technology_hints=technology_hints,
+                priority=priority,
+            )
+
+    async def add_finding_async(
+        self,
+        finding_id: str,
+        title: str,
+        severity: Severity,
+        status: "FindingStatus",
+        description: str,
+        evidence: str,
+        discovered_by: str,
+        attack_surface_id: str | None = None,
+        reproduction_steps: list[str] | None = None,
+        remediation: str = "",
+        validated_by: str | None = None,
+    ) -> Finding:
+        """
+        Thread-safe async version of add_finding.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            return self.add_finding(
+                finding_id=finding_id,
+                title=title,
+                severity=severity,
+                status=status,
+                description=description,
+                evidence=evidence,
+                discovered_by=discovered_by,
+                attack_surface_id=attack_surface_id,
+                reproduction_steps=reproduction_steps,
+                remediation=remediation,
+                validated_by=validated_by,
+            )
+
+    async def mark_surface_tested_async(self, surface_id: str) -> bool:
+        """
+        Thread-safe async version of mark_surface_tested.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            return self.mark_surface_tested(surface_id)
+
+    async def update_recon_summary_async(
+        self,
+        total_endpoints: int | None = None,
+        total_forms: int | None = None,
+        total_apis: int | None = None,
+        technologies_detected: list[str] | None = None,
+        authentication_mechanisms: list[str] | None = None,
+        notes: str | None = None,
+    ) -> ReconSummary:
+        """
+        Thread-safe async version of update_recon_summary.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            return self.update_recon_summary(
+                total_endpoints=total_endpoints,
+                total_forms=total_forms,
+                total_apis=total_apis,
+                technologies_detected=technologies_detected,
+                authentication_mechanisms=authentication_mechanisms,
+                notes=notes,
+            )
+
+    async def save_async(self, file_path: str | None = None) -> None:
+        """
+        Thread-safe async save.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            self.save(file_path)
+
+    async def add_agent_invocation_async(self, agent_name: str) -> None:
+        """
+        Thread-safe async version of add_agent_invocation.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            self.add_agent_invocation(agent_name)
+
+    async def increment_steps_async(self, count: int = 1) -> None:
+        """
+        Thread-safe async version of increment_steps.
+
+        Uses asyncio.Lock to ensure safe concurrent access during
+        parallel subagent execution.
+        """
+        async with self._lock:
+            self.increment_steps(count)
+

@@ -3,6 +3,8 @@ Meta tools for agent control and subagent coordination.
 """
 
 from typing import TYPE_CHECKING
+import re
+from pathlib import Path
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 from tempo.infra.protocols import (
@@ -309,14 +311,52 @@ class FinalizeAnalysisTool(Tool):
             output_parts.insert(4, executive_summary)
             output_parts.insert(5, "")
 
+        final_output = "\n".join(output_parts)
+        saved_path = ""
+
+        # Save narrative report to file
+        try:
+            # Determine target from findings
+            target = "unknown_target"
+            if hasattr(self.findings, "target"):
+                target = self.findings.target
+            elif hasattr(self.findings, "get_summary"):
+                summary = self.findings.get_summary()
+                target = summary.get("target", target)
+
+            # Sanitize target for filename
+            safe_target = re.sub(r'^https?://', '', target)
+            safe_target = re.sub(r'[^\w\-.]', '_', safe_target)
+            safe_target = safe_target.strip('_.')
+            if len(safe_target) > 50:
+                safe_target = safe_target[:50]
+            safe_target = safe_target or "unknown_target"
+
+            # Create directory and save file
+            report_dir = Path("findings") / safe_target
+            report_dir.mkdir(parents=True, exist_ok=True)
+            
+            report_path = report_dir / "report.md"
+            with open(report_path, "w") as f:
+                f.write(final_output)
+            
+            saved_path = str(report_path)
+            output_parts.append(f"\n**Report saved to:** `{saved_path}`")
+            final_output = "\n".join(output_parts)
+
+        except Exception as e:
+            output_parts.append(f"\n[Warning: Failed to save report to file: {e}]")
+            final_output = "\n".join(output_parts)
+
         return ToolResult(
             success=True,
-            output="\n".join(output_parts),
+            output=final_output,
             metadata={
                 "finalize_complete": True,
                 "risk_level": risk_level.lower(),
                 "executive_summary": executive_summary,
                 "final_report": final_report,
+                "report_path": saved_path,
             },
         )
 

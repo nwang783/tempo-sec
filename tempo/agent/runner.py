@@ -142,7 +142,7 @@ class Agent:
         "summarize_previous_tool_output", "view_tool_output", "transition_phase",
         "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
         "branch_to_subtasks", "finish_subtask", "complete_recon",
-        "complete_browser_task", "complete_subtask",
+        "complete_browser_task", "complete_subtask", "finalize_analysis",
     }
     
     def _requires_summarization(self, tool_call: ToolCall) -> bool:

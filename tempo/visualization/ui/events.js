@@ -429,9 +429,19 @@ export function initStopButton() {
 /**
  * Initialize context refresh button.
  */
+/**
+ * Initialize context refresh button.
+ */
 export function initContextRefresh() {
     const refreshBtn = document.getElementById('context-refresh-btn');
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', panels.loadContextWindow);
+        refreshBtn.addEventListener('click', () => {
+            const activeAgent = state.appState.activeAgentView;
+            if (activeAgent === 'orchestrator') {
+                panels.loadContextWindow();
+            } else {
+                panels.loadSubagentContext(activeAgent);
+            }
+        });
     }
 }
