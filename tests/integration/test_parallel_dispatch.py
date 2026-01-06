@@ -27,7 +27,7 @@ class TestParallelDispatchIntegration:
         # We need to simulate subagents that actually take time and update findings
         # We'll monkeypatch the _run_subagent method of the internal tool to simulate this
         
-        async def simulated_subagent(subagent_type, objective, focus_area, max_steps):
+        async def simulated_subagent(subagent_type, objective, focus_area):
             # Simulate work
             await asyncio.sleep(0.01)
             
@@ -75,7 +75,6 @@ class TestParallelDispatchIntegration:
             {
                 "subagent_type": "recon", 
                 "objective": f"Task #{i}",
-                "max_steps": 10
             } 
             for i in range(count)
         ]

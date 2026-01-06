@@ -184,7 +184,6 @@ class TestSubagentDispatchIntegration:
                         subagent_type="recon",
                         objective="Discover API endpoints",
                         focus_area="REST API",
-                        max_steps=20,
                     )
 
                     # Verify result
@@ -237,7 +236,6 @@ class TestSubagentDispatchIntegration:
                         subagent_type="test",
                         objective="Test for SQL injection",
                         focus_area="Login endpoint",
-                        max_steps=30,
                     )
 
                     # Verify result

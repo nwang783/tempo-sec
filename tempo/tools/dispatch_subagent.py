@@ -70,7 +70,6 @@ class DispatchSubagentTool(Tool):
         subagent_type: str,
         objective: str,
         focus_area: str,
-        max_steps: int,
     ) -> ToolResult:
         """
         Core subagent execution logic.
@@ -82,7 +81,6 @@ class DispatchSubagentTool(Tool):
             subagent_type: Type of subagent ("recon" or "test")
             objective: What the subagent should accomplish
             focus_area: Optional specific area to focus on
-            max_steps: Maximum steps for the subagent
 
         Returns:
             ToolResult with the subagent's findings
@@ -137,7 +135,6 @@ class DispatchSubagentTool(Tool):
         # Create agent config
         config = AgentConfig(
             model=subagent_def.model,
-            max_total_steps=max_steps,
         )
 
         # Build prompts
@@ -184,7 +181,6 @@ class DispatchSubagentTool(Tool):
             result = await subagent.run(
                 objective=subagent_objective,
                 initial_phase=subagent_def.initial_phase,
-                max_steps=max_steps,
             )
 
             # Save findings after subagent completion using async-safe method if available
@@ -339,7 +335,6 @@ class DispatchSubagentTool(Tool):
         subagent_type: str,
         objective: str,
         focus_area: str = "",
-        max_steps: int | str = 50,
         purpose: str = "",
     ) -> ToolResult:
         """
@@ -349,15 +344,11 @@ class DispatchSubagentTool(Tool):
             subagent_type: Type of subagent ("recon" or "test")
             objective: What the subagent should accomplish
             focus_area: Optional specific area to focus on
-            max_steps: Maximum steps for the subagent (default: 50)
             purpose: Why this tool is being called
 
         Returns:
             ToolResult with the subagent's findings
         """
-        # Coerce max_steps to int (LLM may pass as string)
-        max_steps = int(max_steps)
-
         # Validate subagent type
         subagent_type_lower = subagent_type.lower()
         if subagent_type_lower not in ("recon", "test"):
@@ -371,7 +362,6 @@ class DispatchSubagentTool(Tool):
             subagent_type=subagent_type_lower,
             objective=objective,
             focus_area=focus_area,
-            max_steps=max_steps,
         )
 
     def get_schema(self) -> ToolSchema:
@@ -394,11 +384,6 @@ class DispatchSubagentTool(Tool):
                         "type": "string",
                         "description": "Optional specific area or surfaces to focus on",
                         "default": "",
-                    },
-                    "max_steps": {
-                        "type": "integer",
-                        "description": "Maximum steps for the subagent (default: 50)",
-                        "default": 50,
                     },
                 },
                 "required": ["subagent_type", "objective"],
@@ -427,7 +412,6 @@ class DispatchSubagentsTool(Tool):
     - "subagent_type": "recon" or "test"
     - "objective": What the subagent should accomplish
     - "focus_area": Optional specific area to focus on
-    - "max_steps": Optional step limit (default: 50)
 
     Results are aggregated from all subagents when complete."""
     category = ToolCategory.META
@@ -466,7 +450,6 @@ class DispatchSubagentsTool(Tool):
         subagent_type: str,
         objective: str,
         focus_area: str,
-        max_steps: int,
     ) -> ToolResult:
         """
         Execute a single subagent with semaphore-based concurrency control.
@@ -476,7 +459,6 @@ class DispatchSubagentsTool(Tool):
             subagent_type: Type of subagent
             objective: What the subagent should accomplish
             focus_area: Optional specific area to focus on
-            max_steps: Maximum steps for the subagent
 
         Returns:
             ToolResult with the subagent's findings
@@ -486,7 +468,6 @@ class DispatchSubagentsTool(Tool):
                 subagent_type=subagent_type,
                 objective=objective,
                 focus_area=focus_area,
-                max_steps=max_steps,
             )
 
     def _aggregate_results(self, results: list[ToolResult]) -> ToolResult:
@@ -579,7 +560,6 @@ class DispatchSubagentsTool(Tool):
                 - subagent_type: "recon" or "test"
                 - objective: What to accomplish
                 - focus_area: Optional focus (default: "")
-                - max_steps: Optional step limit (default: 50)
             purpose: Why this tool is being called
 
         Returns:
@@ -629,7 +609,6 @@ class DispatchSubagentsTool(Tool):
                         subagent_type=req["subagent_type"].lower(),
                         objective=req["objective"],
                         focus_area=req.get("focus_area", ""),
-                        max_steps=int(req.get("max_steps", 50)),
                     )
                 )
                 tasks.append(task)
@@ -666,11 +645,6 @@ class DispatchSubagentsTool(Tool):
                                     "type": "string",
                                     "description": "Optional specific area or surfaces to focus on",
                                     "default": "",
-                                },
-                                "max_steps": {
-                                    "type": "integer",
-                                    "description": "Maximum steps for this subagent (default: 50)",
-                                    "default": 50,
                                 },
                             },
                             "required": ["subagent_type", "objective"],

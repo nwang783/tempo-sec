@@ -42,15 +42,22 @@ class ReadFindingsTool(Tool):
         """
         self.findings = findings_updater
 
-    async def execute(self, purpose: str = "") -> ToolResult:
+    async def execute(
+        self,
+        include_findings: bool = False,
+        include_surfaces: bool = False,
+        purpose: str = "",
+    ) -> ToolResult:
         """
         Read the findings document.
 
         Args:
+            include_findings: Whether to include the full list of findings
+            include_surfaces: Whether to include the full list of attack surfaces
             purpose: A one-sentence summary of why this tool is being called
 
         Returns:
-            ToolResult with findings summary
+            ToolResult with findings summary and optional details
         """
         try:
             summary = self.findings.get_summary()
@@ -78,6 +85,38 @@ class ReadFindingsTool(Tool):
                 f"Total steps: {summary['total_steps']}",
             ]
 
+            # Append detailed findings if requested
+            if include_findings:
+                output_lines.append("")
+                output_lines.append("### Detailed Findings List ###")
+                all_findings = self.findings.get_all_findings()
+                if not all_findings:
+                    output_lines.append("No findings recorded yet.")
+                else:
+                    for f in all_findings:
+                        # Use attribute access since these are Pydantic objects/Finding class
+                        fid = getattr(f, 'id', 'unknown')
+                        title = getattr(f, 'title', 'No Title')
+                        severity = getattr(f, 'severity', 'unknown')
+                        status = getattr(f, 'status', 'unknown')
+                        output_lines.append(f"- [{severity.upper()}] {title} ({status}) | ID: {fid}")
+
+            # Append detailed surfaces if requested
+            if include_surfaces:
+                output_lines.append("")
+                output_lines.append("### Attack Surfaces List ###")
+                all_surfaces = self.findings.get_all_surfaces()
+                if not all_surfaces:
+                    output_lines.append("No attack surfaces recorded yet.")
+                else:
+                    for s in all_surfaces:
+                        sid = getattr(s, 'id', 'unknown')
+                        stype = getattr(s, 'surface_type', 'unknown')
+                        url = getattr(s, 'url', 'unknown')
+                        tested = getattr(s, 'tested', False)
+                        status_str = "TESTED" if tested else "UNTESTED"
+                        output_lines.append(f"- [{status_str}] {stype}: {url} | ID: {sid}")
+
             return ToolResult(
                 success=True,
                 output="\n".join(output_lines),
@@ -98,7 +137,18 @@ class ReadFindingsTool(Tool):
             description=self.description,
             parameters={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "include_findings": {
+                        "type": "boolean",
+                        "description": "Whether to include the full list of findings (default: False)",
+                        "default": False,
+                    },
+                    "include_surfaces": {
+                        "type": "boolean",
+                        "description": "Whether to include the full list of attack surfaces (default: False)",
+                        "default": False,
+                    },
+                },
                 "required": [],
             },
         )
