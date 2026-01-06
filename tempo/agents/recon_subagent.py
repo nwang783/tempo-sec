@@ -104,12 +104,7 @@ class ReconSubagent(BaseAgentDefinition):
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
-        
-        # TODO: Re-enable BrowserTaskTool once the browser agent has been upgraded
-        # tools.register(BrowserTaskTool(
-        #     container_manager=container,
-        #     llm_client=None,  # Will create its own
-        # ))
+        # Browser subagent intentionally disabled for now.
 
         # Findings document tools - pass the findings reference
         tools.register(AddAttackSurfaceTool(findings_updater=self.findings))

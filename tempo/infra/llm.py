@@ -94,20 +94,40 @@ class LLMError(Exception):
 class LiteLLMClient(LLMClient):
     """LiteLLM + Instructor implementation of LLMClient."""
     
-    def __init__(self, model: str, **default_kwargs):
+    def __init__(
+        self,
+        model: str,
+        *,
+        litellm_module: Any | None = None,
+        instructor_client: Any | None = None,
+        **default_kwargs,
+    ):
         """
         Initialize the LiteLLM client.
         
         Args:
             model: Model identifier (e.g., "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o", "gemini/gemini-2.0-flash")
+            litellm_module: Optional injected litellm module (useful for testing)
+            instructor_client: Optional injected Instructor client (useful for testing)
             **default_kwargs: Default arguments for all completions
         """
         self.model = model
         self.default_kwargs = default_kwargs
         
-        # Lazy import to avoid import errors if litellm not installed
+        # Intentionally do not import litellm/instructor at __init__ time.
+        # This keeps unit tests (and offline environments) from crashing on import.
+        self._litellm = litellm_module
+        self._instructor_client = instructor_client
+
+    def _ensure_clients(self) -> None:
+        """Lazy-initialize litellm + instructor bindings when first needed."""
+        if self._litellm is not None and self._instructor_client is not None:
+            return
+
+        # Import only when needed to avoid import-time side effects in tests.
         import instructor
         import litellm
+
         self._litellm = litellm
         self._instructor_client = instructor.from_litellm(litellm.acompletion)
     
@@ -120,6 +140,7 @@ class LiteLLMClient(LLMClient):
         import json
         
         try:
+            self._ensure_clients()
             kwargs = {**self.default_kwargs}
             if tools:
                 kwargs["tools"] = tools
@@ -139,6 +160,7 @@ class LiteLLMClient(LLMClient):
         response_model: type[T],
     ) -> T:
         """Request a structured response."""
+        self._ensure_clients()
         return await self._instructor_client.chat.completions.create(
             model=self.model,
             messages=messages,

@@ -81,10 +81,13 @@ class TestLiteLLMClientNormalization:
     @pytest.fixture
     def mock_client(self):
         """Create a mocked LiteLLM client."""
-        with patch("instructor.from_litellm"):
-            with patch("litellm.acompletion"):
-                client = LiteLLMClient(model="gpt-4o")
-                return client
+        # Inject mocks so we don't import litellm/instructor at all during unit tests.
+        client = LiteLLMClient(
+            model="gpt-5-mini",
+            litellm_module=MagicMock(),
+            instructor_client=MagicMock(),
+        )
+        return client
     
     def test_normalize_response_with_cache_info(self, mock_client):
         """Test _normalize_response extracts caching info."""

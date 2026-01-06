@@ -1,6 +1,11 @@
 """Pytest configuration for tempo-sec tests."""
 
+import os
 import pytest
+
+# Keep unit tests hermetic/offline: avoid importing litellm for token counting.
+# (litellm import registers async atexit cleanup which can cause noisy failures.)
+os.environ.setdefault("TEMPO_USE_LITELLM_TOKENIZER", "0")
 
 
 @pytest.fixture

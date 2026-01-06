@@ -64,7 +64,8 @@ class TestReconSubagent:
         assert "shell" in tool_names
         assert "file_read" in tool_names
         assert "file_write" in tool_names
-        assert "browser_task" in tool_names
+        # NOTE: browser subagent intentionally disabled for now.
+        # assert "browser_task" in tool_names
 
         # Findings document tools for recon
         assert "add_attack_surface" in tool_names
