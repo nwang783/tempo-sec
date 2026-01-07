@@ -13,25 +13,44 @@ from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
+    from tempo.infra.browser_state import BrowserStateManager
 
 
 class BrowserSession:
     """
     Shared browser session manager for Playwright-style tools.
-    
-    Manages the Playwright browser instance lifecycle and maintains
-    state (like element refs from snapshots) across tool calls.
+
+    Manages the Playwright browser instance lifecycle, maintains
+    state (like element refs from snapshots), and supports:
+    - Headless/headed modes
+    - State persistence (cookies, localStorage)
+    - Screenshot capture
+    - Coordinate-based interactions
     """
-    
-    def __init__(self, container_manager: "ContainerManager | None" = None):
+
+    def __init__(
+        self,
+        container_manager: "ContainerManager | None" = None,
+        headless: bool = True,
+        state_manager: "BrowserStateManager | None" = None,
+        viewport_width: int = 1280,
+        viewport_height: int = 720,
+    ):
         """
         Initialize the browser session.
-        
+
         Args:
             container_manager: Optional container for sandboxed execution.
                               If None, runs Playwright locally.
+            headless: Whether to run browser in headless mode.
+            state_manager: Optional BrowserStateManager for state persistence.
+            viewport_width: Browser viewport width in pixels.
+            viewport_height: Browser viewport height in pixels.
         """
         self.container = container_manager
+        self._headless = headless
+        self._state_manager = state_manager
+        self._viewport = {"width": viewport_width, "height": viewport_height}
         self._playwright = None
         self._browser = None
         self._page = None
@@ -40,25 +59,25 @@ class BrowserSession:
         self._network_requests: list[dict] = []
     
     async def ensure_browser(self) -> None:
-        """Ensure browser is initialized and ready."""
+        """Ensure browser is initialized with configured headless mode."""
         if self._browser is not None:
             return
-        
+
         if self.container is not None:
             # Container mode - browser runs inside container
             # We'll execute commands via container.exec()
             return
-        
+
         # Local mode - use Playwright directly
         from playwright.async_api import async_playwright
-        
+
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=True)
-        self._page = await self._browser.new_page()
-        
+        self._browser = await self._playwright.chromium.launch(headless=self._headless)
+        self._page = await self._browser.new_page(viewport=self._viewport)
+
         # Set up console message capture
         self._page.on("console", self._on_console_message)
-        
+
         # Set up network request capture
         self._page.on("request", self._on_request)
     
@@ -103,6 +122,115 @@ class BrowserSession:
     def store_snapshot_refs(self, refs: dict[str, Any]) -> None:
         """Store element refs from a snapshot."""
         self._snapshot_refs = refs
+
+    async def capture_state(self) -> "BrowserState":
+        """Capture current browser state (cookies, storage)."""
+        from tempo.infra.browser_state import BrowserState
+
+        await self.ensure_browser()
+
+        # Get cookies
+        cookies = await self._page.context.cookies()
+
+        # Get localStorage and sessionStorage
+        local_storage = await self._page.evaluate("() => Object.assign({}, localStorage)")
+        session_storage = await self._page.evaluate("() => Object.assign({}, sessionStorage)")
+
+        # Get domain from current URL
+        from urllib.parse import urlparse
+        domain = urlparse(self._page.url).netloc if self._page.url else ""
+
+        return BrowserState(
+            name="",  # Will be set by caller
+            target_domain=domain,
+            cookies=cookies,
+            local_storage=local_storage,
+            session_storage=session_storage,
+        )
+
+    async def restore_state(self, state: "BrowserState") -> None:
+        """Restore browser state from saved state."""
+        await self.ensure_browser()
+
+        # Restore cookies
+        if state.cookies:
+            await self._page.context.add_cookies(state.cookies)
+
+        # Restore localStorage
+        if state.local_storage:
+            for key, value in state.local_storage.items():
+                await self._page.evaluate(
+                    f"localStorage.setItem({json.dumps(key)}, {json.dumps(value)})"
+                )
+
+        # Restore sessionStorage
+        if state.session_storage:
+            for key, value in state.session_storage.items():
+                await self._page.evaluate(
+                    f"sessionStorage.setItem({json.dumps(key)}, {json.dumps(value)})"
+                )
+
+    async def screenshot(self, path: str | None = None, full_page: bool = False) -> bytes:
+        """Capture screenshot of current page."""
+        await self.ensure_browser()
+
+        screenshot_bytes = await self._page.screenshot(
+            path=path,
+            full_page=full_page,
+            type="png",
+        )
+        return screenshot_bytes
+
+    async def click_coordinates(self, x: int, y: int, button: str = "left") -> None:
+        """Click at specific coordinates."""
+        await self.ensure_browser()
+        await self._page.mouse.click(x, y, button=button)
+
+    async def scroll(
+        self,
+        direction: str = "down",
+        amount: int = 500,
+        element_ref: str | None = None,
+    ) -> None:
+        """Scroll the page or a specific element."""
+        await self.ensure_browser()
+
+        if element_ref:
+            # Scroll element into view
+            element_info = self.get_element_by_ref(element_ref)
+            if element_info:
+                # Use locator to scroll element into view
+                role = element_info.get("role", "")
+                name = element_info.get("name", "")
+                if role and name:
+                    locator = self._page.get_by_role(role, name=name)
+                    await locator.scroll_into_view_if_needed()
+        else:
+            # Scroll viewport
+            delta = amount if direction == "down" else -amount
+            await self._page.mouse.wheel(0, delta)
+
+    async def wait_for(
+        self,
+        selector: str | None = None,
+        timeout: int = 30000,
+        state: str = "visible",
+    ) -> bool:
+        """Wait for element or timeout."""
+        await self.ensure_browser()
+
+        try:
+            if selector:
+                await self._page.wait_for_selector(
+                    selector,
+                    timeout=timeout,
+                    state=state,  # "visible", "hidden", "attached", "detached"
+                )
+            else:
+                await self._page.wait_for_timeout(timeout)
+            return True
+        except Exception:
+            return False
 
 
 class BrowserNavigateTool(Tool):
