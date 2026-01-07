@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING, Any
 from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
 from tempo.prompts.phases import Phase
+from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
 
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
+    from tempo.infra.browser_state import BrowserStateManager
     from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
@@ -29,7 +31,10 @@ class BrowserAgent(BaseAgentDefinition):
     
     Features:
     - Browser-only tools (navigate, snapshot, click, type, fill_form)
+    - State management tools (save, load, list, delete states)
+    - Visual tools (screenshot, coordinate click, scroll, wait)
     - Task completion tool to signal done and return findings
+    - Scope support for constrained browsing
     - Focused, single-purpose prompt (no phase transitions)
     - Fast model for quick browser tasks
     """
@@ -42,6 +47,11 @@ class BrowserAgent(BaseAgentDefinition):
         self,
         task: str,
         url: str | None = None,
+        state_name: str | None = None,
+        save_state_as: str | None = None,
+        scope: str | None = None,
+        headless: bool = True,
+        state_ttl_days: int = 7,
         **kwargs: Any,
     ):
         """
@@ -50,10 +60,20 @@ class BrowserAgent(BaseAgentDefinition):
         Args:
             task: Description of the browser task to accomplish
             url: Optional starting URL to navigate to
+            state_name: Optional name of saved state to load at start
+            save_state_as: Optional name to save state as after completion
+            scope: Optional scope constraints for the browser agent
+            headless: Whether to run browser in headless mode
+            state_ttl_days: Default TTL for saved states in days
             **kwargs: Ignored additional args
         """
         self.task = task
         self.url = url
+        self.state_name = state_name
+        self.save_state_as = save_state_as
+        self.scope = scope
+        self.headless = headless
+        self.state_ttl_days = state_ttl_days
     
     @property
     def name(self) -> str:
@@ -68,13 +88,16 @@ class BrowserAgent(BaseAgentDefinition):
         context: "ContextStore",
         container: "ContainerManager | None" = None,
         workflow: "WorkflowManager | None" = None,
+        state_manager: "BrowserStateManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
         """
         Create browser-only tools.
         
-        The browser agent has a minimal toolset:
+        The browser agent has:
         - Browser navigation and interaction tools
+        - State management tools (save/load sessions)
+        - Visual tools (screenshot, coordinate click, scroll, wait)
         - Task completion tool (no other meta tools)
         """
         from tempo.tools.registry import ToolRegistry
@@ -85,18 +108,53 @@ class BrowserAgent(BaseAgentDefinition):
             BrowserClickTool,
             BrowserTypeTool,
             BrowserFillFormTool,
+            BrowserScreenshotTool,
+            BrowserClickCoordsTool,
+            BrowserScrollTool,
+            BrowserWaitTool,
+        )
+        from tempo.tools.browser_state_tools import (
+            BrowserListStatesTool,
+            BrowserSaveStateTool,
+            BrowserLoadStateTool,
+            BrowserDeleteStateTool,
+            BrowserCleanupStatesTool,
         )
         from tempo.tools.complete_browser_task import CompleteBrowserTaskTool
+        from tempo.infra.browser_state import BrowserStateManager
         
         tools = ToolRegistry()
         
+        # Create state manager if not provided
+        if state_manager is None:
+            state_manager = BrowserStateManager(ttl_days=self.state_ttl_days)
+        
         # Browser tools with shared session
-        browser_session = BrowserSession(container_manager=container)
+        browser_session = BrowserSession(
+            container_manager=container,
+            headless=self.headless,
+            state_manager=state_manager,
+        )
+        
+        # Core browser tools
         tools.register(BrowserNavigateTool(browser_session))
         tools.register(BrowserSnapshotTool(browser_session))
         tools.register(BrowserClickTool(browser_session))
         tools.register(BrowserTypeTool(browser_session))
         tools.register(BrowserFillFormTool(browser_session))
+        
+        # Visual/interaction tools
+        tools.register(BrowserScreenshotTool(browser_session))
+        tools.register(BrowserClickCoordsTool(browser_session))
+        tools.register(BrowserScrollTool(browser_session))
+        tools.register(BrowserWaitTool(browser_session))
+        
+        # State management tools
+        tools.register(BrowserListStatesTool(state_manager))
+        tools.register(BrowserSaveStateTool(browser_session, state_manager))
+        tools.register(BrowserLoadStateTool(browser_session, state_manager))
+        tools.register(BrowserDeleteStateTool(state_manager))
+        tools.register(BrowserCleanupStatesTool(state_manager))
         
         # Completion tool - the only meta tool
         tools.register(CompleteBrowserTaskTool())
@@ -113,8 +171,24 @@ class BrowserAgent(BaseAgentDefinition):
         Build browser-specific system prompt.
         
         Uses a focused prompt without phase transitions or security testing context.
+        Includes scope constraints if provided.
         """
-        return prompts.build_browser_prompt(tool_schemas=tool_schemas)
+        # Pass scope if it's not a placeholder value
+        scope_content = None
+        if scope_description and scope_description not in DEFAULT_SCOPE_PLACEHOLDERS:
+            scope_content = scope_description
+        
+        # Also check self.scope which may be passed directly
+        if self.scope and not scope_content:
+            scope_content = self.scope
+        
+        return prompts.build_browser_prompt(
+            tool_schemas=tool_schemas,
+            scope_content=scope_content,
+            state_name=self.state_name,
+            save_state_as=self.save_state_as,
+            ttl_days=self.state_ttl_days,
+        )
     
     def build_objective(self, target: str | None = None, **kwargs: Any) -> str:
         """
@@ -125,7 +199,7 @@ class BrowserAgent(BaseAgentDefinition):
             **kwargs: Ignored
             
         Returns:
-            Formatted objective with task and optional URL
+            Formatted objective with task, URL, and state instructions
         """
         objective_parts = [f"**Task**: {self.task}"]
         
@@ -133,6 +207,20 @@ class BrowserAgent(BaseAgentDefinition):
             objective_parts.append(f"\n**Starting URL**: {self.url}")
         else:
             objective_parts.append("\n**Starting URL**: Navigate as needed to accomplish the task")
+        
+        # Add state loading instruction if specified
+        if self.state_name:
+            objective_parts.append(
+                f"\n**Initial State**: Load saved state '{self.state_name}' "
+                "at the start using `browser_load_state`."
+            )
+        
+        # Add state saving instruction if specified
+        if self.save_state_as:
+            objective_parts.append(
+                f"\n**Save State**: Before completing, save browser state as "
+                f"'{self.save_state_as}' using `browser_save_state`."
+            )
         
         objective_parts.append("\nComplete the task and call `complete_browser_task` with your findings.")
         

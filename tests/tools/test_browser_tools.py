@@ -218,6 +218,174 @@ class TestBrowserFillFormTool:
         assert "No fields provided" in result.error
 
 
+class TestBrowserScreenshotTool:
+    """Tests for BrowserScreenshotTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserScreenshotTool
+        session = BrowserSession()
+        tool = BrowserScreenshotTool(session)
+        
+        assert tool.name == "browser_screenshot"
+        assert tool.category == ToolCategory.BROWSING
+        assert "screenshot" in tool.description.lower()
+    
+    def test_schema_has_optional_params(self):
+        """Schema has optional parameters."""
+        from tempo.tools.browser_tools import BrowserScreenshotTool
+        session = BrowserSession()
+        tool = BrowserScreenshotTool(session)
+        schema = tool.get_schema()
+        
+        assert "filename" in schema.parameters["properties"]
+        assert "full_page" in schema.parameters["properties"]
+        assert "return_base64" in schema.parameters["properties"]
+        assert schema.parameters["required"] == []
+    
+    @pytest.mark.asyncio
+    async def test_execute_with_container_not_implemented(self):
+        """Execute returns not implemented for container mode."""
+        from tempo.tools.browser_tools import BrowserScreenshotTool
+        mock_container = MagicMock()
+        session = BrowserSession(container_manager=mock_container)
+        tool = BrowserScreenshotTool(session)
+        
+        session.ensure_browser = AsyncMock()
+        
+        result = await tool.execute()
+        
+        assert not result.success
+        assert "not yet implemented" in result.error
+
+
+class TestBrowserClickCoordsTool:
+    """Tests for BrowserClickCoordsTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserClickCoordsTool
+        session = BrowserSession()
+        tool = BrowserClickCoordsTool(session)
+        
+        assert tool.name == "browser_click_coords"
+        assert tool.category == ToolCategory.BROWSING
+        assert "coordinate" in tool.description.lower()
+    
+    def test_schema_requires_x_y(self):
+        """Schema requires x and y parameters."""
+        from tempo.tools.browser_tools import BrowserClickCoordsTool
+        session = BrowserSession()
+        tool = BrowserClickCoordsTool(session)
+        schema = tool.get_schema()
+        
+        assert "x" in schema.parameters["properties"]
+        assert "y" in schema.parameters["properties"]
+        assert "button" in schema.parameters["properties"]
+        assert "x" in schema.parameters["required"]
+        assert "y" in schema.parameters["required"]
+    
+    @pytest.mark.asyncio
+    async def test_execute_with_container_not_implemented(self):
+        """Execute returns not implemented for container mode."""
+        from tempo.tools.browser_tools import BrowserClickCoordsTool
+        mock_container = MagicMock()
+        session = BrowserSession(container_manager=mock_container)
+        tool = BrowserClickCoordsTool(session)
+        
+        session.ensure_browser = AsyncMock()
+        
+        result = await tool.execute(x=100, y=200)
+        
+        assert not result.success
+        assert "not yet implemented" in result.error
+
+
+class TestBrowserScrollTool:
+    """Tests for BrowserScrollTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserScrollTool
+        session = BrowserSession()
+        tool = BrowserScrollTool(session)
+        
+        assert tool.name == "browser_scroll"
+        assert tool.category == ToolCategory.BROWSING
+        assert "scroll" in tool.description.lower()
+    
+    def test_schema_has_optional_params(self):
+        """Schema has optional direction and amount."""
+        from tempo.tools.browser_tools import BrowserScrollTool
+        session = BrowserSession()
+        tool = BrowserScrollTool(session)
+        schema = tool.get_schema()
+        
+        props = schema.parameters["properties"]
+        assert "direction" in props
+        assert props["direction"]["enum"] == ["up", "down"]
+        assert "amount" in props
+        assert schema.parameters["required"] == []
+    
+    @pytest.mark.asyncio
+    async def test_execute_with_container_not_implemented(self):
+        """Execute returns not implemented for container mode."""
+        from tempo.tools.browser_tools import BrowserScrollTool
+        mock_container = MagicMock()
+        session = BrowserSession(container_manager=mock_container)
+        tool = BrowserScrollTool(session)
+        
+        session.ensure_browser = AsyncMock()
+        
+        result = await tool.execute()
+        
+        assert not result.success
+        assert "not yet implemented" in result.error
+
+
+class TestBrowserWaitTool:
+    """Tests for BrowserWaitTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserWaitTool
+        session = BrowserSession()
+        tool = BrowserWaitTool(session)
+        
+        assert tool.name == "browser_wait"
+        assert tool.category == ToolCategory.BROWSING
+        assert "wait" in tool.description.lower()
+    
+    def test_schema_has_optional_params(self):
+        """Schema has optional parameters."""
+        from tempo.tools.browser_tools import BrowserWaitTool
+        session = BrowserSession()
+        tool = BrowserWaitTool(session)
+        schema = tool.get_schema()
+        
+        props = schema.parameters["properties"]
+        assert "selector" in props
+        assert "timeout_ms" in props
+        assert "state" in props
+        assert props["state"]["enum"] == ["visible", "hidden", "attached", "detached"]
+        assert schema.parameters["required"] == []
+    
+    @pytest.mark.asyncio
+    async def test_execute_with_container_not_implemented(self):
+        """Execute returns not implemented for container mode."""
+        from tempo.tools.browser_tools import BrowserWaitTool
+        mock_container = MagicMock()
+        session = BrowserSession(container_manager=mock_container)
+        tool = BrowserWaitTool(session)
+        
+        session.ensure_browser = AsyncMock()
+        
+        result = await tool.execute(selector="#test")
+        
+        assert not result.success
+        assert "not yet implemented" in result.error
+
+
 class TestToolFactoryIntegration:
     """Integration tests for tool factory."""
     

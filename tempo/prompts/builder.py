@@ -204,6 +204,10 @@ class PromptBuilder:
     def build_browser_prompt(
         self,
         tool_schemas: list[dict],
+        scope_content: str | None = None,
+        state_name: str | None = None,
+        save_state_as: str | None = None,
+        ttl_days: int = 7,
     ) -> str:
         """
         Build the system prompt for browser agent.
@@ -213,6 +217,10 @@ class PromptBuilder:
         
         Args:
             tool_schemas: List of tool schemas
+            scope_content: Optional scope constraints for the browser agent
+            state_name: Optional name of saved state to load at start
+            save_state_as: Optional name to save state as after completion
+            ttl_days: Default TTL for saved states in days
             
         Returns:
             Formatted browser agent system prompt
@@ -220,8 +228,30 @@ class PromptBuilder:
         tool_descriptions = self.format_tool_descriptions(tool_schemas)
         template = self._load_template("browser_base")
         
+        # Build scope section
+        scope_section = self._build_scope_section(scope_content)
+        
+        # Build state instructions
+        state_instructions = ""
+        if state_name:
+            state_instructions += (
+                f"\n**Initial State**: Load saved state '{state_name}' at the start.\n"
+            )
+        if save_state_as:
+            state_instructions += (
+                f"\n**Save State**: Save browser state as '{save_state_as}' "
+                "before completing.\n"
+            )
+        if not state_name and not save_state_as:
+            state_instructions = (
+                "\nNo specific state loading or saving required for this task.\n"
+            )
+        
         return template.format(
             tools=tool_descriptions,
+            scope_section=scope_section,
+            state_instructions=state_instructions,
+            ttl_days=ttl_days,
         )
     
     def filter_schemas_for_subagent(self, schemas: list[dict]) -> list[dict]:
