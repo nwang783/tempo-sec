@@ -1474,60 +1474,63 @@ viewport_height = 720
 
 ## 5. Implementation Checklist
 
-### Phase 1: Foundation
+### Phase 1: Foundation & Infrastructure
+*Create browser state management and enhance BrowserSession with new capabilities.*
+
 - [ ] Create `tempo/infra/browser_state.py` with `BrowserState` and `BrowserStateManager`
 - [ ] Add browser config options to `tempo/agent/config.py`
-- [ ] Test state manager save/load/delete/cleanup operations
-
-### Phase 2: BrowserSession Enhancement
-- [ ] Update `BrowserSession.__init__()` with new parameters
-- [ ] Add `capture_state()` method
-- [ ] Add `restore_state()` method
-- [ ] Add `screenshot()` method
-- [ ] Add `click_coordinates()` method
-- [ ] Add `scroll()` method
-- [ ] Add `wait_for()` method
-
-### Phase 3: New Tools
-- [ ] Create `tempo/tools/browser_state_tools.py`
-- [ ] Implement `BrowserListStatesTool`
-- [ ] Implement `BrowserSaveStateTool`
-- [ ] Implement `BrowserLoadStateTool`
-- [ ] Implement `BrowserDeleteStateTool`
-- [ ] Implement `BrowserCleanupStatesTool`
-- [ ] Add `BrowserScreenshotTool` to `browser_tools.py`
-- [ ] Add `BrowserClickCoordsTool` to `browser_tools.py`
-- [ ] Add `BrowserScrollTool` to `browser_tools.py`
-- [ ] Add `BrowserWaitTool` to `browser_tools.py`
-
-### Phase 4: Agent Updates
-- [ ] Update `BrowserAgent.__init__()` with new parameters
-- [ ] Update `create_tools()` to register new tools
-- [ ] Update `build_system_prompt()` for scope support
-- [ ] Update `build_objective()` with state instructions
-
-### Phase 5: Task Tool Updates
-- [ ] Update `BrowserTaskTool.__init__()` to accept `visualization_collector`
-- [ ] Update `BrowserTaskTool.execute()` signature with new parameters
-- [ ] Update `BrowserTaskTool.execute()` to create child collector and pass to browser agent
-- [ ] Update `BrowserTaskTool.get_schema()` with new parameters
-- [ ] Update tool instantiation in Recon/Test agents to pass visualization_collector
-
-### Phase 6: Prompts
-- [ ] Update `browser_base.txt` with state management guidance
-- [ ] Update `PromptBuilder.build_browser_prompt()` method
-
-### Phase 7: Agent Prompt Updates
-- [ ] Update `subagent_recon.txt` with browser_task usage guidance
-- [ ] Update `subagent_test.txt` with browser_task usage guidance and state management examples
-
-### Phase 8: Config & Tests
 - [ ] Add `[browser]` section to `config.toml`
-- [ ] Write unit tests for state manager
-- [ ] Write unit tests for state tools
+- [ ] Update `BrowserSession.__init__()` with new parameters (headless from config, state_manager, viewport)
+- [ ] Add `BrowserSession.capture_state()` method
+- [ ] Add `BrowserSession.restore_state()` method
+- [ ] Add `BrowserSession.screenshot()` method
+- [ ] Add `BrowserSession.click_coordinates()` method
+- [ ] Add `BrowserSession.scroll()` method
+- [ ] Add `BrowserSession.wait_for()` method
+- [ ] Write unit tests for `BrowserStateManager` (save/load/delete/cleanup/expiration)
+
+---
+
+### Phase 2: Tools & Agent Integration
+*Create new browser tools and wire them into the browser agent and task tool.*
+
+- [ ] Create `tempo/tools/browser_state_tools.py` with:
+  - [ ] `BrowserListStatesTool`
+  - [ ] `BrowserSaveStateTool`
+  - [ ] `BrowserLoadStateTool`
+  - [ ] `BrowserDeleteStateTool`
+  - [ ] `BrowserCleanupStatesTool`
+- [ ] Add to `tempo/tools/browser_tools.py`:
+  - [ ] `BrowserScreenshotTool`
+  - [ ] `BrowserClickCoordsTool`
+  - [ ] `BrowserScrollTool`
+  - [ ] `BrowserWaitTool`
+- [ ] Update `BrowserAgent` (`tempo/agents/browser.py`):
+  - [ ] Add `state_name`, `save_state_as`, `scope` parameters
+  - [ ] Register new tools in `create_tools()`
+  - [ ] Update `build_system_prompt()` for scope support
+  - [ ] Update `build_objective()` with state instructions
+- [ ] Update `BrowserTaskTool` (`tempo/tools/browser_task_tool.py`):
+  - [ ] Accept `visualization_collector` in constructor
+  - [ ] Update `execute()` with `state_name`, `save_state_as`, `scope` parameters
+  - [ ] Create child collector for browser agent visualization
+  - [ ] Update `get_schema()` with new parameters
+- [ ] Update Recon/Test agent tool instantiation to pass `visualization_collector`
 - [ ] Write unit tests for new browser tools
-- [ ] Write integration tests for state flow
-- [ ] Update documentation
+
+---
+
+### Phase 3: Prompts, Testing & Documentation
+*Update prompts with usage guidance and write integration tests.*
+
+- [ ] Update `tempo/prompts/templates/browser_base.txt` with state management guidance
+- [ ] Update `PromptBuilder.build_browser_prompt()` method
+- [ ] Update `subagent_recon.txt` with `browser_task` usage guidance
+- [ ] Update `subagent_test.txt` with `browser_task` usage and state examples
+- [ ] Write integration tests for full state flow (login → save → reload → verify)
+- [ ] Write integration tests for scope propagation
+- [ ] Update documentation (TOOLS.md, AGENTS.md)
+
 
 ---
 
