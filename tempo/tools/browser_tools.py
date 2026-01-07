@@ -1073,3 +1073,314 @@ class BrowserFillFormTool(Tool):
                 "required": ["fields"],
             },
         )
+
+
+class BrowserScreenshotTool(Tool):
+    """Capture a screenshot of the current page."""
+
+    name = "browser_screenshot"
+    description = (
+        "Capture a screenshot of the current page. "
+        "Returns image path and optionally base64 data."
+    )
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        filename: str | None = None,
+        full_page: bool = False,
+        return_base64: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Capture screenshot."""
+        try:
+            await self.session.ensure_browser()
+
+            if self.session.container is not None:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Container execution not yet implemented for browser_screenshot",
+                )
+
+            # Generate filename if not provided
+            if not filename:
+                import uuid
+                filename = f"/tmp/screenshot_{uuid.uuid4().hex[:8]}.png"
+
+            screenshot_bytes = await self.session.screenshot(
+                path=filename, full_page=full_page
+            )
+
+            output = f"Screenshot saved to: {filename}\nSize: {len(screenshot_bytes)} bytes"
+            metadata = {
+                "path": filename,
+                "size_bytes": len(screenshot_bytes),
+                "full_page": full_page,
+            }
+
+            if return_base64:
+                import base64
+                b64_data = base64.b64encode(screenshot_bytes).decode("utf-8")
+                metadata["base64"] = b64_data
+                output += f"\nBase64 data length: {len(b64_data)}"
+
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata=metadata,
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "Path to save screenshot (auto-generated if not provided)",
+                    },
+                    "full_page": {
+                        "type": "boolean",
+                        "description": "Capture full scrollable page instead of viewport",
+                        "default": False,
+                    },
+                    "return_base64": {
+                        "type": "boolean",
+                        "description": (
+                            "Include base64-encoded image data in metadata "
+                            "(for vision models)"
+                        ),
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserClickCoordsTool(Tool):
+    """Click at specific x,y coordinates."""
+
+    name = "browser_click_coords"
+    description = (
+        "Click at specific x,y coordinates on the page. "
+        "Useful when element refs don't work."
+    )
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        x: int,
+        y: int,
+        button: str = "left",
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Click at coordinates."""
+        try:
+            await self.session.ensure_browser()
+
+            if self.session.container is not None:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Container execution not yet implemented for browser_click_coords",
+                )
+
+            await self.session.click_coordinates(x, y, button)
+
+            return ToolResult(
+                success=True,
+                output=f"Clicked at coordinates ({x}, {y}) with {button} button",
+                metadata={"x": x, "y": y, "button": button},
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "type": "integer",
+                        "description": "X coordinate (pixels from left)",
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y coordinate (pixels from top)",
+                    },
+                    "button": {
+                        "type": "string",
+                        "enum": ["left", "right", "middle"],
+                        "description": "Mouse button to click",
+                        "default": "left",
+                    },
+                },
+                "required": ["x", "y"],
+            },
+        )
+
+
+class BrowserScrollTool(Tool):
+    """Scroll the page."""
+
+    name = "browser_scroll"
+    description = "Scroll the page up or down by a specified amount"
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        direction: str = "down",
+        amount: int = 500,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Scroll the page."""
+        try:
+            await self.session.ensure_browser()
+
+            if self.session.container is not None:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Container execution not yet implemented for browser_scroll",
+                )
+
+            await self.session.scroll(direction=direction, amount=amount)
+
+            return ToolResult(
+                success=True,
+                output=f"Scrolled {direction} by {amount} pixels",
+                metadata={"direction": direction, "amount": amount},
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "direction": {
+                        "type": "string",
+                        "enum": ["up", "down"],
+                        "description": "Scroll direction",
+                        "default": "down",
+                    },
+                    "amount": {
+                        "type": "integer",
+                        "description": "Pixels to scroll",
+                        "default": 500,
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserWaitTool(Tool):
+    """Wait for element or timeout."""
+
+    name = "browser_wait"
+    description = "Wait for an element to appear or for a specified timeout"
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        selector: str | None = None,
+        timeout_ms: int = 5000,
+        state: str = "visible",
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Wait for condition."""
+        try:
+            await self.session.ensure_browser()
+
+            if self.session.container is not None:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Container execution not yet implemented for browser_wait",
+                )
+
+            if selector:
+                success = await self.session.wait_for(
+                    selector=selector,
+                    timeout=timeout_ms,
+                    state=state,
+                )
+                if success:
+                    return ToolResult(
+                        success=True,
+                        output=f"Element '{selector}' is now {state}",
+                        metadata={"selector": selector, "state": state},
+                    )
+                else:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error=f"Timeout waiting for '{selector}' to be {state}",
+                    )
+            else:
+                await self.session.wait_for(timeout=timeout_ms)
+                return ToolResult(
+                    success=True,
+                    output=f"Waited {timeout_ms}ms",
+                    metadata={"timeout_ms": timeout_ms},
+                )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": (
+                            "CSS selector to wait for "
+                            "(if omitted, just waits for timeout)"
+                        ),
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Maximum time to wait in milliseconds",
+                        "default": 5000,
+                    },
+                    "state": {
+                        "type": "string",
+                        "enum": ["visible", "hidden", "attached", "detached"],
+                        "description": "Element state to wait for",
+                        "default": "visible",
+                    },
+                },
+                "required": [],
+            },
+        )
