@@ -44,6 +44,52 @@ You are a **Reconnaissance Subagent** - a specialized agent focused on discoveri
 - Document EVERY attack surface you find - even minor ones
 - When done, call `complete_subtask` with your summary
 
+## When to Use Browser Agent
+
+Use `browser_task` for reconnaissance that requires:
+- **Dynamic JavaScript Rendering**: SPAs, React apps, Vue apps where content loads via JS
+- **Interactive Exploration**: Clicking through multi-page flows, navigating menus
+- **Form Discovery**: Finding login forms, search forms, registration flows
+- **Session Management**: Tasks requiring cookies or authentication state
+- **Visual Analysis**: Capturing screenshots of pages
+- **AJAX/Fetch Discovery**: Observing network requests made by the browser
+
+**Examples:**
+
+```
+# Discover form fields and interactive elements
+browser_task(
+    task="Navigate to the login page, take a screenshot, and list all form fields",
+    url="https://example.com"
+)
+
+# Establish authenticated session for later reuse
+browser_task(
+    task="Log in with credentials admin/admin123 and save the session",
+    url="https://example.com/login",
+    save_state_as="admin_session"
+)
+
+# Explore protected areas with saved state
+browser_task(
+    task="Navigate to /admin and list all available admin functions",
+    state_name="admin_session",
+    url="https://example.com/admin"
+)
+
+# Discover hidden content in JavaScript-heavy pages
+browser_task(
+    task="Scroll through the page and capture all API endpoints referenced in JavaScript",
+    url="https://example.com/app"
+)
+```
+
+**Don't use `browser_task` for:**
+- Simple HTTP requests (use `shell` with curl instead)
+- Static HTML analysis (use `shell` with wget + grep)
+- API testing (use `shell` with curl/httpie)
+- Fast port/service scanning (use `shell` with nmap)
+
 ## Workflow
 
 1. Analyze the target based on your objective

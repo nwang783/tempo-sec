@@ -33,7 +33,9 @@ shell(
 
 ### Browser Tools
 
-Playwright-style browser interaction with ref-based element targeting:
+Playwright-style browser interaction with ref-based element targeting and persistent state management.
+
+#### Core Browser Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -43,19 +45,76 @@ Playwright-style browser interaction with ref-based element targeting:
 | `browser_type` | Type text into element |
 | `browser_fill_form` | Fill multiple form fields |
 
+#### Visual & Interaction Tools
+
+| Tool | Purpose |
+|------|---------|
+| `browser_screenshot` | Capture screenshot (optional base64 for vision models) |
+| `browser_click_coords` | Click at x,y coordinates (fallback when refs fail) |
+| `browser_scroll` | Scroll page up/down by pixels |
+| `browser_wait` | Wait for element or timeout |
+
+#### State Management Tools
+
+| Tool | Purpose |
+|------|---------|
+| `browser_list_states` | List all saved browser states with metadata |
+| `browser_save_state` | Save current cookies/localStorage/sessionStorage |
+| `browser_load_state` | Restore a previously saved state |
+| `browser_delete_state` | Delete a saved state |
+| `browser_cleanup_states` | Remove all expired states |
+
 **Example workflow:**
 ```python
 # 1. Navigate and get summary
 browser_navigate(url="https://example.com/login")
 
 # 2. Snapshot to get element refs
-browser_snapshot()  # Returns refs like [1], [2], [3]
+browser_snapshot()  # Returns refs like [ref_0], [ref_1], [ref_2]
 
 # 3. Interact using refs
-browser_type(ref="[1]", text="username")
-browser_type(ref="[2]", text="password")
-browser_click(ref="[3]")  # Click login button
+browser_type(ref="ref_0", text="username")
+browser_type(ref="ref_1", text="password")
+browser_click(ref="ref_2")  # Click login button
 ```
+
+**State persistence workflow:**
+```python
+# Login and save session for later use
+browser_navigate(url="https://example.com/login")
+browser_snapshot()
+browser_type(ref="ref_0", text="admin")
+browser_type(ref="ref_1", text="password123")
+browser_click(ref="ref_2")
+browser_save_state(name="admin_session", description="Admin account")
+
+# Later: reuse the saved session
+browser_load_state(name="admin_session")
+browser_navigate(url="https://example.com/admin")  # Already authenticated!
+```
+
+### Browser Task Tool
+
+For parent agents (Recon, Test) to delegate browser tasks to a specialized browser agent:
+
+```python
+browser_task(
+    task="Log in and explore the admin panel",
+    url="https://example.com/login",
+    state_name="",              # Optional: load existing session
+    save_state_as="admin_session",  # Optional: save session after task
+    scope="Only explore example.com domain",  # Optional: constraints
+    max_steps=10
+)
+```
+
+**Key parameters:**
+- `task`: Description of what the browser agent should accomplish
+- `url`: Starting URL (optional)
+- `state_name`: Load a saved browser state before starting
+- `save_state_as`: Save browser state after task completion
+- `scope`: Constraints for the browser agent
+- `max_steps`: Maximum steps (default: 10)
 
 ### Filesystem Tools
 
