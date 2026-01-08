@@ -302,7 +302,7 @@ class Agent:
         Returns:
             AgentResult with findings, final state, etc.
         """
-        print(f"[DEBUG] Agent.run() called: start_step={start_step}, max_steps={max_steps}, initial_phase={initial_phase}")
+
         self._objective = objective
         self._step_count = start_step
         
@@ -317,7 +317,7 @@ class Agent:
         # If we are effectively starting from scratch (step_count == 0), add initial prompts
         # If resuming (step_count > 0), assume context is already primed
         is_resuming = start_step > 0
-        print(f"[DEBUG] Agent.run(): is_resuming={is_resuming}")
+
         
         if not is_resuming:
             # Add initial system message
@@ -332,7 +332,7 @@ class Agent:
             self.context.add_message(MessageRole.USER, objective)
         
         max_steps = max_steps or self.config.max_steps or 50
-        print(f"[DEBUG] Agent.run(): entering main loop with max_steps={max_steps}, current _step_count={self._step_count}")
+
         
         try:
             while self._step_count < max_steps:
@@ -350,12 +350,12 @@ class Agent:
                         error="Stopped by user",
                     )
 
-                print(f"[DEBUG] Agent.run(): calling step() at _step_count={self._step_count}")
+
                 try:
                     step_result = await self.step()
-                    print(f"[DEBUG] Agent.run(): step() returned, should_continue={step_result.should_continue}")
+
                 except Exception as e:
-                    print(f"[DEBUG] Agent.run(): step() raised exception: {e}")
+
                     import traceback
                     traceback.print_exc()
                     raise
@@ -457,15 +457,15 @@ class Agent:
             self._viz_collector.on_available_tools(tool_schemas)
         
         # Call LLM
-        print(f"[DEBUG] step(): calling LLM with {len(messages)} messages, {len(tool_schemas)} tools")
+
         try:
             response = await self.llm.complete(
                 messages=messages,
                 tools=tool_schemas,
             )
-            print(f"[DEBUG] step(): LLM returned, content_length={len(response.content) if response.content else 0}, tool_calls={len(response.tool_calls) if response.tool_calls else 0}")
+
         except Exception as e:
-            print(f"[DEBUG] step(): LLM call failed: {e}")
+
             import traceback
             traceback.print_exc()
             raise

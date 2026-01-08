@@ -255,7 +255,7 @@ async def main() -> None:
     
     # Execution Wrapper
     async def run_agent(tools, workflow):
-        print("[DEBUG] run_agent() called")
+
         # Build Objective
         try:
             # Pass args that might be relevant
@@ -263,7 +263,7 @@ async def main() -> None:
                 target=args.target,
                 manifest_path=args.manifest
             )
-            print(f"[DEBUG] Objective built, length={len(objective)}")
+
         except Exception as e:
             print(f"Error building objective: {e}")
             import traceback
@@ -272,13 +272,13 @@ async def main() -> None:
             
         # Build System Prompt if starting fresh
         if step_count == 0:
-            print("[DEBUG] Building system prompt (fresh start)")
+
             system_prompt = agent_def.build_system_prompt(
                 prompts, 
                 tools.get_schemas(), 
                 config.scope or "No specific scope defined."
             )
-            print(f"[DEBUG] System prompt built, length={len(system_prompt)}")
+
             # Inject system prompt
             context.add_message(MessageRole.SYSTEM, system_prompt)
             
@@ -293,7 +293,7 @@ async def main() -> None:
             # Objective might be needed for restoring state or logging
             objective = "Resumed session" # Placeholder if resuming
         
-        print(f"[DEBUG] Creating Agent with start_step={run_start_step}")
+
         # Create Agent
         agent = Agent(
             config=config,
@@ -307,7 +307,7 @@ async def main() -> None:
             stop_event=stop_event,
         )
         
-        print(f"[DEBUG] Calling agent.run() with max_steps={args.max_steps or config.max_total_steps}")
+
         # Run Agent
         result = await agent.run(
             objective=objective,
@@ -316,7 +316,7 @@ async def main() -> None:
             start_step=run_start_step,
         )
         
-        print(f"[DEBUG] agent.run() returned: success={result.success}, error={result.error}")
+
         return result
 
     # Setup Container & Run
@@ -344,7 +344,7 @@ async def main() -> None:
             # Early Docker connectivity check
             try:
                 container.client.ping()
-                print("[DEBUG] Docker ping successful")
+
             except Exception as docker_err:
                 print(f"\n❌ Docker connection failed: {docker_err}")
                 print("\nPossible fixes:")
@@ -354,23 +354,23 @@ async def main() -> None:
                 sys.exit(1)
             
             async with container:
-                print("[DEBUG] Container started")
+
                 # Create tools with container
                 try:
                     tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector, config=config)
-                    print(f"[DEBUG] Tools created: {tools.list_tools()}")
+
                 except Exception as e:
-                    print(f"[DEBUG] Error creating tools: {e}")
+
                     import traceback
                     traceback.print_exc()
                     raise
                 
                 try:
-                    print("[DEBUG] Running agent...")
+
                     result = await run_agent(tools, workflow)
-                    print(f"[DEBUG] Agent finished: success={result.success}, steps={result.steps_taken}")
+
                 except Exception as e:
-                    print(f"[DEBUG] Error running agent: {e}")
+
                     import traceback
                     traceback.print_exc()
                     raise
@@ -399,7 +399,7 @@ async def main() -> None:
         print(f"\n💾 Context saved to: {save_path}")
 
     except Exception as e:
-        print(f"\n[DEBUG] Unhandled exception in main try block: {e}")
+
         import traceback
         traceback.print_exc()
         raise
