@@ -1028,6 +1028,12 @@ svg:active {
     border-color: #f48771;
 }
 
+.agent-node.nested-subagent {
+    margin-left: 40px;
+    font-size: 0.85em;
+    border-left: 2px solid var(--accent-color);
+}
+
 .agent-header {
     display: flex;
     align-items: center;

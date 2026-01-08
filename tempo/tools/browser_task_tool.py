@@ -11,6 +11,7 @@ from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
     from tempo.infra.llm import LLMClient
+    from tempo.infra.protocols import VisualizationObserver
 
 
 class BrowserTaskTool(Tool):
@@ -20,12 +21,18 @@ class BrowserTaskTool(Tool):
     This tool allows parent agents (Recon, TestCycle) to offload
     browser-based tasks to a dedicated browser agent that runs
     autonomously and returns findings.
+    
+    Features:
+    - State persistence (load/save browser sessions)
+    - Scope constraints propagation
+    - Visualization event propagation (UI visibility)
     """
     
     name = "browser_task"
     description = (
         "Execute a browser-based task using a specialized browser agent. "
         "Use this for web browsing, form filling, clicking, and page analysis. "
+        "Supports state persistence (reuse logged-in sessions) and scope constraints. "
         "The browser agent will complete the task and return its findings."
     )
     category = ToolCategory.BROWSING
@@ -34,6 +41,8 @@ class BrowserTaskTool(Tool):
         self,
         container_manager: "ContainerManager | None" = None,
         llm_client: "LLMClient | None" = None,
+        visualization_collector: "VisualizationObserver | None" = None,
+        headless: bool = True,
     ):
         """
         Initialize the browser task tool.
@@ -41,15 +50,23 @@ class BrowserTaskTool(Tool):
         Args:
             container_manager: Container for sandboxed browser execution
             llm_client: LLM client for the browser agent (if None, creates new one)
+            visualization_collector: Collector for UI event propagation
+            headless: Whether to run browser in headless mode (default: True)
         """
         self._container_manager = container_manager
         self._llm_client = llm_client
+        self._visualization_collector = visualization_collector
+        self._headless = headless
     
     async def execute(
         self,
         task: str,
         url: str = "",
+        state_name: str = "",
+        save_state_as: str = "",
+        scope: str = "",
         max_steps: int | str = 10,
+        purpose: str = "",
         **kwargs,
     ) -> ToolResult:
         """
@@ -58,12 +75,17 @@ class BrowserTaskTool(Tool):
         Args:
             task: Description of what the browser agent should accomplish
             url: Optional starting URL (if provided, agent navigates there first)
+            state_name: Optional name of saved state to load (e.g., 'admin_session')
+            save_state_as: Optional name to save state as after task completion
+            scope: Optional scope constraints for the browser agent
             max_steps: Maximum steps for the browser agent (default: 10)
+            purpose: Why this browser task is being executed
             **kwargs: Additional arguments (ignored)
             
         Returns:
             ToolResult with the browser agent's findings
         """
+        import uuid
         from tempo.agents.browser import BrowserAgent
         from tempo.agent.config import AgentConfig
         from tempo.agent.runner import Agent
@@ -73,10 +95,14 @@ class BrowserTaskTool(Tool):
         # Coerce max_steps to int (LLM may pass as string)
         max_steps = int(max_steps)
         
-        # Create browser agent definition
+        # Create browser agent definition with new parameters
         browser_agent_def = BrowserAgent(
             task=task,
             url=url if url else None,
+            state_name=state_name if state_name else None,
+            save_state_as=save_state_as if save_state_as else None,
+            scope=scope if scope else None,
+            headless=self._headless,
         )
         
         # Create isolated context for browser agent
@@ -96,6 +122,7 @@ class BrowserTaskTool(Tool):
         config = AgentConfig(
             model=browser_agent_def.model,
             max_total_steps=max_steps,
+            browser_headless=self._headless,
         )
         
         # Build prompts
@@ -104,19 +131,52 @@ class BrowserTaskTool(Tool):
         system_prompt = browser_agent_def.build_system_prompt(
             prompts=prompts,
             tool_schemas=tool_schemas,
-            scope_description="Browser automation task",
+            scope_description=scope if scope else "Browser automation task",
         )
         
         # Add system prompt to context
         from tempo.context.frame import MessageRole
         browser_context.add_message(MessageRole.SYSTEM, system_prompt)
         
-        # Create and run browser agent
+        # Create child visualization collector for browser agent if available
+        browser_collector = None
+        browser_id = None
+        if self._visualization_collector:
+            browser_id = f"browser_{uuid.uuid4().hex[:8]}"
+            # Use for_subagent if available (VisualizationCollector)
+            if hasattr(self._visualization_collector, "for_subagent"):
+                browser_collector = self._visualization_collector.for_subagent(browser_id)
+            
+            # Get parent subagent ID from the collector (if it's a child collector)
+            parent_id = getattr(self._visualization_collector, "_subagent_id", None) or "orchestrator"
+            
+            # Emit browser agent start event
+            if hasattr(self._visualization_collector, "on_subagent_start"):
+                self._visualization_collector.on_subagent_start(
+                    subagent_id=browser_id,
+                    subagent_type="browser",
+                    objective=task,
+                    parent_id=parent_id,
+                )
+            
+            # Register browser context with server for viewing in UI
+            if hasattr(self._visualization_collector, "server"):
+                self._visualization_collector.server.register_subagent(
+                    subagent_id=browser_id,
+                    context=browser_context,
+                    metadata={
+                        "type": "browser",
+                        "objective": task,
+                    },
+                )
+        
+        # Create and run browser agent with visualization
         browser_agent = Agent(
             config=config,
             llm=llm,
             tools=browser_tools,
             context=browser_context,
+            visualization_collector=browser_collector,
         )
         
         # Build objective
@@ -146,6 +206,16 @@ class BrowserTaskTool(Tool):
                 if extracted_data:
                     output_parts.append(f"\nExtracted data: {extracted_data}")
                 
+                # Emit subagent finish event
+                if self._visualization_collector and hasattr(self._visualization_collector, "on_subagent_finish"):
+                    self._visualization_collector.on_subagent_finish(
+                        subagent_id=browser_id or "browser",
+                        success=task_success,
+                        summary=findings_str[:200],
+                        findings_count=1 if findings else 0,
+                        surfaces_count=0,
+                    )
+                
                 return ToolResult(
                     success=task_success,
                     output="\n".join(output_parts),
@@ -153,9 +223,21 @@ class BrowserTaskTool(Tool):
                         "steps_taken": result.steps_taken,
                         "findings": findings_str,
                         "extracted_data": extracted_data,
+                        "state_loaded": state_name if state_name else None,
+                        "state_saved": save_state_as if save_state_as else None,
                     },
                 )
             else:
+                # Emit subagent finish event for failure
+                if self._visualization_collector and hasattr(self._visualization_collector, "on_subagent_finish"):
+                    self._visualization_collector.on_subagent_finish(
+                        subagent_id=browser_id or "browser",
+                        success=False,
+                        summary=result.error or "Unknown error",
+                        findings_count=0,
+                        surfaces_count=0,
+                    )
+                
                 return ToolResult(
                     success=False,
                     output=f"Browser task failed: {result.error or 'Unknown error'}",
@@ -187,6 +269,31 @@ class BrowserTaskTool(Tool):
                     "url": {
                         "type": "string",
                         "description": "Starting URL to navigate to (optional)",
+                        "default": "",
+                    },
+                    "state_name": {
+                        "type": "string",
+                        "description": (
+                            "Optional name of saved browser state to load "
+                            "(e.g., 'admin_session'). The browser will restore "
+                            "cookies and storage from this state."
+                        ),
+                        "default": "",
+                    },
+                    "save_state_as": {
+                        "type": "string",
+                        "description": (
+                            "Optional name to save browser state as after task completion. "
+                            "Use this to persist authenticated sessions for later reuse."
+                        ),
+                        "default": "",
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": (
+                            "Optional scope constraints for the browser agent. "
+                            "Describe allowed/disallowed domains or actions."
+                        ),
                         "default": "",
                     },
                     "max_steps": {

@@ -258,7 +258,15 @@ class ContainerManager:
     
     async def __aenter__(self) -> "ContainerManager":
         """Async context manager entry."""
-        await self.start()
+
+        try:
+            await self.start()
+
+        except Exception as e:
+
+            import traceback
+            traceback.print_exc()
+            raise
         return self
     
     async def __aexit__(self, *args: Any) -> None:

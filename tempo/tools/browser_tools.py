@@ -13,25 +13,44 @@ from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
+    from tempo.infra.browser_state import BrowserStateManager
 
 
 class BrowserSession:
     """
     Shared browser session manager for Playwright-style tools.
-    
-    Manages the Playwright browser instance lifecycle and maintains
-    state (like element refs from snapshots) across tool calls.
+
+    Manages the Playwright browser instance lifecycle, maintains
+    state (like element refs from snapshots), and supports:
+    - Headless/headed modes
+    - State persistence (cookies, localStorage)
+    - Screenshot capture
+    - Coordinate-based interactions
     """
-    
-    def __init__(self, container_manager: "ContainerManager | None" = None):
+
+    def __init__(
+        self,
+        container_manager: "ContainerManager | None" = None,
+        headless: bool = True,
+        state_manager: "BrowserStateManager | None" = None,
+        viewport_width: int = 1280,
+        viewport_height: int = 720,
+    ):
         """
         Initialize the browser session.
-        
+
         Args:
             container_manager: Optional container for sandboxed execution.
                               If None, runs Playwright locally.
+            headless: Whether to run browser in headless mode.
+            state_manager: Optional BrowserStateManager for state persistence.
+            viewport_width: Browser viewport width in pixels.
+            viewport_height: Browser viewport height in pixels.
         """
         self.container = container_manager
+        self._headless = headless
+        self._state_manager = state_manager
+        self._viewport = {"width": viewport_width, "height": viewport_height}
         self._playwright = None
         self._browser = None
         self._page = None
@@ -40,25 +59,21 @@ class BrowserSession:
         self._network_requests: list[dict] = []
     
     async def ensure_browser(self) -> None:
-        """Ensure browser is initialized and ready."""
+        """Ensure browser is initialized with configured headless mode."""
         if self._browser is not None:
             return
-        
-        if self.container is not None:
-            # Container mode - browser runs inside container
-            # We'll execute commands via container.exec()
-            return
-        
-        # Local mode - use Playwright directly
+
+        # Always use local Playwright - container mode for browser not yet implemented
+        # Container manager can still be used for other sandboxed operations
         from playwright.async_api import async_playwright
-        
+
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=True)
-        self._page = await self._browser.new_page()
-        
+        self._browser = await self._playwright.chromium.launch(headless=self._headless)
+        self._page = await self._browser.new_page(viewport=self._viewport)
+
         # Set up console message capture
         self._page.on("console", self._on_console_message)
-        
+
         # Set up network request capture
         self._page.on("request", self._on_request)
     
@@ -103,6 +118,115 @@ class BrowserSession:
     def store_snapshot_refs(self, refs: dict[str, Any]) -> None:
         """Store element refs from a snapshot."""
         self._snapshot_refs = refs
+
+    async def capture_state(self) -> "BrowserState":
+        """Capture current browser state (cookies, storage)."""
+        from tempo.infra.browser_state import BrowserState
+
+        await self.ensure_browser()
+
+        # Get cookies
+        cookies = await self._page.context.cookies()
+
+        # Get localStorage and sessionStorage
+        local_storage = await self._page.evaluate("() => Object.assign({}, localStorage)")
+        session_storage = await self._page.evaluate("() => Object.assign({}, sessionStorage)")
+
+        # Get domain from current URL
+        from urllib.parse import urlparse
+        domain = urlparse(self._page.url).netloc if self._page.url else ""
+
+        return BrowserState(
+            name="",  # Will be set by caller
+            target_domain=domain,
+            cookies=cookies,
+            local_storage=local_storage,
+            session_storage=session_storage,
+        )
+
+    async def restore_state(self, state: "BrowserState") -> None:
+        """Restore browser state from saved state."""
+        await self.ensure_browser()
+
+        # Restore cookies
+        if state.cookies:
+            await self._page.context.add_cookies(state.cookies)
+
+        # Restore localStorage
+        if state.local_storage:
+            for key, value in state.local_storage.items():
+                await self._page.evaluate(
+                    f"localStorage.setItem({json.dumps(key)}, {json.dumps(value)})"
+                )
+
+        # Restore sessionStorage
+        if state.session_storage:
+            for key, value in state.session_storage.items():
+                await self._page.evaluate(
+                    f"sessionStorage.setItem({json.dumps(key)}, {json.dumps(value)})"
+                )
+
+    async def screenshot(self, path: str | None = None, full_page: bool = False) -> bytes:
+        """Capture screenshot of current page."""
+        await self.ensure_browser()
+
+        screenshot_bytes = await self._page.screenshot(
+            path=path,
+            full_page=full_page,
+            type="png",
+        )
+        return screenshot_bytes
+
+    async def click_coordinates(self, x: int, y: int, button: str = "left") -> None:
+        """Click at specific coordinates."""
+        await self.ensure_browser()
+        await self._page.mouse.click(x, y, button=button)
+
+    async def scroll(
+        self,
+        direction: str = "down",
+        amount: int = 500,
+        element_ref: str | None = None,
+    ) -> None:
+        """Scroll the page or a specific element."""
+        await self.ensure_browser()
+
+        if element_ref:
+            # Scroll element into view
+            element_info = self.get_element_by_ref(element_ref)
+            if element_info:
+                # Use locator to scroll element into view
+                role = element_info.get("role", "")
+                name = element_info.get("name", "")
+                if role and name:
+                    locator = self._page.get_by_role(role, name=name)
+                    await locator.scroll_into_view_if_needed()
+        else:
+            # Scroll viewport
+            delta = amount if direction == "down" else -amount
+            await self._page.mouse.wheel(0, delta)
+
+    async def wait_for(
+        self,
+        selector: str | None = None,
+        timeout: int = 30000,
+        state: str = "visible",
+    ) -> bool:
+        """Wait for element or timeout."""
+        await self.ensure_browser()
+
+        try:
+            if selector:
+                await self._page.wait_for_selector(
+                    selector,
+                    timeout=timeout,
+                    state=state,  # "visible", "hidden", "attached", "detached"
+                )
+            else:
+                await self._page.wait_for_timeout(timeout)
+            return True
+        except Exception:
+            return False
 
 
 class BrowserNavigateTool(Tool):
@@ -381,63 +505,25 @@ class BrowserSnapshotTool(Tool):
             except Exception:
                 pass  # Continue even if timeout
             
-            # Try accessibility tree first
-            snapshot = await self.session.page.accessibility.snapshot()
-            
             refs = {}
             output_lines = []
             
-            if snapshot and snapshot.get("children"):
-                # Use accessibility tree
-                ref_counter = [0]
-                
-                def process_node(node: dict, depth: int = 0) -> list[str]:
-                    """Process accessibility node and assign refs."""
-                    lines = []
-                    ref = f"ref_{ref_counter[0]}"
-                    ref_counter[0] += 1
-                    
-                    role = node.get("role", "unknown")
-                    name = node.get("name", "")
-                    
-                    # Store ref mapping
-                    refs[ref] = {
-                        "role": role,
-                        "name": name,
-                        "node": node,
-                    }
-                    
-                    # Format output line
-                    indent = "  " * depth
-                    line = f"{indent}[{ref}] {role}"
-                    if name:
-                        line += f': "{name[:50]}"' if len(name) > 50 else f': "{name}"'
-                    lines.append(line)
-                    
-                    # Process children
-                    for child in node.get("children", []):
-                        lines.extend(process_node(child, depth + 1))
-                    
-                    return lines
-                
-                output_lines = process_node(snapshot)
-            else:
-                # Fallback: Extract interactive elements from DOM
-                output_lines.append("# Fallback: Accessibility tree unavailable, using DOM extraction")
-                output_lines.append("")
-                
-                elements = await self._extract_interactive_elements()
-                
-                for i, elem in enumerate(elements):
-                    ref = f"ref_{i}"
-                    refs[ref] = {
-                        "role": elem["type"],
-                        "name": elem["text"],
-                        "selector": elem.get("selector", ""),
-                    }
-                    output_lines.append(f"[{ref}] {elem['type']}: \"{elem['text'][:50]}\"")
-                    if elem.get("href"):
-                        output_lines.append(f"        href: {elem['href']}")
+            # Use DOM extraction (accessibility API was removed in Playwright 1.45+)
+            output_lines.append("# Page Snapshot (DOM extraction)")
+            output_lines.append("")
+            
+            elements = await self._extract_interactive_elements()
+            
+            for i, elem in enumerate(elements):
+                ref = f"ref_{i}"
+                refs[ref] = {
+                    "role": elem["type"],
+                    "name": elem["text"],
+                    "selector": elem.get("selector", ""),
+                }
+                output_lines.append(f"[{ref}] {elem['type']}: \"{elem['text'][:50]}\"")
+                if elem.get("href"):
+                    output_lines.append(f"        href: {elem['href']}")
             
             if not refs:
                 return ToolResult(
@@ -596,13 +682,6 @@ class BrowserClickTool(Tool):
         try:
             await self.session.ensure_browser()
             
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_click",
-                )
-            
             # Look up element by ref
             element_info = self.session.get_element_by_ref(ref)
             if element_info is None:
@@ -724,13 +803,6 @@ class BrowserTypeTool(Tool):
         try:
             await self.session.ensure_browser()
             
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_type",
-                )
-            
             # Look up element by ref
             element_info = self.session.get_element_by_ref(ref)
             if element_info is None:
@@ -845,13 +917,6 @@ class BrowserFillFormTool(Tool):
         try:
             await self.session.ensure_browser()
             
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_fill_form",
-                )
-            
             if not fields:
                 return ToolResult(
                     success=False,
@@ -943,5 +1008,288 @@ class BrowserFillFormTool(Tool):
                     },
                 },
                 "required": ["fields"],
+            },
+        )
+
+
+class BrowserScreenshotTool(Tool):
+    """Capture a screenshot of the current page."""
+
+    name = "browser_screenshot"
+    description = (
+        "Capture a screenshot of the current page. "
+        "Returns image path and optionally base64 data."
+    )
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        filename: str | None = None,
+        full_page: bool = False,
+        return_base64: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Capture screenshot."""
+        try:
+            await self.session.ensure_browser()
+
+            # Generate filename if not provided
+            if not filename:
+                import uuid
+                filename = f"/tmp/screenshot_{uuid.uuid4().hex[:8]}.png"
+
+            screenshot_bytes = await self.session.screenshot(
+                path=filename, full_page=full_page
+            )
+
+            output = f"Screenshot saved to: {filename}\nSize: {len(screenshot_bytes)} bytes"
+            metadata = {
+                "path": filename,
+                "size_bytes": len(screenshot_bytes),
+                "full_page": full_page,
+            }
+
+            if return_base64:
+                import base64
+                b64_data = base64.b64encode(screenshot_bytes).decode("utf-8")
+                metadata["base64"] = b64_data
+                output += f"\nBase64 data length: {len(b64_data)}"
+
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata=metadata,
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "Path to save screenshot (auto-generated if not provided)",
+                    },
+                    "full_page": {
+                        "type": "boolean",
+                        "description": "Capture full scrollable page instead of viewport",
+                        "default": False,
+                    },
+                    "return_base64": {
+                        "type": "boolean",
+                        "description": (
+                            "Include base64-encoded image data in metadata "
+                            "(for vision models)"
+                        ),
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserClickCoordsTool(Tool):
+    """Click at specific x,y coordinates."""
+
+    name = "browser_click_coords"
+    description = (
+        "Click at specific x,y coordinates on the page. "
+        "Useful when element refs don't work."
+    )
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        x: int,
+        y: int,
+        button: str = "left",
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Click at coordinates."""
+        try:
+            await self.session.ensure_browser()
+
+            await self.session.click_coordinates(x, y, button)
+
+            return ToolResult(
+                success=True,
+                output=f"Clicked at coordinates ({x}, {y}) with {button} button",
+                metadata={"x": x, "y": y, "button": button},
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "type": "integer",
+                        "description": "X coordinate (pixels from left)",
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y coordinate (pixels from top)",
+                    },
+                    "button": {
+                        "type": "string",
+                        "enum": ["left", "right", "middle"],
+                        "description": "Mouse button to click",
+                        "default": "left",
+                    },
+                },
+                "required": ["x", "y"],
+            },
+        )
+
+
+class BrowserScrollTool(Tool):
+    """Scroll the page."""
+
+    name = "browser_scroll"
+    description = "Scroll the page up or down by a specified amount"
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        direction: str = "down",
+        amount: int = 500,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Scroll the page."""
+        try:
+            await self.session.ensure_browser()
+
+            await self.session.scroll(direction=direction, amount=amount)
+
+            return ToolResult(
+                success=True,
+                output=f"Scrolled {direction} by {amount} pixels",
+                metadata={"direction": direction, "amount": amount},
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "direction": {
+                        "type": "string",
+                        "enum": ["up", "down"],
+                        "description": "Scroll direction",
+                        "default": "down",
+                    },
+                    "amount": {
+                        "type": "integer",
+                        "description": "Pixels to scroll",
+                        "default": 500,
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserWaitTool(Tool):
+    """Wait for element or timeout."""
+
+    name = "browser_wait"
+    description = "Wait for an element to appear or for a specified timeout"
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        selector: str | None = None,
+        timeout_ms: int = 5000,
+        state: str = "visible",
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Wait for condition."""
+        try:
+            await self.session.ensure_browser()
+
+            if selector:
+                success = await self.session.wait_for(
+                    selector=selector,
+                    timeout=timeout_ms,
+                    state=state,
+                )
+                if success:
+                    return ToolResult(
+                        success=True,
+                        output=f"Element '{selector}' is now {state}",
+                        metadata={"selector": selector, "state": state},
+                    )
+                else:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error=f"Timeout waiting for '{selector}' to be {state}",
+                    )
+            else:
+                await self.session.wait_for(timeout=timeout_ms)
+                return ToolResult(
+                    success=True,
+                    output=f"Waited {timeout_ms}ms",
+                    metadata={"timeout_ms": timeout_ms},
+                )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": (
+                            "CSS selector to wait for "
+                            "(if omitted, just waits for timeout)"
+                        ),
+                    },
+                    "timeout_ms": {
+                        "type": "integer",
+                        "description": "Maximum time to wait in milliseconds",
+                        "default": 5000,
+                    },
+                    "state": {
+                        "type": "string",
+                        "enum": ["visible", "hidden", "attached", "detached"],
+                        "description": "Element state to wait for",
+                        "default": "visible",
+                    },
+                },
+                "required": [],
             },
         )

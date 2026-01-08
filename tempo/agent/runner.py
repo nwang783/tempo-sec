@@ -302,6 +302,7 @@ class Agent:
         Returns:
             AgentResult with findings, final state, etc.
         """
+
         self._objective = objective
         self._step_count = start_step
         
@@ -316,6 +317,7 @@ class Agent:
         # If we are effectively starting from scratch (step_count == 0), add initial prompts
         # If resuming (step_count > 0), assume context is already primed
         is_resuming = start_step > 0
+
         
         if not is_resuming:
             # Add initial system message
@@ -330,6 +332,7 @@ class Agent:
             self.context.add_message(MessageRole.USER, objective)
         
         max_steps = max_steps or self.config.max_steps or 50
+
         
         try:
             while self._step_count < max_steps:
@@ -347,7 +350,15 @@ class Agent:
                         error="Stopped by user",
                     )
 
-                step_result = await self.step()
+
+                try:
+                    step_result = await self.step()
+
+                except Exception as e:
+
+                    import traceback
+                    traceback.print_exc()
+                    raise
                 
                 # Checkpoint after step if enabled
                 if self.config.auto_checkpoint:
@@ -446,10 +457,18 @@ class Agent:
             self._viz_collector.on_available_tools(tool_schemas)
         
         # Call LLM
-        response = await self.llm.complete(
-            messages=messages,
-            tools=tool_schemas,
-        )
+
+        try:
+            response = await self.llm.complete(
+                messages=messages,
+                tools=tool_schemas,
+            )
+
+        except Exception as e:
+
+            import traceback
+            traceback.print_exc()
+            raise
         
         # Add assistant response to context
         if response.content:

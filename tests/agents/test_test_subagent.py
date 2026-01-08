@@ -64,8 +64,7 @@ class TestTestSubagent:
         assert "shell" in tool_names
         assert "file_read" in tool_names
         assert "file_write" in tool_names
-        # NOTE: browser subagent intentionally disabled for now.
-        # assert "browser_task" in tool_names
+        assert "browser_task" in tool_names
 
         # Findings document tools for testing
         assert "add_finding" in tool_names

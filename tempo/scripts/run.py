@@ -255,6 +255,7 @@ async def main() -> None:
     
     # Execution Wrapper
     async def run_agent(tools, workflow):
+
         # Build Objective
         try:
             # Pass args that might be relevant
@@ -262,17 +263,22 @@ async def main() -> None:
                 target=args.target,
                 manifest_path=args.manifest
             )
+
         except Exception as e:
             print(f"Error building objective: {e}")
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
             
         # Build System Prompt if starting fresh
         if step_count == 0:
+
             system_prompt = agent_def.build_system_prompt(
                 prompts, 
                 tools.get_schemas(), 
                 config.scope or "No specific scope defined."
             )
+
             # Inject system prompt
             context.add_message(MessageRole.SYSTEM, system_prompt)
             
@@ -287,6 +293,7 @@ async def main() -> None:
             # Objective might be needed for restoring state or logging
             objective = "Resumed session" # Placeholder if resuming
         
+
         # Create Agent
         agent = Agent(
             config=config,
@@ -300,6 +307,7 @@ async def main() -> None:
             stop_event=stop_event,
         )
         
+
         # Run Agent
         result = await agent.run(
             objective=objective,
@@ -308,6 +316,7 @@ async def main() -> None:
             start_step=run_start_step,
         )
         
+
         return result
 
     # Setup Container & Run
@@ -335,6 +344,7 @@ async def main() -> None:
             # Early Docker connectivity check
             try:
                 container.client.ping()
+
             except Exception as docker_err:
                 print(f"\n❌ Docker connection failed: {docker_err}")
                 print("\nPossible fixes:")
@@ -344,9 +354,26 @@ async def main() -> None:
                 sys.exit(1)
             
             async with container:
+
                 # Create tools with container
-                tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector, config=config)
-                result = await run_agent(tools, workflow)
+                try:
+                    tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector, config=config)
+
+                except Exception as e:
+
+                    import traceback
+                    traceback.print_exc()
+                    raise
+                
+                try:
+
+                    result = await run_agent(tools, workflow)
+
+                except Exception as e:
+
+                    import traceback
+                    traceback.print_exc()
+                    raise
         else:
             print("⚠️  Running in LOCAL mode (no sandbox)...")
             # Create local tools
@@ -371,6 +398,11 @@ async def main() -> None:
         save_path = context.save()
         print(f"\n💾 Context saved to: {save_path}")
 
+    except Exception as e:
+
+        import traceback
+        traceback.print_exc()
+        raise
     finally:
         if viz_server:
             print("\nPress Enter to stop visualization server...")

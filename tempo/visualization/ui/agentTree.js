@@ -24,6 +24,7 @@ const TYPE_ICONS = {
     'recon': '📡',
     'test': '🔬',
     'orchestrator': '🎯',
+    'browser': '🌐',
 };
 
 /**
@@ -43,8 +44,16 @@ export function render() {
 
     let html = renderOrchestratorNode(orchestrator);
 
-    for (const subagent of subagents) {
-        html += renderSubagentNode(subagent);
+    // Render first-level subagents (parent is orchestrator)
+    const firstLevelSubagents = subagents.filter(s => s.parent_id === 'orchestrator');
+    for (const subagent of firstLevelSubagents) {
+        html += renderSubagentNode(subagent, 1);
+
+        // Render any child subagents (e.g., browser agents)
+        const children = subagents.filter(s => s.parent_id === subagent.id);
+        for (const child of children) {
+            html += renderSubagentNode(child, 2);
+        }
     }
 
     html += renderFindingsSummary(state.findingsSummary);
@@ -76,14 +85,15 @@ function renderOrchestratorNode(orchestrator) {
 /**
  * Render a subagent node.
  */
-function renderSubagentNode(subagent) {
+function renderSubagentNode(subagent, depth = 1) {
     const statusIcon = STATUS_ICONS[subagent.status] || '?';
     const typeIcon = TYPE_ICONS[subagent.type] || '🔧';
     const activeClass = subagent.active ? 'active' : '';
     const statusClass = subagent.status === 'failed' ? 'status-failed' : '';
+    const nestedClass = depth > 1 ? 'nested-subagent' : '';
 
     return `
-        <div class="agent-node subagent ${activeClass} ${statusClass}" data-agent-id="${subagent.id}">
+        <div class="agent-node subagent ${activeClass} ${statusClass} ${nestedClass}" data-agent-id="${subagent.id}">
             <div class="agent-header">
                 <span class="agent-icon">${typeIcon}</span>
                 <span class="agent-name">${escapeHtml(subagent.name)}</span>
@@ -132,7 +142,8 @@ function renderFindingsSummary(summary) {
  */
 function attachEventListeners() {
     document.querySelectorAll('.agent-node').forEach(node => {
-        node.addEventListener('click', () => {
+        node.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent bubbling
             const agentId = node.dataset.agentId;
             switchToAgentView(agentId);
         });

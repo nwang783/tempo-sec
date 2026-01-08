@@ -100,13 +100,26 @@ class TestSubagent(BaseAgentDefinition):
         from tempo.tools.meta import SummarizeOutputTool
         from tempo.tools.complete_subtask import CompleteSubtaskTool
 
+        # Extract visualization collector and config from kwargs
+        visualization = kwargs.get("visualization")
+        config = kwargs.get("config")
+        
+        # Get headless setting from config (default: True)
+        headless = True
+        if config and hasattr(config, "browser_headless"):
+            headless = config.browser_headless
+
         tools = ToolRegistry()
 
         # Core testing tools
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
-        # Browser subagent intentionally disabled for now.
+        tools.register(BrowserTaskTool(
+            container_manager=container,
+            visualization_collector=visualization,
+            headless=headless,
+        ))
 
         # Findings document tools - pass the findings reference
         tools.register(AddFindingTool(findings_updater=self.findings))

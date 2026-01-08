@@ -62,6 +62,14 @@ class AgentConfig:
     # Orchestrator settings
     max_concurrent_subagents: int = 3  # Max parallel subagent dispatches
 
+    # Browser settings
+    browser_state_dir: str = "~/.tempo-sec/browser_states"
+    browser_state_ttl_days: int = 7
+    browser_headless: bool = True
+    browser_default_timeout: int = 30000  # milliseconds
+    browser_viewport_width: int = 1280
+    browser_viewport_height: int = 720
+
     # Legacy/convenience aliases
     scope: str | None = None  # Optional scope description
     scope_file: str | None = None  # Path to scope file (set via CLI)
@@ -211,6 +219,22 @@ class AgentConfig:
             orch = data["orchestrator"]
             if "max_concurrent" in orch:
                 kwargs["max_concurrent_subagents"] = orch["max_concurrent"]
+
+        # [browser] section
+        if "browser" in data:
+            br = data["browser"]
+            if "state_dir" in br:
+                kwargs["browser_state_dir"] = br["state_dir"]
+            if "state_ttl_days" in br:
+                kwargs["browser_state_ttl_days"] = br["state_ttl_days"]
+            if "headless" in br:
+                kwargs["browser_headless"] = br["headless"]
+            if "default_timeout" in br:
+                kwargs["browser_default_timeout"] = br["default_timeout"]
+            if "viewport_width" in br:
+                kwargs["browser_viewport_width"] = br["viewport_width"]
+            if "viewport_height" in br:
+                kwargs["browser_viewport_height"] = br["viewport_height"]
 
         return cls(**kwargs)
 

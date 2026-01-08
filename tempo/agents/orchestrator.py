@@ -100,11 +100,29 @@ class OrchestratorAgent(BaseAgentDefinition):
 
             if self._findings_path:
                 path = Path(self._findings_path)
+                
+                # Handle directory paths - look for .yaml file with same name
+                if path.is_dir():
+                    # If directory given, look for {dirname}.yaml in parent
+                    yaml_path = path.parent / f"{path.name}.yaml"
+                    if yaml_path.exists():
+                        path = yaml_path
+                    else:
+                        # Create new findings file alongside directory
+                        self._findings = FindingsDocument(
+                            target=self.target,
+                            file_path=str(yaml_path),
+                        )
+                        return self._findings
+                
                 if path.exists():
                     # Load existing document
                     self._findings = FindingsDocument.load(str(path))
                 else:
                     # Create new document at specified path
+                    # Add .yaml extension if missing
+                    if path.suffix != ".yaml":
+                        path = path.with_suffix(".yaml")
                     path.parent.mkdir(parents=True, exist_ok=True)
                     self._findings = FindingsDocument(
                         target=self.target,
@@ -184,6 +202,7 @@ class OrchestratorAgent(BaseAgentDefinition):
             container_manager=container,
             visualization=visualization,
             max_concurrent=max_concurrent,
+            config=config,
         ))
 
         # Findings management tools
