@@ -182,14 +182,39 @@ class ReconSubagent(BaseAgentDefinition):
         return "\n".join(objective_parts)
 
     def _get_findings_context(self) -> str:
-        """Get a summary of the current findings document state."""
+        """Get detailed findings context including all surfaces and findings."""
         try:
             summary = self.findings.get_summary()
-            return (
-                f"Target: {summary.get('target', 'Unknown')}\n"
+            lines = [
+                f"Target: {summary.get('target', 'Unknown')}",
                 f"Attack Surfaces: {summary.get('total_surfaces', 0)} discovered, "
-                f"{summary.get('tested_surfaces', 0)} tested\n"
-                f"Findings: {summary.get('total_findings', 0)} total"
-            )
+                f"{summary.get('tested_surfaces', 0)} tested",
+                f"Findings: {summary.get('total_findings', 0)} total",
+            ]
+
+            # Include all attack surfaces
+            all_surfaces = self.findings.get_all_surfaces()
+            if all_surfaces:
+                lines.append("\n### Attack Surfaces Discovered ###")
+                for s in all_surfaces:
+                    sid = getattr(s, 'id', 'unknown')
+                    stype = getattr(s, 'surface_type', 'unknown')
+                    url = getattr(s, 'url', 'unknown')
+                    tested = getattr(s, 'tested', False)
+                    status_str = "TESTED" if tested else "UNTESTED"
+                    lines.append(f"- [{status_str}] {stype}: {url} | ID: {sid}")
+
+            # Include all findings
+            all_findings = self.findings.get_all_findings()
+            if all_findings:
+                lines.append("\n### Findings Recorded ###")
+                for f in all_findings:
+                    fid = getattr(f, 'id', 'unknown')
+                    title = getattr(f, 'title', 'No Title')
+                    severity = getattr(f, 'severity', 'unknown')
+                    status = getattr(f, 'status', 'unknown')
+                    lines.append(f"- [{severity.upper()}] {title} ({status}) | ID: {fid}")
+
+            return "\n".join(lines)
         except Exception:
             return "No existing findings document"

@@ -46,6 +46,13 @@ Do NOT create theoretical assessments or assume what might be present - discover
    - Technologies detected
    - Authentication mechanisms observed
 
+4. **Share Helpful Information**: When documenting discoveries, include:
+   - Credentials found (usernames, API keys, tokens)
+   - Authentication methods that worked
+   - Configuration details that might help testing
+   - Discovered file paths or hidden endpoints
+   - Technology versions and known vulnerabilities
+
 ## Guidelines
 
 - Stay focused on your assigned objective - don't wander beyond the focus area

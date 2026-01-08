@@ -44,6 +44,13 @@ Do NOT:
 
 3. **Mark Progress**: Use `mark_surface_tested` after testing each surface
 
+4. **Share What You Learned**: Document information that helps other agents:
+   - Working credentials or sessions discovered
+   - Bypass techniques that succeeded
+   - Authentication tokens or cookies obtained
+   - Error messages revealing internal paths
+   - Configuration data useful for other tests
+
 ## Severity Guidelines
 
 - **Critical**: Remote code execution, complete system compromise

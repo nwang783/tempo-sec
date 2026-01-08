@@ -181,22 +181,36 @@ class TestSubagent(BaseAgentDefinition):
         return "\n".join(objective_parts)
 
     def _get_attack_surfaces_context(self) -> str:
-        """Get a summary of untested attack surfaces."""
+        """Get detailed context including surfaces and prior findings."""
         try:
+            lines = []
+
+            # Include untested surfaces (primary focus for test agent)
             untested = self.findings.get_untested_surfaces()
-            if not untested:
-                return "No untested attack surfaces available."
+            if untested:
+                lines.append(f"**{len(untested)} untested attack surfaces:**")
+                for surface in untested[:10]:  # Limit to first 10
+                    surface_id = getattr(surface, 'id', 'unknown')
+                    surface_type = getattr(surface, 'surface_type', 'unknown')
+                    url = getattr(surface, 'url', 'unknown')
+                    priority = getattr(surface, 'priority', 'medium')
+                    lines.append(f"- [{priority.upper()}] {surface_type}: {url} (ID: {surface_id})")
 
-            lines = [f"**{len(untested)} untested attack surfaces:**"]
-            for surface in untested[:10]:  # Limit to first 10
-                surface_id = getattr(surface, 'id', 'unknown')
-                surface_type = getattr(surface, 'surface_type', 'unknown')
-                url = getattr(surface, 'url', 'unknown')
-                priority = getattr(surface, 'priority', 'medium')
-                lines.append(f"- [{priority.upper()}] {surface_type}: {url} (ID: {surface_id})")
+                if len(untested) > 10:
+                    lines.append(f"... and {len(untested) - 10} more")
+            else:
+                lines.append("No untested attack surfaces available.")
 
-            if len(untested) > 10:
-                lines.append(f"... and {len(untested) - 10} more")
+            # Include existing findings for awareness
+            all_findings = self.findings.get_all_findings()
+            if all_findings:
+                lines.append("\n### Prior Findings (for reference) ###")
+                for f in all_findings:
+                    fid = getattr(f, 'id', 'unknown')
+                    title = getattr(f, 'title', 'No Title')
+                    severity = getattr(f, 'severity', 'unknown')
+                    status = getattr(f, 'status', 'unknown')
+                    lines.append(f"- [{severity.upper()}] {title} ({status}) | ID: {fid}")
 
             return "\n".join(lines)
         except Exception:
