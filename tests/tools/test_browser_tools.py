@@ -242,21 +242,6 @@ class TestBrowserScreenshotTool:
         assert "full_page" in schema.parameters["properties"]
         assert "return_base64" in schema.parameters["properties"]
         assert schema.parameters["required"] == []
-    
-    @pytest.mark.asyncio
-    async def test_execute_with_container_not_implemented(self):
-        """Execute returns not implemented for container mode."""
-        from tempo.tools.browser_tools import BrowserScreenshotTool
-        mock_container = MagicMock()
-        session = BrowserSession(container_manager=mock_container)
-        tool = BrowserScreenshotTool(session)
-        
-        session.ensure_browser = AsyncMock()
-        
-        result = await tool.execute()
-        
-        assert not result.success
-        assert "not yet implemented" in result.error
 
 
 class TestBrowserClickCoordsTool:
@@ -284,21 +269,6 @@ class TestBrowserClickCoordsTool:
         assert "button" in schema.parameters["properties"]
         assert "x" in schema.parameters["required"]
         assert "y" in schema.parameters["required"]
-    
-    @pytest.mark.asyncio
-    async def test_execute_with_container_not_implemented(self):
-        """Execute returns not implemented for container mode."""
-        from tempo.tools.browser_tools import BrowserClickCoordsTool
-        mock_container = MagicMock()
-        session = BrowserSession(container_manager=mock_container)
-        tool = BrowserClickCoordsTool(session)
-        
-        session.ensure_browser = AsyncMock()
-        
-        result = await tool.execute(x=100, y=200)
-        
-        assert not result.success
-        assert "not yet implemented" in result.error
 
 
 class TestBrowserScrollTool:
@@ -326,21 +296,6 @@ class TestBrowserScrollTool:
         assert props["direction"]["enum"] == ["up", "down"]
         assert "amount" in props
         assert schema.parameters["required"] == []
-    
-    @pytest.mark.asyncio
-    async def test_execute_with_container_not_implemented(self):
-        """Execute returns not implemented for container mode."""
-        from tempo.tools.browser_tools import BrowserScrollTool
-        mock_container = MagicMock()
-        session = BrowserSession(container_manager=mock_container)
-        tool = BrowserScrollTool(session)
-        
-        session.ensure_browser = AsyncMock()
-        
-        result = await tool.execute()
-        
-        assert not result.success
-        assert "not yet implemented" in result.error
 
 
 class TestBrowserWaitTool:
@@ -369,21 +324,6 @@ class TestBrowserWaitTool:
         assert "state" in props
         assert props["state"]["enum"] == ["visible", "hidden", "attached", "detached"]
         assert schema.parameters["required"] == []
-    
-    @pytest.mark.asyncio
-    async def test_execute_with_container_not_implemented(self):
-        """Execute returns not implemented for container mode."""
-        from tempo.tools.browser_tools import BrowserWaitTool
-        mock_container = MagicMock()
-        session = BrowserSession(container_manager=mock_container)
-        tool = BrowserWaitTool(session)
-        
-        session.ensure_browser = AsyncMock()
-        
-        result = await tool.execute(selector="#test")
-        
-        assert not result.success
-        assert "not yet implemented" in result.error
 
 
 class TestToolFactoryIntegration:

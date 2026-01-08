@@ -24,6 +24,8 @@ class CompleteBrowserTaskTool(Tool):
         findings: str,
         success: bool = True,
         extracted_data: str = "",
+        purpose: str = "",
+        **kwargs,
     ) -> ToolResult:
         """
         Complete the browser task and report findings.

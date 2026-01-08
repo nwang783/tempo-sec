@@ -121,6 +121,7 @@ class BrowserAgent(BaseAgentDefinition):
             BrowserCleanupStatesTool,
         )
         from tempo.tools.complete_browser_task import CompleteBrowserTaskTool
+        from tempo.tools.meta import SummarizePreviousOutputTool
         from tempo.infra.browser_state import BrowserStateManager
         
         tools = ToolRegistry()
@@ -156,7 +157,10 @@ class BrowserAgent(BaseAgentDefinition):
         tools.register(BrowserDeleteStateTool(state_manager))
         tools.register(BrowserCleanupStatesTool(state_manager))
         
-        # Completion tool - the only meta tool
+        # Summarization tool (required for large outputs)
+        tools.register(SummarizePreviousOutputTool(context))
+        
+        # Completion tool
         tools.register(CompleteBrowserTaskTool())
         
         return tools

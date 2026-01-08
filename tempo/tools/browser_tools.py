@@ -63,12 +63,8 @@ class BrowserSession:
         if self._browser is not None:
             return
 
-        if self.container is not None:
-            # Container mode - browser runs inside container
-            # We'll execute commands via container.exec()
-            return
-
-        # Local mode - use Playwright directly
+        # Always use local Playwright - container mode for browser not yet implemented
+        # Container manager can still be used for other sandboxed operations
         from playwright.async_api import async_playwright
 
         self._playwright = await async_playwright().start()
@@ -509,63 +505,25 @@ class BrowserSnapshotTool(Tool):
             except Exception:
                 pass  # Continue even if timeout
             
-            # Try accessibility tree first
-            snapshot = await self.session.page.accessibility.snapshot()
-            
             refs = {}
             output_lines = []
             
-            if snapshot and snapshot.get("children"):
-                # Use accessibility tree
-                ref_counter = [0]
-                
-                def process_node(node: dict, depth: int = 0) -> list[str]:
-                    """Process accessibility node and assign refs."""
-                    lines = []
-                    ref = f"ref_{ref_counter[0]}"
-                    ref_counter[0] += 1
-                    
-                    role = node.get("role", "unknown")
-                    name = node.get("name", "")
-                    
-                    # Store ref mapping
-                    refs[ref] = {
-                        "role": role,
-                        "name": name,
-                        "node": node,
-                    }
-                    
-                    # Format output line
-                    indent = "  " * depth
-                    line = f"{indent}[{ref}] {role}"
-                    if name:
-                        line += f': "{name[:50]}"' if len(name) > 50 else f': "{name}"'
-                    lines.append(line)
-                    
-                    # Process children
-                    for child in node.get("children", []):
-                        lines.extend(process_node(child, depth + 1))
-                    
-                    return lines
-                
-                output_lines = process_node(snapshot)
-            else:
-                # Fallback: Extract interactive elements from DOM
-                output_lines.append("# Fallback: Accessibility tree unavailable, using DOM extraction")
-                output_lines.append("")
-                
-                elements = await self._extract_interactive_elements()
-                
-                for i, elem in enumerate(elements):
-                    ref = f"ref_{i}"
-                    refs[ref] = {
-                        "role": elem["type"],
-                        "name": elem["text"],
-                        "selector": elem.get("selector", ""),
-                    }
-                    output_lines.append(f"[{ref}] {elem['type']}: \"{elem['text'][:50]}\"")
-                    if elem.get("href"):
-                        output_lines.append(f"        href: {elem['href']}")
+            # Use DOM extraction (accessibility API was removed in Playwright 1.45+)
+            output_lines.append("# Page Snapshot (DOM extraction)")
+            output_lines.append("")
+            
+            elements = await self._extract_interactive_elements()
+            
+            for i, elem in enumerate(elements):
+                ref = f"ref_{i}"
+                refs[ref] = {
+                    "role": elem["type"],
+                    "name": elem["text"],
+                    "selector": elem.get("selector", ""),
+                }
+                output_lines.append(f"[{ref}] {elem['type']}: \"{elem['text'][:50]}\"")
+                if elem.get("href"):
+                    output_lines.append(f"        href: {elem['href']}")
             
             if not refs:
                 return ToolResult(
@@ -724,13 +682,6 @@ class BrowserClickTool(Tool):
         try:
             await self.session.ensure_browser()
             
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_click",
-                )
-            
             # Look up element by ref
             element_info = self.session.get_element_by_ref(ref)
             if element_info is None:
@@ -852,13 +803,6 @@ class BrowserTypeTool(Tool):
         try:
             await self.session.ensure_browser()
             
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_type",
-                )
-            
             # Look up element by ref
             element_info = self.session.get_element_by_ref(ref)
             if element_info is None:
@@ -972,13 +916,6 @@ class BrowserFillFormTool(Tool):
         """
         try:
             await self.session.ensure_browser()
-            
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_fill_form",
-                )
             
             if not fields:
                 return ToolResult(
@@ -1100,13 +1037,6 @@ class BrowserScreenshotTool(Tool):
         try:
             await self.session.ensure_browser()
 
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_screenshot",
-                )
-
             # Generate filename if not provided
             if not filename:
                 import uuid
@@ -1192,13 +1122,6 @@ class BrowserClickCoordsTool(Tool):
         try:
             await self.session.ensure_browser()
 
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_click_coords",
-                )
-
             await self.session.click_coordinates(x, y, button)
 
             return ToolResult(
@@ -1257,13 +1180,6 @@ class BrowserScrollTool(Tool):
         try:
             await self.session.ensure_browser()
 
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_scroll",
-                )
-
             await self.session.scroll(direction=direction, amount=amount)
 
             return ToolResult(
@@ -1319,13 +1235,6 @@ class BrowserWaitTool(Tool):
         """Wait for condition."""
         try:
             await self.session.ensure_browser()
-
-            if self.session.container is not None:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="Container execution not yet implemented for browser_wait",
-                )
 
             if selector:
                 success = await self.session.wait_for(
