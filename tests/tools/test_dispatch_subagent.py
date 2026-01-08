@@ -71,17 +71,17 @@ class TestDispatchSubagentTool:
         assert "dispatch_requests" in props
         assert "purpose" in props
 
-    def test_schema_no_top_level_enum(self, findings_doc):
-        """Test schema avoids enum at top-level properties (OpenAI limitation)."""
+    def test_schema_includes_enum(self, findings_doc):
+        """Test schema includes enum for strict type definition."""
         tool = DispatchSubagentTool(findings=findings_doc)
         schema = tool.get_schema()
 
         props = schema.parameters["properties"]
-        # enum should not be at top-level (OpenAI doesn't support this well)
-        # Valid values documented in description instead
-        assert "enum" not in props.get("subagent_type", {})
-        assert "recon" in props["subagent_type"]["description"]
-        assert "test" in props["subagent_type"]["description"]
+        
+        # enum should be present for subagent_type to guide the LLM
+        assert "enum" in props["subagent_type"]
+        assert "recon" in props["subagent_type"]["enum"]
+        assert "test" in props["subagent_type"]["enum"]
 
     def test_valid_subagent_types_documented(self, findings_doc):
         """Test that valid subagent types are documented in description."""
