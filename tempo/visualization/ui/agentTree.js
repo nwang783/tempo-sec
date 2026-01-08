@@ -145,7 +145,6 @@ function attachEventListeners() {
         node.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent bubbling
             const agentId = node.dataset.agentId;
-            console.log('[DEBUG] agentTree click: agentId=', agentId, 'node=', node);
             switchToAgentView(agentId);
         });
     });

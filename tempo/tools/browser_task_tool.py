@@ -141,18 +141,14 @@ class BrowserTaskTool(Tool):
         # Create child visualization collector for browser agent if available
         browser_collector = None
         browser_id = None
-        print(f"[DEBUG] browser_task_tool: _visualization_collector={self._visualization_collector}")
-        print(f"[DEBUG] browser_task_tool: has server attr={hasattr(self._visualization_collector, 'server') if self._visualization_collector else 'N/A'}")
         if self._visualization_collector:
             browser_id = f"browser_{uuid.uuid4().hex[:8]}"
-            print(f"[DEBUG] browser_task_tool: Created browser_id={browser_id}")
             # Use for_subagent if available (VisualizationCollector)
             if hasattr(self._visualization_collector, "for_subagent"):
                 browser_collector = self._visualization_collector.for_subagent(browser_id)
             
             # Get parent subagent ID from the collector (if it's a child collector)
             parent_id = getattr(self._visualization_collector, "_subagent_id", None) or "orchestrator"
-            print(f"[DEBUG] browser_task_tool: parent_id={parent_id}")
             
             # Emit browser agent start event
             if hasattr(self._visualization_collector, "on_subagent_start"):
@@ -165,7 +161,6 @@ class BrowserTaskTool(Tool):
             
             # Register browser context with server for viewing in UI
             if hasattr(self._visualization_collector, "server"):
-                print(f"[DEBUG] browser_task_tool: Registering browser context with ID={browser_id}")
                 self._visualization_collector.server.register_subagent(
                     subagent_id=browser_id,
                     context=browser_context,
@@ -174,8 +169,6 @@ class BrowserTaskTool(Tool):
                         "objective": task,
                     },
                 )
-            else:
-                print(f"[DEBUG] browser_task_tool: No server attribute on visualization collector")
         
         # Create and run browser agent with visualization
         browser_agent = Agent(

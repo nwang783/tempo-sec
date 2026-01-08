@@ -264,9 +264,8 @@ export const findingsSummary = {
  * @param {Object} subagentData - Subagent data from event
  */
 export function addSubagent(subagentData) {
-    console.log('[DEBUG] addSubagent called with:', subagentData);
     const count = agentHierarchy.subagents.length + 1;
-    const newSubagent = {
+    agentHierarchy.subagents.push({
         id: subagentData.subagent_id,
         type: subagentData.subagent_type,
         name: `${subagentData.subagent_type}_${count}`,
@@ -283,9 +282,7 @@ export function addSubagent(subagentData) {
         stepsMap: new Map(),
         currentFrameId: `${subagentData.subagent_id}-root`,
         currentStepNumber: 0,
-    };
-    console.log('[DEBUG] addSubagent storing:', newSubagent.id, 'parent:', newSubagent.parent_id);
-    agentHierarchy.subagents.push(newSubagent);
+    });
 }
 
 /**
