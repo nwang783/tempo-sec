@@ -555,6 +555,7 @@ The subagent will:
                     "subagent_type": {
                         "type": "string",
                         "description": "Type of subagent (for single dispatch): 'recon' for reconnaissance, 'test' for vulnerability testing. Must be 'recon' or 'test'.",
+                        "enum": ["recon", "test"],
                     },
                     "objective": {
                         "type": "string",
@@ -577,6 +578,7 @@ The subagent will:
                                 "subagent_type": {
                                     "type": "string",
                                     "description": "Type of subagent: 'recon' or 'test'",
+                                    "enum": ["recon", "test"],
                                 },
                                 "objective": {
                                     "type": "string",
