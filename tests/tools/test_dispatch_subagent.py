@@ -52,44 +52,46 @@ class TestDispatchSubagentTool:
         assert "Invalid subagent_type" in result.error
 
     def test_get_schema(self, findings_doc):
-        """Test schema is properly formatted."""
+        """Test schema is properly formatted for OpenAI compatibility."""
         tool = DispatchSubagentTool(findings=findings_doc)
         schema = tool.get_schema()
 
         assert schema.name == "dispatch_subagent"
         
-        # Schema uses oneOf to support both single and parallel dispatch
-        one_of = schema.parameters.get("oneOf", [])
-        assert len(one_of) == 2
-        # Single dispatch requires subagent_type and objective
-        assert {"required": ["subagent_type", "objective"]} in one_of
-        # Parallel dispatch requires dispatch_requests
-        assert {"required": ["dispatch_requests"]} in one_of
-
+        # Schema must be type object without oneOf/anyOf/allOf at top level (OpenAI requirement)
+        assert schema.parameters["type"] == "object"
+        assert "oneOf" not in schema.parameters
+        assert "anyOf" not in schema.parameters
+        assert "allOf" not in schema.parameters
+        
         props = schema.parameters["properties"]
         assert "subagent_type" in props
-        assert props["subagent_type"]["enum"] == ["recon", "test"]
         assert "objective" in props
         assert "focus_area" in props
         assert "dispatch_requests" in props
+        assert "purpose" in props
 
-    def test_schema_defaults(self, findings_doc):
-        """Test schema has correct defaults."""
+    def test_schema_no_top_level_enum(self, findings_doc):
+        """Test schema avoids enum at top-level properties (OpenAI limitation)."""
         tool = DispatchSubagentTool(findings=findings_doc)
         schema = tool.get_schema()
 
         props = schema.parameters["properties"]
-        assert props["focus_area"].get("default") == ""
+        # enum should not be at top-level (OpenAI doesn't support this well)
+        # Valid values documented in description instead
+        assert "enum" not in props.get("subagent_type", {})
+        assert "recon" in props["subagent_type"]["description"]
+        assert "test" in props["subagent_type"]["description"]
 
-    def test_valid_subagent_types_in_schema(self, findings_doc):
-        """Test that schema specifies valid subagent types."""
+    def test_valid_subagent_types_documented(self, findings_doc):
+        """Test that valid subagent types are documented in description."""
         tool = DispatchSubagentTool(findings=findings_doc)
         schema = tool.get_schema()
 
-        subagent_types = schema.parameters["properties"]["subagent_type"]["enum"]
-        assert "recon" in subagent_types
-        assert "test" in subagent_types
-        assert len(subagent_types) == 2
+        # Valid types should be mentioned in description
+        desc = schema.parameters["properties"]["subagent_type"]["description"]
+        assert "recon" in desc
+        assert "test" in desc
 
 
 class TestDispatchSubagentToolWithMocks:

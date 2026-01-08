@@ -258,7 +258,15 @@ class ContainerManager:
     
     async def __aenter__(self) -> "ContainerManager":
         """Async context manager entry."""
-        await self.start()
+        print(f"[DEBUG] Container __aenter__: starting container with image={self.config.image}")
+        try:
+            await self.start()
+            print(f"[DEBUG] Container __aenter__: container started successfully")
+        except Exception as e:
+            print(f"[DEBUG] Container __aenter__: failed to start container: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
         return self
     
     async def __aexit__(self, *args: Any) -> None:

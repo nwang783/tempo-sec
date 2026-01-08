@@ -52,6 +52,7 @@ The subagent will:
         container_manager: "ContainerManager | None" = None,
         visualization: "VisualizationObserver | None" = None,
         max_concurrent: int = 3,
+        config: "Any" = None,
     ):
         """
         Initialize the dispatch subagent tool.
@@ -61,11 +62,13 @@ The subagent will:
             container_manager: Optional container for sandboxed execution
             visualization: Optional visualization observer for UI events
             max_concurrent: Maximum concurrent subagent dispatches (default: 3)
+            config: Optional AgentConfig for browser settings and other configuration
         """
         self._findings = findings
         self._container_manager = container_manager
         self._visualization = visualization
         self._max_concurrent = max_concurrent
+        self._config = config
 
     async def _run_subagent(
         self,
@@ -124,10 +127,17 @@ The subagent will:
         # Create isolated context for subagent
         subagent_context = ContextStore()
 
-        # Create tools for subagent
+        # Create child visualization collector for subagent (before creating tools)
+        subagent_viz = None
+        if self._visualization and hasattr(self._visualization, 'for_subagent'):
+            subagent_viz = self._visualization.for_subagent(subagent_id)
+
+        # Create tools for subagent (pass visualization and config)
         subagent_tools = subagent_def.create_tools(
             context=subagent_context,
             container=self._container_manager,
+            visualization=subagent_viz,
+            config=self._config,
         )
 
         # Create LLM client with subagent's model
@@ -150,20 +160,16 @@ The subagent will:
         # Add system prompt to context
         subagent_context.add_message(MessageRole.SYSTEM, system_prompt)
 
-        # Create child collector for subagent (enables real-time visualization)
-        subagent_viz = None
-        if self._visualization and hasattr(self._visualization, 'for_subagent'):
-            subagent_viz = self._visualization.for_subagent(subagent_id)
-            # Register subagent context with server for viewing
-            if hasattr(self._visualization, 'server'):
-                self._visualization.server.register_subagent(
-                    subagent_id=subagent_id,
-                    context=subagent_context,
-                    metadata={
-                        "type": subagent_type,
-                        "objective": objective,
-                    },
-                )
+        # Register subagent context with server for viewing (if visualization available)
+        if subagent_viz and hasattr(self._visualization, 'server'):
+            self._visualization.server.register_subagent(
+                subagent_id=subagent_id,
+                context=subagent_context,
+                metadata={
+                    "type": subagent_type,
+                    "objective": objective,
+                },
+            )
 
         # Create and run subagent
         subagent = Agent(
@@ -546,8 +552,7 @@ The subagent will:
                 "properties": {
                     "subagent_type": {
                         "type": "string",
-                        "enum": ["recon", "test"],
-                        "description": "Type of subagent (for single dispatch): 'recon' for reconnaissance, 'test' for vulnerability testing",
+                        "description": "Type of subagent (for single dispatch): 'recon' for reconnaissance, 'test' for vulnerability testing. Must be 'recon' or 'test'.",
                     },
                     "objective": {
                         "type": "string",
@@ -556,23 +561,20 @@ The subagent will:
                     "focus_area": {
                         "type": "string",
                         "description": "Optional specific area or surfaces to focus on (for single dispatch)",
-                        "default": "",
                     },
                     "scope": {
                         "type": "string",
                         "description": "Optional scope constraints (e.g., 'Only test /api/* endpoints')",
-                        "default": "",
                     },
                     "dispatch_requests": {
                         "type": "array",
-                        "description": "For parallel dispatch: array of subagent requests to execute concurrently",
+                        "description": "For parallel dispatch: array of subagent requests to execute concurrently. Each item must have 'subagent_type' (recon/test) and 'objective', optionally 'focus_area' and 'scope'.",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "subagent_type": {
                                     "type": "string",
-                                    "enum": ["recon", "test"],
-                                    "description": "Type of subagent",
+                                    "description": "Type of subagent: 'recon' or 'test'",
                                 },
                                 "objective": {
                                     "type": "string",
@@ -581,21 +583,20 @@ The subagent will:
                                 "focus_area": {
                                     "type": "string",
                                     "description": "Optional focus area",
-                                    "default": "",
                                 },
                                 "scope": {
                                     "type": "string",
                                     "description": "Optional scope constraints",
-                                    "default": "",
                                 },
                             },
                             "required": ["subagent_type", "objective"],
                         },
                     },
+                    "purpose": {
+                        "type": "string",
+                        "description": "Brief explanation of why this dispatch is needed",
+                    },
                 },
-                "oneOf": [
-                    {"required": ["subagent_type", "objective"]},
-                    {"required": ["dispatch_requests"]},
-                ],
+                "required": [],
             },
         )
