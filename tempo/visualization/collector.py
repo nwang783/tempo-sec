@@ -203,7 +203,8 @@ class VisualizationCollector:
     def emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """Send event to server."""
         # Include subagent_id in events if this is a subagent collector
-        if self._subagent_id:
+        # BUT don't overwrite if the event already has a subagent_id (e.g., subagent_start/finish)
+        if self._subagent_id and "subagent_id" not in data:
             data = {**data, "subagent_id": self._subagent_id}
         event = VisualizationEvent.create(event_type, data)
         # Schedule on event loop since this might be called synchronously

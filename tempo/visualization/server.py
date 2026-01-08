@@ -259,8 +259,11 @@ class VisualizationServer:
         @self.app.get("/api/subagent/{subagent_id}/context")
         async def get_subagent_context(subagent_id: str):
             """Get context for a specific subagent."""
+            print(f"[DEBUG] get_subagent_context: Looking up {subagent_id}")
+            print(f"[DEBUG] Available contexts: {list(self._subagent_contexts.keys())}")
             context_store = self._subagent_contexts.get(subagent_id)
             if not context_store:
+                print(f"[DEBUG] get_subagent_context: {subagent_id} NOT FOUND")
                 raise HTTPException(status_code=404, detail="Subagent not found")
             
             try:

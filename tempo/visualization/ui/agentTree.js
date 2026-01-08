@@ -91,10 +91,9 @@ function renderSubagentNode(subagent, depth = 1) {
     const activeClass = subagent.active ? 'active' : '';
     const statusClass = subagent.status === 'failed' ? 'status-failed' : '';
     const nestedClass = depth > 1 ? 'nested-subagent' : '';
-    const indentStyle = depth > 1 ? `margin-left: ${(depth - 1) * 16}px;` : '';
 
     return `
-        <div class="agent-node subagent ${activeClass} ${statusClass} ${nestedClass}" data-agent-id="${subagent.id}" style="${indentStyle}">
+        <div class="agent-node subagent ${activeClass} ${statusClass} ${nestedClass}" data-agent-id="${subagent.id}">
             <div class="agent-header">
                 <span class="agent-icon">${typeIcon}</span>
                 <span class="agent-name">${escapeHtml(subagent.name)}</span>
@@ -143,8 +142,10 @@ function renderFindingsSummary(summary) {
  */
 function attachEventListeners() {
     document.querySelectorAll('.agent-node').forEach(node => {
-        node.addEventListener('click', () => {
+        node.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent bubbling
             const agentId = node.dataset.agentId;
+            console.log('[DEBUG] agentTree click: agentId=', agentId, 'node=', node);
             switchToAgentView(agentId);
         });
     });
