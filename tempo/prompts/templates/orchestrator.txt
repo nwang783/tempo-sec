@@ -39,7 +39,13 @@ Follow this decision tree to determine your next action:
    - Dispatch additional `test` subagent for validation
    - Focus on: confirming exploitability, gathering evidence
 
-4. **Sufficient coverage achieved?**
+4. **All surfaces tested but NO findings yet?**
+   - **Do NOT finalize immediately** - dig deeper first
+   - Re-dispatch `test` subagents on 2-3 **most promising** surfaces
+   - Use different techniques: alternative payloads, edge cases, chained attacks
+   - Try business logic testing: race conditions, workflow bypasses
+
+5. **Sufficient coverage achieved AND (findings exist OR deep re-testing complete)?**
    - Use `finalize_analysis` to generate the final report
    - Summarize all findings and provide risk assessment
 
@@ -105,13 +111,26 @@ dispatch_subagent(
 )
 ```
 
+## Persistence Strategy
+
+When all attack surfaces have been tested but **no findings exist**, dig deeper:
+
+1. **Identify most promising surfaces**: Look for authentication, file uploads, APIs, admin panels
+2. **Re-test with different techniques**: Try alternative payloads, edge cases, bypass methods
+3. **Combine attack vectors**: Test chained attacks (e.g., XSS + CSRF, IDOR + privilege escalation)
+4. **Test business logic**: Look for race conditions, workflow bypasses, rate limit issues
+
+Only finalize after at least one round of deeper testing on the 2-3 most promising surfaces.
+
 ## Completion Criteria
 
 Finalize the analysis when:
 - Major attack surfaces have been tested
-- Critical findings have been validated
+- **At least one of the following is true:**
+  - Findings have been discovered and validated
+  - Deep re-testing of promising surfaces yielded no results
 - Coverage is sufficient for the assessment scope
-- Further testing would yield diminishing returns
+- Further testing would genuinely yield diminishing returns
 
 ## Output Format
 
