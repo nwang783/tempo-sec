@@ -44,14 +44,13 @@ class TestBrowserTaskTool:
             result = await tool.execute(
                 task="test task",
                 purpose="testing",
-                max_steps=15
             )
             
-            # Verify AgentConfig was initialized with max_total_steps and browser_headless
+            # Verify AgentConfig was initialized with fixed max_total_steps and browser_headless
             AgentConfig.assert_called_with(
                 model="test-model", 
-                max_total_steps=15,
-                browser_headless=True,  # New parameter added in Phase 2
+                max_total_steps=50,  # Fixed value, not configurable
+                browser_headless=True,
             )
             
             # Verify system prompt added to context

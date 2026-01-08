@@ -65,7 +65,6 @@ class BrowserTaskTool(Tool):
         state_name: str = "",
         save_state_as: str = "",
         scope: str = "",
-        max_steps: int | str = 10,
         purpose: str = "",
         **kwargs,
     ) -> ToolResult:
@@ -78,7 +77,6 @@ class BrowserTaskTool(Tool):
             state_name: Optional name of saved state to load (e.g., 'admin_session')
             save_state_as: Optional name to save state as after task completion
             scope: Optional scope constraints for the browser agent
-            max_steps: Maximum steps for the browser agent (default: 10)
             purpose: Why this browser task is being executed
             **kwargs: Additional arguments (ignored)
             
@@ -92,8 +90,8 @@ class BrowserTaskTool(Tool):
         from tempo.context.store import ContextStore
         from tempo.prompts.builder import PromptBuilder
         
-        # Coerce max_steps to int (LLM may pass as string)
-        max_steps = int(max_steps)
+        # Fixed step limit for browser agent
+        max_steps = 50
         
         # Create browser agent definition with new parameters
         browser_agent_def = BrowserAgent(
@@ -121,7 +119,7 @@ class BrowserTaskTool(Tool):
         # Create browser agent config
         config = AgentConfig(
             model=browser_agent_def.model,
-            max_total_steps=max_steps,
+            max_total_steps=50,
             browser_headless=self._headless,
         )
         
@@ -186,7 +184,7 @@ class BrowserTaskTool(Tool):
             # Run browser agent
             result = await browser_agent.run(
                 objective=objective,
-                max_steps=max_steps,
+                max_steps=50,
             )
             
             # Extract findings from result
@@ -295,11 +293,6 @@ class BrowserTaskTool(Tool):
                             "Describe allowed/disallowed domains or actions."
                         ),
                         "default": "",
-                    },
-                    "max_steps": {
-                        "type": "integer",
-                        "description": "Maximum steps for the browser agent (default: 10)",
-                        "default": 10,
                     },
                 },
                 "required": ["task"],

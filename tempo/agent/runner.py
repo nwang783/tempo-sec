@@ -427,14 +427,7 @@ class Agent:
         self.workflow.record_step()
         
 
-        # Check for forced transitions
-        forced_phase = self.workflow.should_force_transition()
-        if forced_phase:
-            self.workflow.transition(forced_phase)
-            self.context.add_message(
-                MessageRole.SYSTEM,
-                f"[System] Automatically transitioned to {forced_phase.value} due to step limit."
-            )
+        # Note: Phase transition logic has been removed - agents no longer use phases
         
         # Check context size and optimize if needed
         if self.config.max_context_tokens and getattr(self.config, 'auto_summarize', True):
