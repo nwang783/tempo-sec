@@ -146,12 +146,16 @@ class BrowserTaskTool(Tool):
             if hasattr(self._visualization_collector, "for_subagent"):
                 browser_collector = self._visualization_collector.for_subagent(browser_id)
             
+            # Get parent subagent ID from the collector (if it's a child collector)
+            parent_id = getattr(self._visualization_collector, "_subagent_id", None) or "orchestrator"
+            
             # Emit browser agent start event
             if hasattr(self._visualization_collector, "on_subagent_start"):
                 self._visualization_collector.on_subagent_start(
                     subagent_id=browser_id,
                     subagent_type="browser",
                     objective=task,
+                    parent_id=parent_id,
                 )
         
         # Create and run browser agent with visualization

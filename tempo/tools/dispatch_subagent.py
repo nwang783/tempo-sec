@@ -143,10 +143,12 @@ The subagent will:
         # Create LLM client with subagent's model
         llm = LiteLLMClient(model=subagent_def.model)
 
-        # Create agent config
-        config = AgentConfig(
-            model=subagent_def.model,
-        )
+        # Create agent config - use passed config if available to preserve browser settings
+        if self._config:
+            # Use passed config (preserves browser_headless, etc. from TOML)
+            config = self._config
+        else:
+            config = AgentConfig(model=subagent_def.model)
 
         # Build prompts
         prompts = PromptBuilder()

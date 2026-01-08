@@ -270,6 +270,7 @@ export function addSubagent(subagentData) {
         type: subagentData.subagent_type,
         name: `${subagentData.subagent_type}_${count}`,
         objective: subagentData.objective || '',
+        parent_id: subagentData.parent_id || 'orchestrator',
         status: 'running',
         steps: 0,
         findings: 0,
