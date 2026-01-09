@@ -181,6 +181,40 @@ class TestBrowserTypeTool:
         assert "element" in required
         assert "ref" in required
         assert "text" in required
+    
+    @pytest.mark.asyncio
+    async def test_execute_uses_selector_if_present(self):
+        """Execute uses selector if available in ref."""
+        session = BrowserSession()
+        tool = BrowserTypeTool(session)
+        
+        # Mock session and page
+        session.ensure_browser = AsyncMock()
+        session._snapshot_refs = {
+            "ref_0": {
+                "role": "textbox",
+                "name": "Search",
+                "selector": "#search-input",
+            }
+        }
+        # page is a property, so we set _page
+        session._page = MagicMock()
+        mock_locator = AsyncMock()
+        session._page.locator.return_value = mock_locator
+        
+        result = await tool.execute(
+            element="Search box",
+            ref="ref_0",
+            text="test query",
+        )
+        
+        assert result.success
+        # Should call page.locator("#search-input"), NOT get_by_role
+        session.page.locator.assert_called_with("#search-input")
+        session.page.get_by_role.assert_not_called()
+        # Should clear and fill
+        mock_locator.clear.assert_called_once()
+        mock_locator.fill.assert_called_with("test query")
 
 
 class TestBrowserFillFormTool:
@@ -345,3 +379,86 @@ class TestToolFactoryIntegration:
         assert "browser_click" in registry
         assert "browser_type" in registry
         assert "browser_fill_form" in registry
+
+
+class TestBrowserSmartFillTool:
+    """Tests for BrowserSmartFillTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserSmartFillTool
+        session = BrowserSession()
+        tool = BrowserSmartFillTool(session)
+        
+        assert tool.name == "browser_smart_fill"
+        assert tool.category == ToolCategory.BROWSING
+        assert "intelligent" in tool.description.lower() or "fill" in tool.description.lower()
+    
+    def test_schema_requires_fields(self):
+        """Schema requires fields parameter."""
+        from tempo.tools.browser_tools import BrowserSmartFillTool
+        session = BrowserSession()
+        tool = BrowserSmartFillTool(session)
+        schema = tool.get_schema()
+        
+        assert "fields" in schema.parameters["properties"]
+        assert "fields" in schema.parameters["required"]
+        assert "submit" in schema.parameters["properties"]
+    
+    @pytest.mark.asyncio
+    async def test_execute_empty_fields(self):
+        """Execute returns error for empty fields."""
+        from tempo.tools.browser_tools import BrowserSmartFillTool
+        session = BrowserSession()
+        tool = BrowserSmartFillTool(session)
+        
+        session.ensure_browser = AsyncMock()
+        
+        result = await tool.execute(fields={})
+        
+        assert not result.success
+        assert "No fields provided" in result.error
+
+
+class TestBrowserVisionSnapshotTool:
+    """Tests for BrowserVisionSnapshotTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserVisionSnapshotTool
+        session = BrowserSession()
+        tool = BrowserVisionSnapshotTool(session)
+        
+        assert tool.name == "browser_vision_snapshot"
+        assert tool.category == ToolCategory.BROWSING
+        assert "vision" in tool.description.lower()
+        assert "coordinates" in tool.description.lower()
+    
+    def test_schema_has_optional_params(self):
+        """Schema has optional query and full_page parameters."""
+        from tempo.tools.browser_tools import BrowserVisionSnapshotTool
+        session = BrowserSession()
+        tool = BrowserVisionSnapshotTool(session)
+        schema = tool.get_schema()
+        
+        assert "query" in schema.parameters["properties"]
+        assert "full_page" in schema.parameters["properties"]
+        assert schema.parameters["required"] == []
+    
+    def test_vision_model_is_gpt5_mini(self):
+        """Vision model is hardcoded to gpt-5-mini."""
+        from tempo.tools.browser_tools import BrowserVisionSnapshotTool
+        session = BrowserSession()
+        tool = BrowserVisionSnapshotTool(session)
+        
+        assert tool.VISION_MODEL == "openai/gpt-5-mini"
+    
+    def test_vision_prompt_includes_coordinates(self):
+        """Vision prompt template asks for coordinates."""
+        from tempo.tools.browser_tools import BrowserVisionSnapshotTool
+        session = BrowserSession()
+        tool = BrowserVisionSnapshotTool(session)
+        
+        assert "coordinates" in tool.VISION_PROMPT.lower()
+        assert "{width}" in tool.VISION_PROMPT
+        assert "{height}" in tool.VISION_PROMPT

@@ -694,10 +694,14 @@ class BrowserClickTool(Tool):
             # Use role and name to locate element
             role = element_info.get("role", "")
             name = element_info.get("name", "")
+            selector = element_info.get("selector", "")
             
-            # Try to locate element using accessibility info
+            # Locate element
             locator = None
-            if role and name:
+            if selector:
+                # Prioritize explicit selector if available
+                locator = self.session.page.locator(selector)
+            elif role and name:
                 locator = self.session.page.get_by_role(role, name=name)
             elif name:
                 locator = self.session.page.get_by_text(name)
@@ -814,10 +818,14 @@ class BrowserTypeTool(Tool):
             
             role = element_info.get("role", "")
             name = element_info.get("name", "")
+            selector = element_info.get("selector", "")
             
             # Locate element
             locator = None
-            if role in ("textbox", "searchbox", "combobox"):
+            if selector:
+                # Prioritize explicit selector if available (more reliable than accessible name)
+                locator = self.session.page.locator(selector)
+            elif role in ("textbox", "searchbox", "combobox"):
                 locator = self.session.page.get_by_role(role, name=name) if name else self.session.page.get_by_role(role)
             elif name:
                 locator = self.session.page.get_by_label(name)
@@ -943,11 +951,15 @@ class BrowserFillFormTool(Tool):
                 
                 role = element_info.get("role", "")
                 name = element_info.get("name", "")
+                selector = element_info.get("selector", "")
                 
                 try:
                     # Locate and fill
                     locator = None
-                    if role in ("textbox", "searchbox", "combobox"):
+                    if selector:
+                        # Prioritize explicit selector if available
+                        locator = self.session.page.locator(selector)
+                    elif role in ("textbox", "searchbox", "combobox"):
                         locator = self.session.page.get_by_role(role, name=name) if name else self.session.page.get_by_role(role)
                     elif name:
                         locator = self.session.page.get_by_label(name)
@@ -1288,6 +1300,400 @@ class BrowserWaitTool(Tool):
                         "enum": ["visible", "hidden", "attached", "detached"],
                         "description": "Element state to wait for",
                         "default": "visible",
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserSmartFillTool(Tool):
+    """
+    Intelligently fill a form based on field hints.
+    
+    Analyzes the current page's form fields and fills them based on
+    provided hints, matching field names/labels/placeholders using
+    fuzzy matching.
+    """
+    
+    name = "browser_smart_fill"
+    description = (
+        "Fill a form intelligently using field hints. "
+        "Matches your hints (like 'email', 'password', 'name') to actual form fields "
+        "using fuzzy matching on field names, labels, and placeholders. "
+        "Example: browser_smart_fill(fields={'email': 'test@example.com', 'password': 'secret'})"
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        fields: dict[str, str],
+        submit: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Analyze page forms and fill matching fields.
+        
+        Args:
+            fields: Dictionary mapping field hints to values.
+                   Hints can be partial names like 'email', 'password', 'username'.
+            submit: Whether to click the submit button after filling.
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            if not fields:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="No fields provided",
+                )
+            
+            # Extract all form fields from the page with their attributes
+            page_fields = await self.session.page.evaluate("""
+                () => {
+                    const fields = [];
+                    const inputs = document.querySelectorAll('input, textarea, select');
+                    
+                    inputs.forEach((el, idx) => {
+                        // Skip hidden and submit inputs
+                        if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') {
+                            return;
+                        }
+                        
+                        // Get associated label text
+                        let labelText = '';
+                        if (el.id) {
+                            const label = document.querySelector(`label[for="${el.id}"]`);
+                            if (label) labelText = label.innerText?.trim() || '';
+                        }
+                        if (!labelText && el.labels && el.labels.length > 0) {
+                            labelText = el.labels[0].innerText?.trim() || '';
+                        }
+                        
+                        fields.push({
+                            index: idx,
+                            tag: el.tagName.toLowerCase(),
+                            type: el.type || el.tagName.toLowerCase(),
+                            name: el.name || '',
+                            id: el.id || '',
+                            placeholder: el.placeholder || '',
+                            ariaLabel: el.getAttribute('aria-label') || '',
+                            label: labelText,
+                            selector: el.id ? `#${el.id}` : (el.name ? `[name="${el.name}"]` : null)
+                        });
+                    });
+                    
+                    return fields;
+                }
+            """)
+            
+            if not page_fields:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="No form fields found on page",
+                )
+            
+            filled = []
+            errors = []
+            unmatched_hints = []
+            
+            # Match each hint to a field using fuzzy matching
+            for hint, value in fields.items():
+                hint_lower = hint.lower()
+                best_match = None
+                best_score = 0
+                
+                for field in page_fields:
+                    # Check if hint appears in any field attribute
+                    score = 0
+                    searchable = [
+                        field.get('name', '').lower(),
+                        field.get('id', '').lower(),
+                        field.get('placeholder', '').lower(),
+                        field.get('ariaLabel', '').lower(),
+                        field.get('label', '').lower(),
+                        field.get('type', '').lower(),
+                    ]
+                    
+                    for text in searchable:
+                        if not text:
+                            continue
+                        # Exact match in attribute
+                        if hint_lower == text:
+                            score = 100
+                        # Hint is substring
+                        elif hint_lower in text:
+                            score = max(score, 80)
+                        # Attribute is substring of hint
+                        elif text in hint_lower:
+                            score = max(score, 60)
+                        # Common patterns
+                        elif hint_lower in ['email', 'mail'] and 'email' in text:
+                            score = max(score, 90)
+                        elif hint_lower in ['pass', 'password', 'pwd'] and 'pass' in text:
+                            score = max(score, 90)
+                        elif hint_lower in ['user', 'username', 'login'] and ('user' in text or 'login' in text):
+                            score = max(score, 90)
+                        elif hint_lower in ['name', 'fullname', 'full_name'] and 'name' in text:
+                            score = max(score, 85)
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_match = field
+                
+                if best_match and best_score >= 50:
+                    # Fill the matched field
+                    selector = best_match.get('selector')
+                    if selector:
+                        try:
+                            locator = self.session.page.locator(selector)
+                            await locator.fill(value)
+                            filled.append(f"{hint} -> {best_match.get('name') or best_match.get('id')} = '{value}'")
+                        except Exception as e:
+                            errors.append(f"Failed to fill {hint}: {e}")
+                    else:
+                        # Fallback: use nth input based on index
+                        try:
+                            inputs = self.session.page.locator('input, textarea, select')
+                            await inputs.nth(best_match['index']).fill(value)
+                            filled.append(f"{hint} -> field[{best_match['index']}] = '{value}'")
+                        except Exception as e:
+                            errors.append(f"Failed to fill {hint}: {e}")
+                else:
+                    unmatched_hints.append(hint)
+            
+            # Optionally click submit button
+            submit_clicked = False
+            if submit:
+                try:
+                    submit_button = self.session.page.locator(
+                        'button[type="submit"], input[type="submit"], button:has-text("Submit"), '
+                        'button:has-text("Sign Up"), button:has-text("Login"), button:has-text("Register")'
+                    ).first
+                    await submit_button.click()
+                    submit_clicked = True
+                except Exception as e:
+                    errors.append(f"Submit button not found or not clickable: {e}")
+            
+            # Build output
+            output_parts = []
+            if filled:
+                output_parts.append(f"Filled {len(filled)} field(s):")
+                output_parts.extend(f"  • {f}" for f in filled)
+            if unmatched_hints:
+                output_parts.append(f"\nUnmatched hints (no matching fields found): {', '.join(unmatched_hints)}")
+            if submit_clicked:
+                output_parts.append("\n✓ Clicked submit button")
+            if errors:
+                output_parts.append(f"\nErrors:")
+                output_parts.extend(f"  • {e}" for e in errors)
+            
+            return ToolResult(
+                success=len(filled) > 0,
+                output="\n".join(output_parts),
+                metadata={
+                    "filled_count": len(filled),
+                    "unmatched_count": len(unmatched_hints),
+                    "submit_clicked": submit_clicked,
+                    "error_count": len(errors),
+                },
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "fields": {
+                        "type": "object",
+                        "description": (
+                            "Mapping of field hints to values. "
+                            "Keys are hints like 'email', 'password', 'username'. "
+                            "Values are what to fill in those fields."
+                        ),
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "submit": {
+                        "type": "boolean",
+                        "description": "Click the submit button after filling",
+                        "default": False,
+                    },
+                },
+                "required": ["fields"],
+            },
+        )
+
+
+class BrowserVisionSnapshotTool(Tool):
+    """
+    Capture a screenshot and analyze it with a vision model.
+    
+    Returns element descriptions WITH COORDINATES for use with browser_click_coords.
+    The screenshot is NOT added to main context - used in a separate LLM call.
+    """
+    
+    name = "browser_vision_snapshot"
+    description = (
+        "Take a screenshot and analyze it with AI vision. "
+        "Returns descriptions of visible elements WITH THEIR COORDINATES. "
+        "Use the returned coordinates with browser_click_coords to click on elements. "
+        "Useful when DOM snapshot doesn't capture what you need (images, canvas, complex UIs)."
+    )
+    category = ToolCategory.BROWSING
+    
+    # Hardcoded vision model (same as browser agent)
+    VISION_MODEL = "openai/gpt-5-mini"
+    
+    # Vision prompt template for coordinate extraction
+    VISION_PROMPT = """Analyze this webpage screenshot.
+Identify all interactive elements (buttons, links, form fields, dropdowns, icons, etc).
+
+For EACH interactive element, provide:
+- What it is and what it does
+- Center coordinates (x, y) for clicking
+- Expected action when clicked
+
+Viewport size: {width}x{height} pixels. All coordinates must be within this range.
+{user_query}
+
+Format your response as a list:
+ELEMENT: [description] at ({x}, {y}) - [expected action]
+
+Example:
+ELEMENT: Blue "Sign Up" button at (640, 450) - submits registration form
+ELEMENT: Email input field at (400, 200) - click to enter email address
+ELEMENT: Menu hamburger icon at (50, 30) - opens navigation menu
+"""
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+        self._llm_client = None
+    
+    async def execute(
+        self,
+        query: str = "",
+        full_page: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Capture screenshot and analyze with vision model.
+        
+        Args:
+            query: Optional specific question to add to the analysis
+            full_page: Capture full scrollable page vs viewport only
+            
+        Returns:
+            Text analysis with element descriptions and coordinates
+        """
+        import base64
+        
+        try:
+            await self.session.ensure_browser()
+            
+            # Get viewport dimensions
+            viewport = self.session._viewport
+            width = viewport.get("width", 1280)
+            height = viewport.get("height", 720)
+            
+            # Capture screenshot as bytes
+            screenshot_bytes = await self.session.screenshot(full_page=full_page)
+            
+            # Encode to base64
+            b64_screenshot = base64.b64encode(screenshot_bytes).decode("utf-8")
+            
+            # Build vision prompt
+            user_query_section = f"\nAdditional question: {query}" if query else ""
+            prompt_text = self.VISION_PROMPT.format(
+                width=width,
+                height=height,
+                user_query=user_query_section,
+            )
+            
+            # Build multimodal message for vision model
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{b64_screenshot}"
+                            }
+                        }
+                    ]
+                }
+            ]
+            
+            # Create LLM client for vision call (lazy init)
+            if self._llm_client is None:
+                from tempo.infra.llm import LiteLLMClient
+                self._llm_client = LiteLLMClient(model=self.VISION_MODEL)
+            
+            # Make vision API call
+            response = await self._llm_client.complete(messages=messages)
+            
+            if not response.content:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Vision model returned empty response",
+                )
+            
+            # Format output
+            output = f"""## Vision Analysis (viewport: {width}x{height})
+
+{response.content}
+
+---
+**Usage**: Use `browser_click_coords(x=X, y=Y)` to click on any element listed above.
+"""
+            
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata={
+                    "viewport_width": width,
+                    "viewport_height": height,
+                    "full_page": full_page,
+                    "model": self.VISION_MODEL,
+                },
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Optional specific question to ask about the screenshot. "
+                            "Default behavior lists all interactive elements with coordinates."
+                        ),
+                        "default": "",
+                    },
+                    "full_page": {
+                        "type": "boolean",
+                        "description": "Capture full scrollable page instead of just viewport",
+                        "default": False,
                     },
                 },
                 "required": [],

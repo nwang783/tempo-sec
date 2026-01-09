@@ -112,6 +112,8 @@ class BrowserAgent(BaseAgentDefinition):
             BrowserClickCoordsTool,
             BrowserScrollTool,
             BrowserWaitTool,
+            BrowserSmartFillTool,
+            BrowserVisionSnapshotTool,
         )
         from tempo.tools.browser_state_tools import (
             BrowserListStatesTool,
@@ -143,6 +145,10 @@ class BrowserAgent(BaseAgentDefinition):
         tools.register(BrowserClickTool(browser_session))
         tools.register(BrowserTypeTool(browser_session))
         tools.register(BrowserFillFormTool(browser_session))
+        
+        # Smart form filling and vision tools
+        tools.register(BrowserSmartFillTool(browser_session))
+        tools.register(BrowserVisionSnapshotTool(browser_session))
         
         # Visual/interaction tools
         tools.register(BrowserScreenshotTool(browser_session))
