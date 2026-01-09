@@ -40,7 +40,7 @@ class BrowserAgent(BaseAgentDefinition):
     """
     
     _name = "browser"
-    _model = "openai/gpt-5-mini"  # Fast model for browser tasks
+    _model = "openai/gpt-5.1" #"anthropic/claude-haiku-4-5"  # Vision-capable for visual browsing
     _initial_phase = Phase.RECON  # Single phase, no transitions
     
     def __init__(
@@ -97,23 +97,18 @@ class BrowserAgent(BaseAgentDefinition):
         The browser agent has:
         - Browser navigation and interaction tools
         - State management tools (save/load sessions)
-        - Visual tools (screenshot, coordinate click, scroll, wait)
+        - Visual tools (screenshot, coordinate click/type, scroll, wait)
         - Task completion tool (no other meta tools)
         """
         from tempo.tools.registry import ToolRegistry
         from tempo.tools.browser_tools import (
             BrowserSession,
             BrowserNavigateTool,
-            BrowserSnapshotTool,
-            BrowserClickTool,
-            BrowserTypeTool,
-            BrowserFillFormTool,
             BrowserScreenshotTool,
             BrowserClickCoordsTool,
+            BrowserTypeCoordsTool,
             BrowserScrollTool,
             BrowserWaitTool,
-            BrowserSmartFillTool,
-            BrowserVisionSnapshotTool,
         )
         from tempo.tools.browser_state_tools import (
             BrowserListStatesTool,
@@ -139,20 +134,11 @@ class BrowserAgent(BaseAgentDefinition):
             state_manager=state_manager,
         )
         
-        # Core browser tools
+        # Core visual browser tools (no DOM-based tools)
         tools.register(BrowserNavigateTool(browser_session))
-        tools.register(BrowserSnapshotTool(browser_session))
-        tools.register(BrowserClickTool(browser_session))
-        tools.register(BrowserTypeTool(browser_session))
-        tools.register(BrowserFillFormTool(browser_session))
-        
-        # Smart form filling and vision tools
-        tools.register(BrowserSmartFillTool(browser_session))
-        tools.register(BrowserVisionSnapshotTool(browser_session))
-        
-        # Visual/interaction tools
         tools.register(BrowserScreenshotTool(browser_session))
         tools.register(BrowserClickCoordsTool(browser_session))
+        tools.register(BrowserTypeCoordsTool(browser_session))
         tools.register(BrowserScrollTool(browser_session))
         tools.register(BrowserWaitTool(browser_session))
         

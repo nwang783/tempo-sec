@@ -28,33 +28,40 @@ class TestBrowserAgent:
         assert agent.task == "Navigate and find forms"
         assert agent.url is None
     
-    def test_model_is_fast(self):
-        """Test that browser agent uses a fast model."""
+    def test_model_is_vision_capable(self):
+        """Test that browser agent uses a vision-capable model."""
         agent = BrowserAgent(task="test")
         
-        # Should use a lightweight model for fast browser tasks
-        assert "mini" in agent.model or "4o" in agent.model
+        # Should use a vision-capable model for visual browsing
+        assert "haiku" in agent.model or "claude" in agent.model or "4-5" in agent.model
     
-    def test_create_tools_only_browser_tools(self):
-        """Test that browser agent only has browser tools + completion."""
+    def test_create_tools_only_visual_browser_tools(self):
+        """Test that browser agent only has visual browser tools + completion."""
         agent = BrowserAgent(task="test")
         context = ContextStore()
         
         tools = agent.create_tools(context=context)
         tool_names = tools.list_tools()
         
-        # Should have browser tools
+        # Should have visual browser tools (coordinate-based)
         assert "browser_navigate" in tool_names
-        assert "browser_snapshot" in tool_names
-        assert "browser_click" in tool_names
-        assert "browser_type" in tool_names
-        assert "browser_fill_form" in tool_names
+        assert "browser_screenshot" in tool_names
+        assert "browser_click_coords" in tool_names
+        assert "browser_type_coords" in tool_names
+        assert "browser_scroll" in tool_names
+        assert "browser_wait" in tool_names
         
         # Should have completion tool
         assert "complete_browser_task" in tool_names
         
         # Should have summarization tool (for large outputs)
         assert "summarize_previous_tool_output" in tool_names
+        
+        # Should NOT have DOM-based tools (removed for visual workflow)
+        assert "browser_snapshot" not in tool_names
+        assert "browser_click" not in tool_names
+        assert "browser_type" not in tool_names
+        assert "browser_fill_form" not in tool_names
         
         # Should NOT have shell, file, or phase transition tools
         assert "shell" not in tool_names

@@ -1041,12 +1041,16 @@ class BrowserScreenshotTool(Tool):
         self,
         filename: str | None = None,
         full_page: bool = False,
-        return_base64: bool = False,
+        return_base64: bool = True,
         purpose: str = "",
         **kwargs,
     ) -> ToolResult:
         """Capture screenshot."""
         try:
+            # Type coercion for LLM inputs (may come as strings)
+            full_page = full_page if isinstance(full_page, bool) else str(full_page).lower() == "true"
+            return_base64 = return_base64 if isinstance(return_base64, bool) else str(return_base64).lower() == "true"
+            
             await self.session.ensure_browser()
 
             # Generate filename if not provided
@@ -1099,9 +1103,9 @@ class BrowserScreenshotTool(Tool):
                         "type": "boolean",
                         "description": (
                             "Include base64-encoded image data in metadata "
-                            "(for vision models)"
+                            "(for vision models). Default: true"
                         ),
-                        "default": False,
+                        "default": True,
                     },
                 },
                 "required": [],
@@ -1132,6 +1136,10 @@ class BrowserClickCoordsTool(Tool):
     ) -> ToolResult:
         """Click at coordinates."""
         try:
+            # Type coercion for LLM inputs (may come as strings)
+            x = int(x)
+            y = int(y)
+            
             await self.session.ensure_browser()
 
             await self.session.click_coordinates(x, y, button)
@@ -1171,6 +1179,111 @@ class BrowserClickCoordsTool(Tool):
         )
 
 
+class BrowserTypeCoordsTool(Tool):
+    """Type text at specific x,y coordinates."""
+
+    name = "browser_type_coords"
+    description = (
+        "Click at x,y coordinates to focus an input field, then type text. "
+        "Use after taking a screenshot to identify input field locations. "
+        "Optionally clears existing content and/or submits with Enter."
+    )
+    category = ToolCategory.BROWSING
+
+    def __init__(self, session: BrowserSession):
+        self.session = session
+
+    async def execute(
+        self,
+        x: int,
+        y: int,
+        text: str,
+        clear_first: bool = True,
+        submit: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """Click at coordinates, then type text."""
+        try:
+            # Type coercion for LLM inputs (may come as strings)
+            x = int(x)
+            y = int(y)
+            clear_first = clear_first if isinstance(clear_first, bool) else str(clear_first).lower() == "true"
+            submit = submit if isinstance(submit, bool) else str(submit).lower() == "true"
+            
+            await self.session.ensure_browser()
+
+            # Click to focus the input field
+            await self.session.click_coordinates(x, y)
+            
+            # Small delay to ensure focus
+            import asyncio
+            await asyncio.sleep(0.15)
+
+            # Clear existing content if requested
+            if clear_first:
+                # Use platform-appropriate select-all
+                import sys
+                modifier = "Meta" if sys.platform == "darwin" else "Control"
+                await self.session.page.keyboard.press(f"{modifier}+a")
+                await self.session.page.keyboard.press("Backspace")
+
+            # Type the text
+            await self.session.page.keyboard.type(text, delay=20)
+
+            # Submit if requested
+            if submit:
+                await self.session.page.keyboard.press("Enter")
+
+            result_text = f"Typed '{text}' at coordinates ({x}, {y})"
+            if clear_first:
+                result_text += " (cleared first)"
+            if submit:
+                result_text += " and submitted"
+
+            return ToolResult(
+                success=True,
+                output=result_text,
+                metadata={"x": x, "y": y, "text": text, "submitted": submit},
+            )
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "type": "integer",
+                        "description": "X coordinate of the input field (pixels from left)",
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y coordinate of the input field (pixels from top)",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to type into the field",
+                    },
+                    "clear_first": {
+                        "type": "boolean",
+                        "description": "Clear existing content before typing (default: true)",
+                        "default": True,
+                    },
+                    "submit": {
+                        "type": "boolean",
+                        "description": "Press Enter after typing to submit",
+                        "default": False,
+                    },
+                },
+                "required": ["x", "y", "text"],
+            },
+        )
+
+
 class BrowserScrollTool(Tool):
     """Scroll the page."""
 
@@ -1190,6 +1303,9 @@ class BrowserScrollTool(Tool):
     ) -> ToolResult:
         """Scroll the page."""
         try:
+            # Type coercion for LLM inputs (may come as strings)
+            amount = int(amount)
+            
             await self.session.ensure_browser()
 
             await self.session.scroll(direction=direction, amount=amount)
