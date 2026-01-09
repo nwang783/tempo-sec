@@ -713,10 +713,31 @@ class ContextStore:
                     "role": "assistant",
                     "content": f"[Tool: {tc.tool_name}]\nInput: {tc.input}",
                 })
-                messages.append({
-                    "role": "user",
-                    "content": f"[Tool Result: {tc.tool_name}]\n{tc.get_truncated_output(max_output_chars)}",
-                })
+                
+                # Check if tool result has base64 image data (for vision models)
+                tool_output = tc.get_truncated_output(max_output_chars)
+                base64_image = tc.metadata.get("base64") if tc.metadata else None
+                
+                if base64_image:
+                    # Multimodal message with text + image for vision-capable LLMs
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"[Tool Result: {tc.tool_name}]\n{tool_output}"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                }
+                            }
+                        ],
+                    })
+                else:
+                    # Standard text-only tool result
+                    messages.append({
+                        "role": "user",
+                        "content": f"[Tool Result: {tc.tool_name}]\n{tool_output}",
+                    })
         
         # Apply token limit if specified
         if max_tokens is not None:

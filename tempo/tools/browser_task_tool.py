@@ -121,6 +121,7 @@ class BrowserTaskTool(Tool):
             model=browser_agent_def.model,
             max_total_steps=50,
             browser_headless=self._headless,
+            browser_tool_call_delay=1.0,  # 1 second between tool calls (rate limiting)
         )
         
         # Build prompts

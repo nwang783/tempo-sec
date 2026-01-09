@@ -51,6 +51,7 @@ class TestBrowserTaskTool:
                 model="test-model", 
                 max_total_steps=50,  # Fixed value, not configurable
                 browser_headless=True,
+                browser_tool_call_delay=1.0,  # Rate limiting between tool calls
             )
             
             # Verify system prompt added to context

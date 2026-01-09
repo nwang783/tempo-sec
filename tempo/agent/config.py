@@ -69,6 +69,7 @@ class AgentConfig:
     browser_default_timeout: int = 30000  # milliseconds
     browser_viewport_width: int = 1280
     browser_viewport_height: int = 720
+    browser_tool_call_delay: float = 0.0  # seconds between tool calls (0 = no delay, set > 0 for rate limiting)
 
     # Legacy/convenience aliases
     scope: str | None = None  # Optional scope description
@@ -235,6 +236,8 @@ class AgentConfig:
                 kwargs["browser_viewport_width"] = br["viewport_width"]
             if "viewport_height" in br:
                 kwargs["browser_viewport_height"] = br["viewport_height"]
+            if "tool_call_delay" in br:
+                kwargs["browser_tool_call_delay"] = br["tool_call_delay"]
 
         return cls(**kwargs)
 

@@ -485,6 +485,11 @@ class Agent:
                 # Add to context
                 self.context.add_tool_call(tool_call)
                 
+                # Apply tool call delay if configured (for browser agents / rate limiting)
+                if self.config.browser_tool_call_delay > 0:
+                    import asyncio
+                    await asyncio.sleep(self.config.browser_tool_call_delay)
+                
                 # Track tool calls that require summarization (>threshold tokens, non-meta)
                 if self._requires_summarization(tool_call):
                     self.context.add_pending_summarization(tool_call.id)
