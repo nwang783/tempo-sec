@@ -33,7 +33,7 @@ class TestBrowserAgent:
         agent = BrowserAgent(task="test")
         
         # Should use a vision-capable model for visual browsing
-        assert "haiku" in agent.model or "claude" in agent.model or "4-5" in agent.model
+        assert "haiku" in agent.model or "claude" in agent.model or "gpt-5" in agent.model
     
     def test_create_tools_only_visual_browser_tools(self):
         """Test that browser agent only has visual browser tools + completion."""

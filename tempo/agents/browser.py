@@ -40,7 +40,7 @@ class BrowserAgent(BaseAgentDefinition):
     """
     
     _name = "browser"
-    _model = "openai/gpt-5.1" #"anthropic/claude-haiku-4-5"  # Vision-capable for visual browsing
+    _model = "openai/gpt-5.1"  # Vision-capable model for visual browsing
     _initial_phase = Phase.RECON  # Single phase, no transitions
     
     def __init__(

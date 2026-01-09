@@ -8,6 +8,7 @@ enabling ref-based element targeting via accessibility snapshots.
 from typing import TYPE_CHECKING, Any
 import asyncio
 import json
+import sys
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 
@@ -1200,7 +1201,6 @@ class BrowserTypeCoordsTool(Tool):
         text: str,
         clear_first: bool = True,
         submit: bool = False,
-        purpose: str = "",
         **kwargs,
     ) -> ToolResult:
         """Click at coordinates, then type text."""
@@ -1215,15 +1215,10 @@ class BrowserTypeCoordsTool(Tool):
 
             # Click to focus the input field
             await self.session.click_coordinates(x, y)
-            
-            # Small delay to ensure focus
-            import asyncio
-            await asyncio.sleep(0.15)
 
             # Clear existing content if requested
             if clear_first:
                 # Use platform-appropriate select-all
-                import sys
                 modifier = "Meta" if sys.platform == "darwin" else "Control"
                 await self.session.page.keyboard.press(f"{modifier}+a")
                 await self.session.page.keyboard.press("Backspace")
