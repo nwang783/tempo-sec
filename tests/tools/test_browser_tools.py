@@ -212,9 +212,9 @@ class TestBrowserTypeTool:
         # Should call page.locator("#search-input"), NOT get_by_role
         session.page.locator.assert_called_with("#search-input")
         session.page.get_by_role.assert_not_called()
-        # Should clear and fill
+        # Should clear and fill (with timeout)
         mock_locator.clear.assert_called_once()
-        mock_locator.fill.assert_called_with("test query")
+        mock_locator.fill.assert_called_with("test query", timeout=30000)
 
 
 class TestBrowserFillFormTool:

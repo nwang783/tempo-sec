@@ -12,6 +12,9 @@ import sys
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 
+# Default timeout for Playwright operations (30 seconds)
+DEFAULT_TIMEOUT_MS = 30000
+
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
     from tempo.infra.browser_state import BrowserStateManager
@@ -714,8 +717,8 @@ class BrowserClickTool(Tool):
                     error=f"Could not locate element with ref {ref}",
                 )
             
-            # Build click options
-            click_kwargs = {"button": button}
+            # Build click options with timeout
+            click_kwargs = {"button": button, "timeout": DEFAULT_TIMEOUT_MS}
             if modifiers:
                 click_kwargs["modifiers"] = modifiers
             
@@ -838,17 +841,17 @@ class BrowserTypeTool(Tool):
                     error=f"Could not locate input element with ref {ref}",
                 )
             
-            # Clear existing content and type
-            await locator.clear()
+            # Clear existing content and type (with timeouts)
+            await locator.clear(timeout=DEFAULT_TIMEOUT_MS)
             
             if slowly:
-                await locator.type(text, delay=50)
+                await locator.type(text, delay=50, timeout=DEFAULT_TIMEOUT_MS)
             else:
-                await locator.fill(text)
+                await locator.fill(text, timeout=DEFAULT_TIMEOUT_MS)
             
             # Submit if requested
             if submit:
-                await locator.press("Enter")
+                await locator.press("Enter", timeout=DEFAULT_TIMEOUT_MS)
             
             result_text = f"Typed '{text}' into {element}"
             if submit:
@@ -966,7 +969,7 @@ class BrowserFillFormTool(Tool):
                         locator = self.session.page.get_by_label(name)
                     
                     if locator:
-                        await locator.fill(value)
+                        await locator.fill(value, timeout=DEFAULT_TIMEOUT_MS)
                         filled.append(f"{element_desc}: '{value}'")
                     else:
                         errors.append(f"Could not locate: {ref}")
@@ -1564,7 +1567,7 @@ class BrowserSmartFillTool(Tool):
                     if selector:
                         try:
                             locator = self.session.page.locator(selector)
-                            await locator.fill(value)
+                            await locator.fill(value, timeout=DEFAULT_TIMEOUT_MS)
                             filled.append(f"{hint} -> {best_match.get('name') or best_match.get('id')} = '{value}'")
                         except Exception as e:
                             errors.append(f"Failed to fill {hint}: {e}")
@@ -1572,7 +1575,7 @@ class BrowserSmartFillTool(Tool):
                         # Fallback: use nth input based on index
                         try:
                             inputs = self.session.page.locator('input, textarea, select')
-                            await inputs.nth(best_match['index']).fill(value)
+                            await inputs.nth(best_match['index']).fill(value, timeout=DEFAULT_TIMEOUT_MS)
                             filled.append(f"{hint} -> field[{best_match['index']}] = '{value}'")
                         except Exception as e:
                             errors.append(f"Failed to fill {hint}: {e}")
@@ -1587,7 +1590,7 @@ class BrowserSmartFillTool(Tool):
                         'button[type="submit"], input[type="submit"], button:has-text("Submit"), '
                         'button:has-text("Sign Up"), button:has-text("Login"), button:has-text("Register")'
                     ).first
-                    await submit_button.click()
+                    await submit_button.click(timeout=DEFAULT_TIMEOUT_MS)
                     submit_clicked = True
                 except Exception as e:
                     errors.append(f"Submit button not found or not clickable: {e}")
