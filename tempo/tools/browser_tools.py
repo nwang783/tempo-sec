@@ -633,10 +633,49 @@ class BrowserSnapshotTool(Tool):
             return ToolResult(success=False, output="", error=str(e))
     
     async def _extract_interactive_elements(self) -> list[dict]:
-        """Extract interactive elements from DOM as fallback."""
+        """Extract interactive elements from DOM with robust selectors."""
         return await self.session.page.evaluate("""
             () => {
                 const elements = [];
+                
+                // Helper function to generate robust selectors
+                function generateSelector(el) {
+                    // 1. ID is most reliable
+                    if (el.id) {
+                        return `#${el.id}`;
+                    }
+                    
+                    // 2. Name attribute (for form elements)
+                    if (el.name) {
+                        const tag = el.tagName.toLowerCase();
+                        return `${tag}[name="${el.name}"]`;
+                    }
+                    
+                    // 3. Unique aria-label
+                    const ariaLabel = el.getAttribute('aria-label');
+                    if (ariaLabel) {
+                        return `[aria-label="${ariaLabel}"]`;
+                    }
+                    
+                    // 4. Test ID (common in React/Vue apps)
+                    const testId = el.getAttribute('data-testid') || 
+                                   el.getAttribute('data-test-id') ||
+                                   el.getAttribute('data-cy');
+                    if (testId) {
+                        return `[data-testid="${testId}"]`;
+                    }
+                    
+                    // 5. Unique class combinations (fallback)
+                    if (el.className && typeof el.className === 'string') {
+                        const classes = el.className.split(' ').filter(c => c && !c.match(/^(ng-|_|is-|has-)/));
+                        if (classes.length > 0) {
+                            const tag = el.tagName.toLowerCase();
+                            return `${tag}.${classes.slice(0, 2).join('.')}`;
+                        }
+                    }
+                    
+                    return null;
+                }
                 
                 // Links
                 document.querySelectorAll('a[href]').forEach((el, i) => {
@@ -645,7 +684,7 @@ class BrowserSnapshotTool(Tool):
                             type: 'link',
                             text: el.innerText?.trim() || el.getAttribute('aria-label') || 'unnamed',
                             href: el.href,
-                            selector: `a[href="${el.getAttribute('href')}"]`
+                            selector: generateSelector(el) || `a[href="${el.getAttribute('href')}"]`
                         });
                     }
                 });
@@ -656,18 +695,28 @@ class BrowserSnapshotTool(Tool):
                         elements.push({
                             type: 'button',
                             text: el.innerText?.trim() || el.value || el.getAttribute('aria-label') || 'unnamed',
-                            selector: el.id ? `#${el.id}` : null
+                            selector: generateSelector(el)
                         });
                     }
                 });
                 
                 // Text inputs
-                document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="search"], textarea').forEach((el, i) => {
+                document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="tel"], input[type="url"], input[type="number"], textarea').forEach((el, i) => {
                     if (i < 15) {
+                        // Get associated label text
+                        let labelText = el.placeholder || '';
+                        if (el.id) {
+                            const label = document.querySelector(`label[for="${el.id}"]`);
+                            if (label) labelText = label.innerText?.trim() || labelText;
+                        }
+                        if (!labelText && el.labels && el.labels.length > 0) {
+                            labelText = el.labels[0].innerText?.trim() || '';
+                        }
+                        
                         elements.push({
                             type: 'textbox',
-                            text: el.placeholder || el.name || el.id || 'input',
-                            selector: el.id ? `#${el.id}` : (el.name ? `[name="${el.name}"]` : null)
+                            text: labelText || el.name || el.id || 'input',
+                            selector: generateSelector(el)
                         });
                     }
                 });
@@ -679,18 +728,37 @@ class BrowserSnapshotTool(Tool):
                         elements.push({
                             type: el.type,
                             text: label,
-                            selector: el.id ? `#${el.id}` : null
+                            selector: generateSelector(el)
                         });
                     }
                 });
                 
-                // Select dropdowns
+                // Select dropdowns with options
                 document.querySelectorAll('select').forEach((el, i) => {
                     if (i < 10) {
+                        // Get option details
+                        const options = Array.from(el.options).slice(0, 10).map(opt => ({
+                            text: opt.text,
+                            value: opt.value,
+                            selected: opt.selected
+                        }));
+                        
+                        // Get label
+                        let labelText = '';
+                        if (el.id) {
+                            const label = document.querySelector(`label[for="${el.id}"]`);
+                            if (label) labelText = label.innerText?.trim() || '';
+                        }
+                        
+                        const optionsSummary = options.map(o => o.text).join(', ');
+                        const currentSelection = options.find(o => o.selected)?.text || '';
+                        
                         elements.push({
                             type: 'combobox',
-                            text: el.name || el.id || 'dropdown',
-                            selector: el.id ? `#${el.id}` : null
+                            text: labelText || el.name || el.id || 'dropdown',
+                            selector: generateSelector(el),
+                            options: optionsSummary,
+                            selectedOption: currentSelection
                         });
                     }
                 });
@@ -806,14 +874,44 @@ class BrowserClickTool(Tool):
                 await locator.click(**click_kwargs)
                 action = "Clicked"
             
+            # Verify click action
+            verification = await self._verify_click(locator)
+            
             return ToolResult(
                 success=True,
-                output=f"{action} on {element} (ref: {ref})",
-                metadata={"ref": ref, "element": element, "action": action},
+                output=f"{action} on {element} (ref: {ref}). {verification}",
+                metadata={"ref": ref, "element": element, "action": action, "verification": verification},
             )
             
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
+    
+    async def _verify_click(self, locator) -> str:
+        """Verify click had expected effect."""
+        try:
+            # Wait briefly for any state changes
+            await self.session.page.wait_for_timeout(100)
+            
+            # Check if element is still visible (button might hide after click)
+            try:
+                is_visible = await locator.is_visible(timeout=500)
+                if not is_visible:
+                    return "Element no longer visible (may have triggered navigation or modal)"
+            except Exception:
+                return "Element state unknown after click"
+            
+            # Check if element has focus (for form elements)
+            try:
+                is_focused = await locator.evaluate("el => el === document.activeElement")
+                if is_focused:
+                    return "Element now has focus"
+            except Exception:
+                pass
+            
+            return "Click completed, element still visible"
+            
+        except Exception as e:
+            return f"Verification inconclusive: {e}"
     
     def get_schema(self) -> ToolSchema:
         return ToolSchema(
@@ -929,14 +1027,28 @@ class BrowserTypeTool(Tool):
             if submit:
                 await locator.press("Enter", timeout=DEFAULT_TIMEOUT_MS)
             
-            result_text = f"Typed '{text}' into {element}"
+            # Verify input value matches what we typed
+            verification = ""
+            try:
+                actual_value = await locator.input_value(timeout=1000)
+                if actual_value == text:
+                    display_text = f"'{text[:20]}...'" if len(text) > 20 else f"'{text}'"
+                    verification = f"Verified: input contains {display_text}"
+                elif text in actual_value or actual_value in text:
+                    verification = f"Partial match: input contains '{actual_value[:30]}'"
+                else:
+                    verification = f"Warning: input has '{actual_value[:30]}' instead of expected text"
+            except Exception:
+                verification = "Could not verify input value"
+            
+            result_text = f"Typed '{text}' into {element}. {verification}"
             if submit:
-                result_text += " and submitted"
+                result_text = f"Typed '{text}' into {element} and submitted. {verification}"
             
             return ToolResult(
                 success=True,
                 output=result_text,
-                metadata={"ref": ref, "text": text, "submitted": submit},
+                metadata={"ref": ref, "text": text, "submitted": submit, "verification": verification},
             )
             
         except Exception as e:
@@ -1100,6 +1212,139 @@ class BrowserFillFormTool(Tool):
                     },
                 },
                 "required": ["fields"],
+            },
+        )
+
+
+class BrowserSelectTool(Tool):
+    """Select an option from a dropdown element."""
+    
+    name = "browser_select"
+    description = (
+        "Select an option from a dropdown (<select> element). "
+        "Use after browser_snapshot to get the element ref. "
+        "Can select by visible text (default), value attribute, or index."
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        element: str,
+        ref: str,
+        option: str,
+        by: str = "text",
+        purpose: str = "",
+    ) -> ToolResult:
+        """
+        Select a dropdown option.
+        
+        Args:
+            element: Human-readable description of the dropdown
+            ref: Element reference from snapshot
+            option: The option to select (text, value, or index)
+            by: Selection method - "text", "value", or "index"
+            purpose: Why this selection is being made
+            
+        Returns:
+            ToolResult with selection status
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            element_info = self.session.get_element_by_ref(ref)
+            if element_info is None:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Ref not found: {ref}. Run browser_snapshot first.",
+                )
+            
+            selector = element_info.get("selector", "")
+            role = element_info.get("role", "")
+            
+            # Verify element is a dropdown
+            if role != "combobox" and not selector:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Element {ref} does not appear to be a dropdown (role: {role})",
+                )
+            
+            # Locate the select element
+            if selector:
+                locator = self.session.page.locator(selector)
+            else:
+                # Fallback to role-based lookup
+                name = element_info.get("name", "")
+                if name:
+                    locator = self.session.page.get_by_role("combobox", name=name)
+                else:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error="No selector available for dropdown",
+                    )
+            
+            # Perform selection based on method
+            if by == "text":
+                await locator.select_option(label=option, timeout=DEFAULT_TIMEOUT_MS)
+            elif by == "value":
+                await locator.select_option(value=option, timeout=DEFAULT_TIMEOUT_MS)
+            elif by == "index":
+                await locator.select_option(index=int(option), timeout=DEFAULT_TIMEOUT_MS)
+            else:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Invalid selection method: {by}. Use 'text', 'value', or 'index'",
+                )
+            
+            # Verify selection by getting current value
+            try:
+                selected_value = await locator.input_value(timeout=1000)
+                verification = f"Current value: {selected_value}"
+            except Exception:
+                verification = "Selection completed"
+            
+            return ToolResult(
+                success=True,
+                output=f"Selected '{option}' in {element} (ref: {ref}). {verification}",
+                metadata={"ref": ref, "option": option, "by": by},
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "element": {
+                        "type": "string",
+                        "description": "Human-readable dropdown description",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Element reference from browser_snapshot",
+                    },
+                    "option": {
+                        "type": "string",
+                        "description": "Option to select (text, value, or index depending on 'by')",
+                    },
+                    "by": {
+                        "type": "string",
+                        "enum": ["text", "value", "index"],
+                        "description": "How to select: by visible text (default), value attribute, or index",
+                        "default": "text",
+                    },
+                },
+                "required": ["element", "ref", "option"],
             },
         )
 
@@ -1493,234 +1738,6 @@ class BrowserWaitTool(Tool):
                     },
                 },
                 "required": [],
-            },
-        )
-
-
-class BrowserSmartFillTool(Tool):
-    """
-    Intelligently fill a form based on field hints.
-    
-    Analyzes the current page's form fields and fills them based on
-    provided hints, matching field names/labels/placeholders using
-    fuzzy matching.
-    """
-    
-    name = "browser_smart_fill"
-    description = (
-        "Fill a form intelligently using field hints. "
-        "Matches your hints (like 'email', 'password', 'name') to actual form fields "
-        "using fuzzy matching on field names, labels, and placeholders. "
-        "Example: browser_smart_fill(fields={'email': 'test@example.com', 'password': 'secret'})"
-    )
-    category = ToolCategory.BROWSING
-    
-    def __init__(self, session: BrowserSession):
-        self.session = session
-    
-    async def execute(
-        self,
-        fields: dict[str, str],
-        submit: bool = False,
-        purpose: str = "",
-        **kwargs,
-    ) -> ToolResult:
-        """
-        Analyze page forms and fill matching fields.
-        
-        Args:
-            fields: Dictionary mapping field hints to values.
-                   Hints can be partial names like 'email', 'password', 'username'.
-            submit: Whether to click the submit button after filling.
-        """
-        try:
-            await self.session.ensure_browser()
-            
-            if not fields:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="No fields provided",
-                )
-            
-            # Extract all form fields from the page with their attributes
-            page_fields = await self.session.page.evaluate("""
-                () => {
-                    const fields = [];
-                    const inputs = document.querySelectorAll('input, textarea, select');
-                    
-                    inputs.forEach((el, idx) => {
-                        // Skip hidden and submit inputs
-                        if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') {
-                            return;
-                        }
-                        
-                        // Get associated label text
-                        let labelText = '';
-                        if (el.id) {
-                            const label = document.querySelector(`label[for="${el.id}"]`);
-                            if (label) labelText = label.innerText?.trim() || '';
-                        }
-                        if (!labelText && el.labels && el.labels.length > 0) {
-                            labelText = el.labels[0].innerText?.trim() || '';
-                        }
-                        
-                        fields.push({
-                            index: idx,
-                            tag: el.tagName.toLowerCase(),
-                            type: el.type || el.tagName.toLowerCase(),
-                            name: el.name || '',
-                            id: el.id || '',
-                            placeholder: el.placeholder || '',
-                            ariaLabel: el.getAttribute('aria-label') || '',
-                            label: labelText,
-                            selector: el.id ? `#${el.id}` : (el.name ? `[name="${el.name}"]` : null)
-                        });
-                    });
-                    
-                    return fields;
-                }
-            """)
-            
-            if not page_fields:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="No form fields found on page",
-                )
-            
-            filled = []
-            errors = []
-            unmatched_hints = []
-            
-            # Match each hint to a field using fuzzy matching
-            for hint, value in fields.items():
-                hint_lower = hint.lower()
-                best_match = None
-                best_score = 0
-                
-                for field in page_fields:
-                    # Check if hint appears in any field attribute
-                    score = 0
-                    searchable = [
-                        field.get('name', '').lower(),
-                        field.get('id', '').lower(),
-                        field.get('placeholder', '').lower(),
-                        field.get('ariaLabel', '').lower(),
-                        field.get('label', '').lower(),
-                        field.get('type', '').lower(),
-                    ]
-                    
-                    for text in searchable:
-                        if not text:
-                            continue
-                        # Exact match in attribute
-                        if hint_lower == text:
-                            score = 100
-                        # Hint is substring
-                        elif hint_lower in text:
-                            score = max(score, 80)
-                        # Attribute is substring of hint
-                        elif text in hint_lower:
-                            score = max(score, 60)
-                        # Common patterns
-                        elif hint_lower in ['email', 'mail'] and 'email' in text:
-                            score = max(score, 90)
-                        elif hint_lower in ['pass', 'password', 'pwd'] and 'pass' in text:
-                            score = max(score, 90)
-                        elif hint_lower in ['user', 'username', 'login'] and ('user' in text or 'login' in text):
-                            score = max(score, 90)
-                        elif hint_lower in ['name', 'fullname', 'full_name'] and 'name' in text:
-                            score = max(score, 85)
-                    
-                    if score > best_score:
-                        best_score = score
-                        best_match = field
-                
-                if best_match and best_score >= 50:
-                    # Fill the matched field
-                    selector = best_match.get('selector')
-                    if selector:
-                        try:
-                            locator = self.session.page.locator(selector)
-                            await locator.fill(value, timeout=DEFAULT_TIMEOUT_MS)
-                            filled.append(f"{hint} -> {best_match.get('name') or best_match.get('id')} = '{value}'")
-                        except Exception as e:
-                            errors.append(f"Failed to fill {hint}: {e}")
-                    else:
-                        # Fallback: use nth input based on index
-                        try:
-                            inputs = self.session.page.locator('input, textarea, select')
-                            await inputs.nth(best_match['index']).fill(value, timeout=DEFAULT_TIMEOUT_MS)
-                            filled.append(f"{hint} -> field[{best_match['index']}] = '{value}'")
-                        except Exception as e:
-                            errors.append(f"Failed to fill {hint}: {e}")
-                else:
-                    unmatched_hints.append(hint)
-            
-            # Optionally click submit button
-            submit_clicked = False
-            if submit:
-                try:
-                    submit_button = self.session.page.locator(
-                        'button[type="submit"], input[type="submit"], button:has-text("Submit"), '
-                        'button:has-text("Sign Up"), button:has-text("Login"), button:has-text("Register")'
-                    ).first
-                    await submit_button.click(timeout=DEFAULT_TIMEOUT_MS)
-                    submit_clicked = True
-                except Exception as e:
-                    errors.append(f"Submit button not found or not clickable: {e}")
-            
-            # Build output
-            output_parts = []
-            if filled:
-                output_parts.append(f"Filled {len(filled)} field(s):")
-                output_parts.extend(f"  • {f}" for f in filled)
-            if unmatched_hints:
-                output_parts.append(f"\nUnmatched hints (no matching fields found): {', '.join(unmatched_hints)}")
-            if submit_clicked:
-                output_parts.append("\n✓ Clicked submit button")
-            if errors:
-                output_parts.append(f"\nErrors:")
-                output_parts.extend(f"  • {e}" for e in errors)
-            
-            return ToolResult(
-                success=len(filled) > 0,
-                output="\n".join(output_parts),
-                metadata={
-                    "filled_count": len(filled),
-                    "unmatched_count": len(unmatched_hints),
-                    "submit_clicked": submit_clicked,
-                    "error_count": len(errors),
-                },
-            )
-            
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
-    
-    def get_schema(self) -> ToolSchema:
-        return ToolSchema(
-            name=self.name,
-            description=self.description,
-            parameters={
-                "type": "object",
-                "properties": {
-                    "fields": {
-                        "type": "object",
-                        "description": (
-                            "Mapping of field hints to values. "
-                            "Keys are hints like 'email', 'password', 'username'. "
-                            "Values are what to fill in those fields."
-                        ),
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "submit": {
-                        "type": "boolean",
-                        "description": "Click the submit button after filling",
-                        "default": False,
-                    },
-                },
-                "required": ["fields"],
             },
         )
 

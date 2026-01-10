@@ -35,17 +35,26 @@ class TestBrowserAgent:
         # Should use a vision-capable model for visual browsing
         assert "haiku" in agent.model or "claude" in agent.model or "gpt-5" in agent.model
     
-    def test_create_tools_only_visual_browser_tools(self):
-        """Test that browser agent only has visual browser tools + completion."""
+    def test_create_tools_includes_all_browser_tools(self):
+        """Test that browser agent has both DOM-based and coordinate-based tools."""
         agent = BrowserAgent(task="test")
         context = ContextStore()
         
         tools = agent.create_tools(context=context)
         tool_names = tools.list_tools()
         
-        # Should have visual browser tools (coordinate-based)
+        # Should have page inspection tools
         assert "browser_navigate" in tool_names
+        assert "browser_snapshot" in tool_names
         assert "browser_screenshot" in tool_names
+        
+        # Should have DOM-based interaction tools (PRIMARY)
+        assert "browser_click" in tool_names
+        assert "browser_type" in tool_names
+        assert "browser_select" in tool_names
+        assert "browser_fill_form" in tool_names
+        
+        # Should have coordinate-based tools (FALLBACK)
         assert "browser_click_coords" in tool_names
         assert "browser_type_coords" in tool_names
         assert "browser_scroll" in tool_names
@@ -56,12 +65,6 @@ class TestBrowserAgent:
         
         # Should have summarization tool (for large outputs)
         assert "summarize_previous_tool_output" in tool_names
-        
-        # Should NOT have DOM-based tools (removed for visual workflow)
-        assert "browser_snapshot" not in tool_names
-        assert "browser_click" not in tool_names
-        assert "browser_type" not in tool_names
-        assert "browser_fill_form" not in tool_names
         
         # Should NOT have shell, file, or phase transition tools
         assert "shell" not in tool_names
