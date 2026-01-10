@@ -109,6 +109,9 @@ class BrowserAgent(BaseAgentDefinition):
             BrowserTypeCoordsTool,
             BrowserScrollTool,
             BrowserWaitTool,
+            BrowserConsoleTool,
+            BrowserNetworkTool,
+            BrowserEvaluateTool,
         )
         from tempo.tools.browser_state_tools import (
             BrowserListStatesTool,
@@ -141,6 +144,11 @@ class BrowserAgent(BaseAgentDefinition):
         tools.register(BrowserTypeCoordsTool(browser_session))
         tools.register(BrowserScrollTool(browser_session))
         tools.register(BrowserWaitTool(browser_session))
+        
+        # Debugging tools
+        tools.register(BrowserConsoleTool(browser_session))
+        tools.register(BrowserNetworkTool(browser_session))
+        tools.register(BrowserEvaluateTool(browser_session))
         
         # State management tools
         tools.register(BrowserListStatesTool(state_manager))

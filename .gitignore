@@ -215,6 +215,7 @@ config.toml
 
 manifests/
 /findings/
+/scopes/
 
 # AMP
 .agents

@@ -5,6 +5,7 @@ This module provides tools that mimic the Playwright MCP server's functionality,
 enabling ref-based element targeting via accessibility snapshots.
 """
 
+from collections import deque
 from typing import TYPE_CHECKING, Any
 import asyncio
 import json
@@ -59,8 +60,9 @@ class BrowserSession:
         self._browser = None
         self._page = None
         self._snapshot_refs: dict[str, Any] = {}  # ref -> element info
-        self._console_messages: list[dict] = []
-        self._network_requests: list[dict] = []
+        # Bounded deques to prevent unbounded memory growth
+        self._console_messages: deque[dict] = deque(maxlen=1000)
+        self._network_requests: deque[dict] = deque(maxlen=1000)
     
     async def ensure_browser(self) -> None:
         """Ensure browser is initialized with configured headless mode."""
@@ -78,8 +80,12 @@ class BrowserSession:
         # Set up console message capture
         self._page.on("console", self._on_console_message)
 
-        # Set up network request capture
+        # Set up network request capture with response handler
         self._page.on("request", self._on_request)
+        self._page.on("response", self._on_response)
+
+        # Auto-clear page data on navigation to keep context relevant
+        self._page.on("domcontentloaded", lambda _: self.clear_page_data())
     
     def _on_console_message(self, msg) -> None:
         """Capture console messages."""
@@ -95,7 +101,74 @@ class BrowserSession:
             "url": request.url,
             "method": request.method,
             "resource_type": request.resource_type,
+            "status": None,  # Will be updated by _on_response
         })
+    
+    def _on_response(self, response) -> None:
+        """Capture response status codes and update matching request."""
+        url = response.url
+        status = response.status
+        # Find and update the matching request
+        for req in reversed(self._network_requests):
+            if req["url"] == url and req["status"] is None:
+                req["status"] = status
+                break
+    
+    # Console message level ordering (more severe = higher number)
+    _CONSOLE_LEVELS = {
+        "debug": 0,
+        "log": 1,
+        "info": 2,
+        "warning": 3,
+        "error": 4,
+    }
+    
+    def get_console_messages(self, min_level: str = "info") -> list[dict]:
+        """
+        Get console messages filtered by minimum level.
+        
+        Args:
+            min_level: Minimum level to return. Each level includes more severe messages.
+                       Options: "debug", "log", "info", "warning", "error"
+                       
+        Returns:
+            List of console message dicts with type, text, and location
+        """
+        min_level_num = self._CONSOLE_LEVELS.get(min_level, 2)
+        return [
+            msg for msg in self._console_messages
+            if self._CONSOLE_LEVELS.get(msg["type"], 2) >= min_level_num
+        ]
+    
+    # Resource types considered static (typically excluded from network analysis)
+    _STATIC_RESOURCE_TYPES = {"image", "font", "script", "stylesheet"}
+    
+    def get_network_requests(self, include_static: bool = False) -> list[dict]:
+        """
+        Get network requests, optionally filtering out static resources.
+        
+        Args:
+            include_static: If True, include static resources (images, fonts, scripts, stylesheets).
+                           Default False excludes them.
+                           
+        Returns:
+            List of request dicts with url, method, resource_type, and status
+        """
+        if include_static:
+            return list(self._network_requests)
+        return [
+            req for req in self._network_requests
+            if req["resource_type"] not in self._STATIC_RESOURCE_TYPES
+        ]
+    
+    def clear_page_data(self) -> None:
+        """
+        Clear accumulated page data (console messages and network requests).
+        
+        Called automatically on navigation to keep data relevant to current page.
+        """
+        self._console_messages.clear()
+        self._network_requests.clear()
     
     @property
     def page(self):
@@ -260,6 +333,9 @@ class BrowserNavigateTool(Tool):
         """
         try:
             await self.session.ensure_browser()
+            
+            # Clear previous page data before navigating
+            self.session.clear_page_data()
             
             if self.session.container is not None:
                 return await self._execute_in_container(url)
@@ -1811,5 +1887,279 @@ ELEMENT: Menu hamburger icon at (50, 30) - opens navigation menu
                     },
                 },
                 "required": [],
+            },
+        )
+
+
+class BrowserConsoleTool(Tool):
+    """Get console messages from the current page."""
+    
+    name = "browser_console_messages"
+    description = (
+        "Returns all console messages (log, info, warn, error) captured since page load. "
+        "Useful for debugging JavaScript errors, identifying security issues, or understanding page behavior."
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        level: str = "info",
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Get console messages filtered by level.
+        
+        Args:
+            level: Minimum level to return - "debug", "log", "info", "warning", "error".
+                   Defaults to "info". Each level includes more severe messages.
+            purpose: Why console messages are being retrieved
+            
+        Returns:
+            ToolResult with list of console messages
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            # Validate level
+            valid_levels = ["debug", "log", "info", "warning", "error"]
+            if level not in valid_levels:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Invalid level '{level}'. Must be one of: {', '.join(valid_levels)}",
+                )
+            
+            messages = self.session.get_console_messages(min_level=level)
+            
+            if not messages:
+                return ToolResult(
+                    success=True,
+                    output=f"No console messages at level '{level}' or higher.",
+                    metadata={"count": 0, "level": level},
+                )
+            
+            # Format output
+            output_lines = [f"## Console Messages (level >= {level})"]
+            output_lines.append(f"Total: {len(messages)} message(s)\n")
+            
+            for msg in messages:
+                msg_type = msg["type"].upper()
+                text = msg["text"]
+                location = msg.get("location", "")
+                
+                if location:
+                    output_lines.append(f"[{msg_type}] {text}")
+                    output_lines.append(f"       at {location}")
+                else:
+                    output_lines.append(f"[{msg_type}] {text}")
+            
+            return ToolResult(
+                success=True,
+                output="\n".join(output_lines),
+                metadata={"count": len(messages), "level": level},
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "level": {
+                        "type": "string",
+                        "description": (
+                            "Minimum level to return. Each level includes more severe messages. "
+                            "Options: debug, log, info, warning, error"
+                        ),
+                        "enum": ["debug", "log", "info", "warning", "error"],
+                        "default": "info",
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserNetworkTool(Tool):
+    """List network requests made by the page."""
+    
+    name = "browser_network_requests"
+    description = (
+        "Returns all network requests since loading the page. "
+        "Useful for identifying API endpoints, analyzing request patterns, and finding potential security issues."
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        includeStatic: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Get network requests, optionally including static resources.
+        
+        Args:
+            includeStatic: Include static resources (images, fonts, scripts, stylesheets).
+                          Defaults to false.
+            purpose: Why network requests are being retrieved
+            
+        Returns:
+            ToolResult with list of network requests
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            requests = self.session.get_network_requests(include_static=includeStatic)
+            
+            if not requests:
+                filter_note = " (excluding static resources)" if not includeStatic else ""
+                return ToolResult(
+                    success=True,
+                    output=f"No network requests captured{filter_note}.",
+                    metadata={"count": 0, "include_static": includeStatic},
+                )
+            
+            # Format output
+            filter_note = "all requests" if includeStatic else "excluding static (images, fonts, scripts, stylesheets)"
+            output_lines = [f"## Network Requests ({filter_note})"]
+            output_lines.append(f"Total: {len(requests)} request(s)\n")
+            
+            for req in requests:
+                method = req["method"]
+                url = req["url"]
+                resource_type = req["resource_type"]
+                status = req.get("status")
+                
+                status_str = f" -> {status}" if status else " -> (pending)"
+                output_lines.append(f"[{method}] {url}")
+                output_lines.append(f"       type: {resource_type}{status_str}")
+            
+            return ToolResult(
+                success=True,
+                output="\n".join(output_lines),
+                metadata={"count": len(requests), "include_static": includeStatic},
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "includeStatic": {
+                        "type": "boolean",
+                        "description": (
+                            "Include static resources (images, fonts, scripts, stylesheets). "
+                            "Defaults to false to show only dynamic requests."
+                        ),
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserEvaluateTool(Tool):
+    """Evaluate JavaScript in the browser.
+    
+    WARNING: This is a write tool that can execute arbitrary JavaScript.
+    Intentional for security testing (XSS detection, DOM manipulation, etc.)
+    """
+    
+    name = "browser_evaluate"
+    description = (
+        "Evaluate JavaScript expression on the page and return the result. "
+        "Useful for XSS testing, DOM inspection, extracting data, or manipulating page state. "
+        "Expression should be a function body like '() => { return document.title; }'"
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        expression: str,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Evaluate JavaScript expression on the page.
+        
+        Args:
+            expression: JavaScript code to evaluate. Should be a function body
+                       like '() => { return document.title; }'
+            purpose: Why this JavaScript is being evaluated
+            
+        Returns:
+            ToolResult with the serialized result
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            if not expression or not expression.strip():
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Expression is required",
+                )
+            
+            # Execute JavaScript
+            result = await self.session.page.evaluate(expression)
+            
+            # Serialize result for output
+            if result is None:
+                output = "Result: null"
+            elif isinstance(result, (dict, list)):
+                output = f"Result:\n{json.dumps(result, indent=2, default=str)}"
+            else:
+                output = f"Result: {result}"
+            
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata={"expression": expression[:100]},
+            )
+            
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"JavaScript evaluation failed: {str(e)}",
+            )
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": (
+                            "JavaScript code to evaluate. Should be a function body "
+                            "like '() => { return document.title; }' or '() => document.cookie'"
+                        ),
+                    },
+                },
+                "required": ["expression"],
             },
         )
