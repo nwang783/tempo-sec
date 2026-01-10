@@ -640,21 +640,33 @@ class BrowserSnapshotTool(Tool):
                 
                 // Helper function to generate robust selectors
                 function generateSelector(el) {
+                    // Helper to check uniqueness
+                    const isUnique = (sel) => {
+                        try {
+                            return document.querySelectorAll(sel).length === 1;
+                        } catch (e) {
+                            return false;
+                        }
+                    };
+                
                     // 1. ID is most reliable
                     if (el.id) {
-                        return `#${el.id}`;
+                        const sel = `#${el.id}`;
+                        if (isUnique(sel)) return sel;
                     }
                     
                     // 2. Name attribute (for form elements)
                     if (el.name) {
                         const tag = el.tagName.toLowerCase();
-                        return `${tag}[name="${el.name}"]`;
+                        const sel = `${tag}[name="${el.name}"]`;
+                        if (isUnique(sel)) return sel;
                     }
                     
                     // 3. Unique aria-label
                     const ariaLabel = el.getAttribute('aria-label');
                     if (ariaLabel) {
-                        return `[aria-label="${ariaLabel}"]`;
+                        const sel = `[aria-label="${ariaLabel}"]`;
+                        if (isUnique(sel)) return sel;
                     }
                     
                     // 4. Test ID (common in React/Vue apps)
@@ -662,7 +674,8 @@ class BrowserSnapshotTool(Tool):
                                    el.getAttribute('data-test-id') ||
                                    el.getAttribute('data-cy');
                     if (testId) {
-                        return `[data-testid="${testId}"]`;
+                        const sel = `[data-testid="${testId}"]`;
+                        if (isUnique(sel)) return sel;
                     }
                     
                     // 5. Unique class combinations (fallback)
@@ -670,8 +683,41 @@ class BrowserSnapshotTool(Tool):
                         const classes = el.className.split(' ').filter(c => c && !c.match(/^(ng-|_|is-|has-)/));
                         if (classes.length > 0) {
                             const tag = el.tagName.toLowerCase();
-                            return `${tag}.${classes.slice(0, 2).join('.')}`;
+                            // Try 1, 2, then 3 classes
+                            for (let i = 1; i <= Math.min(3, classes.length); i++) {
+                                const sel = `${tag}.${classes.slice(0, i).join('.')}`;
+                                if (isUnique(sel)) return sel;
+                            }
                         }
+                    }
+                    
+                    // 6. Path-based selector (last resort)
+                    // Construct a path of tag:nth-child up to 3 levels
+                    let path = [];
+                    let current = el;
+                    let valid = true;
+                    
+                    for (let i = 0; i < 3 && current && current.tagName !== 'BODY'; i++) {
+                        const parent = current.parentElement;
+                        if (!parent) break;
+                        
+                        const tag = current.tagName.toLowerCase();
+                        const siblings = Array.from(parent.children).filter(c => c.tagName === current.tagName);
+                        
+                        if (siblings.length === 1) {
+                            path.unshift(tag);
+                        } else {
+                            const index = siblings.indexOf(current);
+                            path.unshift(`${tag}:nth-of-type(${index + 1})`);
+                        }
+                        
+                        current = parent;
+                    }
+                    
+                    if (path.length > 0) {
+                        const sel = path.join(' > ');
+                        // Only use if unique (it might not be if we stopped traversing too early)
+                        if (isUnique(sel)) return sel;
                     }
                     
                     return null;
