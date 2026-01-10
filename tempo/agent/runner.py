@@ -16,6 +16,7 @@ from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.context.store import ContextStore
 from tempo.context.frame import MessageRole, ToolCall
 from tempo.infra.llm import LLMClient, LLMResponse
+from tempo.infra.output_storage import TruncatedOutputStorage
 from tempo.infra.tokenizer import count_tokens
 from tempo.prompts.builder import PromptBuilder
 from tempo.prompts.phases import Phase
@@ -101,7 +102,27 @@ class Agent:
         self.config = config
         self.llm = llm
         self.tools = tools
-        self.context = context or ContextStore()
+
+        # Create output storage if enabled in config
+        output_storage = None
+        if getattr(config, 'save_truncated_outputs', True):
+            session_id = context.session_id if context else None
+            output_storage = TruncatedOutputStorage(
+                output_dir=getattr(config, 'truncated_output_dir', None),
+                session_id=session_id or "",
+                ttl_hours=getattr(config, 'truncated_output_ttl_hours', 24),
+                enabled=True,
+            )
+
+        # Create context store with output storage
+        if context is None:
+            self.context = ContextStore(output_storage=output_storage)
+        else:
+            self.context = context
+            # Set output storage if not already set
+            if not hasattr(self.context, '_output_storage') or self.context._output_storage is None:
+                self.context._output_storage = output_storage
+
         self.prompts = prompts or PromptBuilder()
         
         # Logging callbacks

@@ -16,9 +16,12 @@ from tempo.infra.protocols import (
 
 class SummarizePreviousOutputTool(Tool):
     """Summarize the previous tool output using LLM with conversation context."""
-    
+
     name = "summarize_previous_tool_output"
-    description = "Summarize the previous tool's output to save context. Call this when prompted after a large tool output."
+    description = """Summarize the previous tool's output to save context. Call this when prompted after a large tool output.
+
+IMPORTANT: The summary will REPLACE the original tool output. Make sure to copy any important strings verbatim
+(URLs, API endpoints, tokens, IDs, file paths, configuration values, error messages, etc.) that you may need later."""
     category = ToolCategory.META
     
     def __init__(self, context_store: ContextSummarizer):
@@ -100,11 +103,15 @@ class SummarizePreviousOutputTool(Tool):
 {output_for_summary}{truncation_note}
 
 ## Instructions:
+CRITICAL: This summary will REPLACE the original tool output in the context. You will NOT have access to the original output after summarization.
+
 1. Extract key findings relevant to the conversation context
-2. Note any errors or issues
-3. Identify actionable information
-4. Keep summary under 200 words
-{f"5. Note that only the first {MAX_CHARS_FOR_SUMMARIZER:,} chars were summarized" if output_truncated else ""}
+2. **COPY any important strings verbatim** (URLs, API endpoints, tokens, file paths, IDs, configuration values, error messages, etc.)
+3. Note any errors or issues
+4. Identify actionable information
+5. Include specific data you may need later (e.g., "API key: abc123", "Endpoint: /api/v1/users")
+6. Keep summary under 200 words but prioritize completeness over brevity for critical data
+{f"7. Note that only the first {MAX_CHARS_FOR_SUMMARIZER:,} chars were summarized" if output_truncated else ""}
 
 Provide ONLY the summary, no preamble."""
 

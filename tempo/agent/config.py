@@ -21,6 +21,9 @@ class AgentConfig:
     auto_summarize: bool = True             # Automatically summarize tool outputs
     summarization_model: str | None = None  # Use cheaper model for summaries (None = same model)
     max_output_chars: int = 10000           # Chars to show per tool output (LLM can request more)
+    save_truncated_outputs: bool = True     # Save truncated outputs to files for AI access
+    truncated_output_dir: str = "~/.tempo-sec/truncated_outputs"  # Directory for truncated output files
+    truncated_output_ttl_hours: int = 24    # Hours before truncated output files expire
     
     # Workflow settings
     enforce_phases: bool = True             # Require explicit phase transitions
@@ -150,6 +153,12 @@ class AgentConfig:
                 kwargs["persistence_dir"] = ctx["persistence_dir"]
             if "max_output_chars" in ctx:
                 kwargs["max_output_chars"] = ctx["max_output_chars"]
+            if "save_truncated_outputs" in ctx:
+                kwargs["save_truncated_outputs"] = ctx["save_truncated_outputs"]
+            if "truncated_output_dir" in ctx:
+                kwargs["truncated_output_dir"] = ctx["truncated_output_dir"]
+            if "truncated_output_ttl_hours" in ctx:
+                kwargs["truncated_output_ttl_hours"] = ctx["truncated_output_ttl_hours"]
         
         # [workflow] section
         if "workflow" in data:

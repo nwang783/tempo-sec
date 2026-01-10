@@ -1,345 +1,228 @@
 version: '1.0'
 target: https://classik.ai
-created_at: 2025-12-28 03:56:22.061983
-updated_at: 2026-01-07 02:27:51.225393
+created_at: 2026-01-10 20:28:11.926327
+updated_at: 2026-01-10 20:44:38.633836
 recon_summary:
-  total_endpoints: 5
-  total_forms: 2
-  total_apis: 0
+  total_endpoints: 2
+  total_forms: 0
+  total_apis: 1
   technologies_detected:
-  - Next.js
-  - React
+  - Next.js (App Router)
   - Vercel
   - Tailwind CSS
-  - Firebase (Auth, Firestore, Realtime DB, Storage, Functions)
-  - IndexedDB
-  - Webpack/_next static chunks
+  - Firebase (Auth, Firestore, Storage)
+  - Webpack
+  - JavaScript
   authentication_mechanisms:
-  - Firebase Auth (client SDK)
-  - next-auth (client references)
-  - OAuth / magic-link patterns (client-side)
-  notes: 'Confirmed Next.js site hosted on Vercel. Downloaded key _next JS chunks
-    and confirmed Firebase SDK (v11.10.0). Reachable routes: /login, /signup (forms),
-    /admin, /dashboard (pages returned 200). CORS header allows ''*'', HSTS enabled,
-    apex domain redirects to www. Further work: extract firebaseConfig from JS bundles,
-    enumerate /api/* (serverless/Vercel functions), test Firebase rules, and perform
-    access-control tests on /admin and /dashboard.'
+  - Firebase Authentication (client-side)
+  - Custom AuthProvider logic in JS
+  notes: Discovered main site and exposed Next.js static chunks. Client-side bundles
+    contain full Firebase configuration (apiKey, projectId, etc.). No explicit login/signup
+    HTML forms were found during static crawl, but auth flows are present in JS. Security
+    headers include HSTS; no CSP observed. CORS configured permissively on main page.
 attack_surfaces:
-- id: 47cf3222-80b0-4861-8afc-23c9a0ebb908
-  surface_type: form
-  url: https://www.classik.ai/login
-  description: 'Login page — client-side authentication flow using React/Next.js.
-    Likely accepts credentials or supports magic link/OAuth. Client components observed:
-    RedirectIfSignedIn, HideWhenSignedIn indicating client-side state checks.'
-  parameters:
-  - email
-  - password
-  - remember_me (optional)
-  - csrf_token (maybe)
-  technology_hints:
-  - Next.js
-  - React
-  - Vercel
-  tested: true
-  priority: high
-  discovered_at: 2025-12-28 04:00:17.529982
-  discovered_by: shell (curl)
-- id: 97635c27-a44e-4136-aee0-9c34b6cc8684
-  surface_type: form
-  url: https://www.classik.ai/signup
-  description: Signup page — client-side registration flow built with Next.js/React.
-    Likely accepts user email, password and possibly magic-link or OAuth flows. Useful
-    for testing account creation, input validation, and authorization escalation. Tell the agent to sign up an account. 
-  parameters:
-  - email
-  - password
-  - confirm_password
-  - csrf_token (maybe)
-  - referrer (optional)
-  technology_hints:
-  - Next.js
-  - React
-  - Vercel
-  - Tailwind CSS
-  tested: true
-  priority: high
-  discovered_at: 2025-12-28 04:02:08.676087
-  discovered_by: shell (curl) and homepage HTML analysis
-- id: 56868d43-e377-46b5-abd9-e105700202bf
-  surface_type: endpoint
-  url: https://www.classik.ai/admin
-  description: Admin route returned HTTP 200 and serves a Next.js page. Potential
-    administrative interface or privileged area reachable without obvious protection
-    from initial requests — requires further authorization testing and access control
-    validation.
-  parameters: []
-  technology_hints:
-  - Next.js
-  - React
-  - Vercel
-  tested: true
-  priority: high
-  discovered_at: 2025-12-28 04:02:28.894686
-  discovered_by: shell (curl) and homepage analysis
-- id: d841dcb9-f44e-423f-ac0e-9ce9d1bba6b4
-  surface_type: endpoint
-  url: https://www.classik.ai/dashboard
-  description: Dashboard route returned HTTP 200 and serves a Next.js page. Likely
-    protected behind authentication in-app; useful for access control and authorization
-    testing (IDOR/forceful browsing).
-  parameters: []
-  technology_hints:
-  - Next.js
-  - React
-  - Vercel
-  tested: true
-  priority: high
-  discovered_at: 2025-12-28 04:03:04.143306
-  discovered_by: shell (curl)
-- id: b2d2c43f-5352-4d96-8b94-7eed9ac3f341
-  surface_type: endpoint
-  url: https://www.classik.ai/bot-logo.png
-  description: Static asset (site logo) accessible at /bot-logo.png. Useful for fingerprinting
-    and confirms accessible public assets and potential metadata in image files.
-  parameters: []
-  technology_hints:
-  - Next.js
-  - Vercel
-  tested: true
-  priority: low
-  discovered_at: 2025-12-28 04:04:05.586245
-  discovered_by: shell (curl)
-- id: b6c7633b-2d92-4420-a38d-a73b4151a60b
-  surface_type: endpoint
-  url: https://www.classik.ai/_next/static/*
-  description: Next.js static asset directory pattern serving JavaScript, CSS, fonts
-    and media. Accessible _next assets were enumerated; these files can reveal client-side
-    logic, API endpoints, keys, and other sensitive data when downloaded and analyzed.
-  parameters: []
-  technology_hints:
-  - Next.js
-  - Vercel
-  - React
-  tested: true
-  priority: medium
-  discovered_at: 2025-12-28 04:04:24.852712
-  discovered_by: shell (curl) and JS chunk analysis
-- id: 3328adc4-01c6-4e15-a781-951d84c989d1
+- id: cf6e63e6-cdaf-4333-8537-021241a71558
   surface_type: endpoint
   url: https://www.classik.ai/
-  description: Homepage — public entry point, redirects from apex (classik.ai -> www.classik.ai).
-    Contains navigation to login/signup and client-side JS references. Useful for
-    content discovery, fingerprinting, and initial interaction testing.
+  description: Public web application root. Built with Next.js (App Router) on Vercel.
+    Contains client-side authentication components (AuthProvider, RedirectIfSignedIn/HideWhenSignedIn),
+    navigation, pricing, and CTA sections. Useful starting point for crawling, finding
+    forms, and triggering API calls.
   parameters: []
   technology_hints:
-  - Next.js
-  - React
+  - Next.js (App Router)
   - Vercel
   - Tailwind CSS
+  - HSTS present
+  - No CSP observed initially
   tested: true
   priority: medium
-  discovered_at: 2025-12-28 04:04:42.882274
-  discovered_by: shell (curl)
+  discovered_at: 2026-01-10 20:33:19.371867
+  discovered_by: shell/curl of homepage and static chunk analysis
+- id: 0b4455bc-b7ce-4728-8db4-a6ebfd4b640d
+  surface_type: endpoint
+  url: https://www.classik.ai/_next/static/chunks/
+  description: Exposed Next.js static chunk directory containing application JavaScript
+    bundles. Chunks contain client-side logic, route definitions, and hardcoded configuration
+    (including Firebase config). These files are high-value for static analysis to
+    discover hidden routes, API paths, and leaked configuration.
+  parameters: []
+  technology_hints:
+  - Next.js static chunks
+  - Vercel
+  - JavaScript bundles
+  tested: true
+  priority: medium
+  discovered_at: 2026-01-10 20:33:42.778853
+  discovered_by: shell/curl + chunk download and grep
+- id: c1e863e7-2079-442e-ae20-c62f23c5ec49
+  surface_type: api
+  url: 'Firebase project: classik-ai (projectId: classik-ai)'
+  description: 'Client-side JS exposes Firebase configuration (apiKey: AIzaSyASEDVyFUnHL6iS6rg1ewPDywqvz3bqssE,
+    authDomain: classik-ai.firebaseapp.com, projectId: classik-ai, storageBucket:
+    classik-ai.firebasestorage.app, messagingSenderId: 287081183762, appId: 1:287081183762:web:a6f8f34c5e770c810836cb,
+    measurementId: G-Q36WL9F0JZ). Firebase Auth and Firestore are used. Attack surfaces
+    include Firestore rules, Storage bucket permissions, and Authentication flows.
+    Test for misconfigured rules and public read/write access to collections (e.g.,
+    users).'
+  parameters:
+  - apiKey
+  - authDomain
+  - projectId
+  - storageBucket
+  - messagingSenderId
+  - appId
+  - measurementId
+  technology_hints:
+  - Firebase v11.10.0
+  - Firestore
+  - Firebase Authentication
+  - IndexedDB usage for firebase-heartbeat
+  tested: true
+  priority: high
+  discovered_at: 2026-01-10 20:33:50.149903
+  discovered_by: grep of downloaded Next.js chunks (layout-0ae3a0d47ef68ebe.js)
 findings:
-- id: a974f3e6-1699-4b0c-9466-f9e55315c1bb
-  title: Client-side access control for /admin allows unauthenticated HTML shell (potential
-    auth bypass)
-  severity: high
-  status: suspected
-  attack_surface_id: 56868d43-e377-46b5-abd9-e105700202bf
-  description: The /admin path returns an HTTP 200 and serves a client-side rendered
-    shell (Next.js) rather than performing a server-side authentication check / redirect.
-    This indicates access control is enforced client-side and may allow unauthenticated
-    users to load the administrative UI skeleton. While no sensitive admin data was
-    confirmed accessible in the initial HTML, reliance on client-side checks is a
-    risky pattern and can lead to unauthorized API access if backend endpoints lack
-    proper server-side authorization.
-  evidence: "curl -s -i -L https://www.classik.ai/admin returned HTTP 200 and HTML\
-    \ containing 'Loading...' and client-side scripts. Response headers show Next.js/Vercel\
-    \ and presence of Next.js chunks. The page body includes references to an AuthProvider\
-    \ in the hydration scripts. Example (truncated):\n\nHTTP/2 200\ncontent-type:\
-    \ text/html; charset=utf-8\n...\n<body>\n  <!-- Loading state -->\n  <div>Loading...</div>\n\
-    \  <script src=\"/_next/static/chunks/app/layout-...js\"></script>\n  ...\n</body>\n\
-    \n(Recorded during automated curl session.)"
+- id: 4632a17b-7df0-46fc-a05d-c4d1eb574dba
+  title: Firebase configuration (apiKey, projectId, storageBucket) exposed in client-side
+    Next.js bundles
+  severity: info
+  status: confirmed
+  attack_surface_id: 0b4455bc-b7ce-4728-8db4-a6ebfd4b640d
+  description: The Firebase configuration object for project 'classik-ai' (apiKey,
+    authDomain, projectId, storageBucket, messagingSenderId, appId) is present in
+    publicly served Next.js static chunks. This leaks the project identifiers needed
+    to interact with public Firebase APIs (Auth, Firestore, Storage). While Firebase
+    API keys are not secret in client apps, the presence of these values enables discovery
+    and targeted testing of the backend (e.g., account creation, rule probing).
+  evidence: 'Extracted from /_next/static/chunks/* bundles. Example values found:
+    apiKey=AIzaSyASEDVyFUnHL6iS6rg1ewPDywqvz3bqssE, authDomain=classik-ai.firebaseapp.com,
+    projectId=classik-ai, storageBucket=classik-ai.firebasestorage.app, appId=1:287081183762:web:a6f8f34c5e770c810836cb.
+    The chunks were enumerated and searched with curl/grep as part of the test workflow.'
   reproduction_steps:
-  - 'Run: curl -s -i -L https://www.classik.ai/admin -H "User-Agent: testing-agent/1.0"'
-  - Observe HTTP 200 (no 302/401/403) and HTML body containing a client-side loading
-    state and Next.js chunk references
-  - Inspect served JS chunks for client-side AuthProvider (e.g., app/layout or app/admin
-    chunk) to confirm client-side enforcement
-  remediation: Enforce server-side authentication and authorization for /admin. Return
-    401/403 or redirect to login for unauthenticated requests. Ensure any API endpoints
-    backing admin pages perform server-side authorization checks regardless of client
-    state.
-  discovered_at: 2025-12-28 04:41:52.936902
-  discovered_by: Testing Subagent (shell)
-  validated_by: shell
-- id: e8856dd7-a346-4983-9e94-f5fc25d72e1e
-  title: Unauthenticated dashboard shell served (client-side auth enforcement)
-  severity: high
-  status: suspected
-  attack_surface_id: d841dcb9-f44e-423f-ac0e-9ce9d1bba6b4
-  description: The /dashboard path returns an HTTP 200 and serves a client-side rendered
-    shell (Next.js) that shows a "Checking authentication" loading state. This indicates
-    the application relies on client-side checks for access control instead of enforcing
-    server-side authentication. Serving the dashboard shell to unauthenticated clients
-    is risky because if any API endpoints used by the dashboard lack proper server-side
-    authorization, sensitive data or actions may be accessible via direct API calls.
-  evidence: 'curl -s -i -L https://www.classik.ai/dashboard -H "User-Agent: testing-agent/1.0"
-    returned HTTP/2 200 with HTML body containing ''Checking authentication'' and
-    references to Next.js chunks (e.g., app/dashboard/page-13efdf71ced7d9ea.js). No
-    302/401/403 redirect was observed. (Recorded during automated curl session.)'
+  - 1) curl -sL https://www.classik.ai/ | grep -oE '/_next/static/chunks/[^" ]+\.js'
+    | sort -u
+  - 2) curl -sL https://www.classik.ai/_next/static/chunks/<chunk>.js | grep -nE 'apiKey|projectId|storageBucket|authDomain|appId'
+  remediation: Storing Firebase apiKey in client-side code is expected for a client
+    app; however, avoid embedding any additional secret configuration in public bundles.
+    Ensure sensitive operations require server-side checks and minimize leaked metadata
+    in source maps. Regularly audit public assets for sensitive strings.
+  discovered_at: 2026-01-10 20:42:41.510313
+  discovered_by: Testing Subagent (automated shell inspection of Next.js bundles)
+  validated_by: shell (curl/grep search)
+- id: ea557281-c0dd-4417-b2d7-114763fdb198
+  title: Authenticated users cannot read or create /users documents via REST API (restricted
+    Firestore rules)
+  severity: info
+  status: confirmed
+  attack_surface_id: c1e863e7-2079-442e-ae20-c62f23c5ec49
+  description: Using an authenticated idToken for test users, attempts to read the
+    user's own document (GET /documents/users/<uid>), list the users collection, create
+    a document at users/<uid>, and update isAdmin were rejected with 403 or returned
+    404 (document not present). This indicates Firestore rules restrict client-side
+    reads and writes to the users collection, likely requiring server-side processes
+    to create user profiles.
+  evidence: 'Sign-in succeeded for test users, but:
+
+    - GET https://firestore.googleapis.com/v1/projects/classik-ai/databases/(default)/documents/users/<uid>
+    returned 404 Not Found
+
+    - GET https://firestore.googleapis.com/v1/projects/classik-ai/databases/(default)/documents/users?pageSize=50
+    returned 403 PERMISSION_DENIED
+
+    - POST to create document and PATCH to update isAdmin returned 403 PERMISSION_DENIED
+
+    These were executed using Authorization: Bearer <idToken> obtained from identitytoolkit
+    signInWithPassword.'
   reproduction_steps:
-  - 'Run: curl -s -i -L https://www.classik.ai/dashboard -H "User-Agent: testing-agent/1.0"'
-  - Observe HTTP 200 and HTML body containing 'Checking authentication' and links
-    to _next static chunks
-  - Inspect client-side JS (dashboard app chunks) to determine what API endpoints
-    are called and verify whether those endpoints enforce server-side authorization
-  remediation: 'Enforce server-side authentication/authorization for the dashboard
-    route and any API endpoints it uses. Return 401/403 or redirect to login for unauthenticated
-    requests. Apply the principle of defense-in-depth: do not rely solely on client-side
-    checks.'
-  discovered_at: 2025-12-28 04:43:34.940021
-  discovered_by: Testing Subagent (shell)
-  validated_by: null
-- id: 336251eb-8295-4c18-9a81-228c2d21c5c7
-  title: 'Overly permissive CORS header (Access-Control-Allow-Origin: *) on public
-    pages'
-  severity: medium
-  status: suspected
-  attack_surface_id: 3328adc4-01c6-4e15-a781-951d84c989d1
-  description: 'Multiple responses from the application include the header Access-Control-Allow-Origin:
-    *. While this is common for public static assets, returning a wildcard CORS policy
-    on pages that may expose authentication or user-specific API endpoints increases
-    the risk that a malicious site could perform cross-origin requests and read responses
-    if other misconfigurations (e.g., Access-Control-Allow-Credentials: true) are
-    present or if API endpoints improperly trust the Origin header.'
-  evidence: 'Observed header in responses for /login, /signup, /bot-logo.png and others.
-    Example header excerpt captured during curl sessions:
-
-
-    Access-Control-Allow-Origin: *
-
-
-    Recorded during automated curl sessions to https://www.classik.ai/login, https://www.classik.ai/signup
-    and https://www.classik.ai/bot-logo.png.'
-  reproduction_steps:
-  - 'Run: curl -s -i -L https://www.classik.ai/login -H "User-Agent: testing-agent/1.0"
-    and inspect response headers for Access-Control-Allow-Origin'
-  - 'Run: curl -s -i -L https://www.classik.ai/signup -H "User-Agent: testing-agent/1.0"
-    and inspect response headers'
-  - 'Run: curl -s -I https://www.classik.ai/bot-logo.png and inspect response headers'
-  remediation: 'Restrict CORS to a specific set of trusted origins for any endpoints
-    that return sensitive information or perform authenticated actions. If wildcard
-    CORS is necessary for public static assets, ensure API endpoints that handle credentials
-    or user data do not return Access-Control-Allow-Origin: * and require proper authentication
-    and CSRF protections.'
-  discovered_at: 2025-12-28 04:44:17.328609
-  discovered_by: Testing Subagent (shell)
-  validated_by: shell
-- id: c1f35cd5-6011-4f8e-89e0-6d079c617b2e
-  title: Missing security headers (CSP, X-Frame-Options, X-Content-Type-Options) on
-    root and pages
+  - 1) Create user via POST to identitytoolkit accounts:signUp (returns idToken and
+    localId)
+  - 2) Sign in via signInWithPassword to get idToken
+  - '3) Attempt GET/POST/PATCH to Firestore endpoints as described using Authorization:
+    Bearer <idToken>'
+  remediation: If the application requires client-side user profile creation, ensure
+    rules only permit creation of documents for the authenticated user's own UID and
+    validate fields server-side. Otherwise, maintain server-side creation with secure
+    checks.
+  discovered_at: 2026-01-10 20:42:56.593364
+  discovered_by: Testing Subagent (curl authenticated REST calls)
+  validated_by: shell (curl with Authorization header)
+- id: c693b6f2-b958-4099-a634-09862dee4d7c
+  title: Client-side role checks (isAdmin/role) present in public Next.js bundles
   severity: low
-  status: suspected
-  attack_surface_id: 3328adc4-01c6-4e15-a781-951d84c989d1
-  description: 'Responses from the root and multiple application pages are missing
-    several recommended security headers: Content-Security-Policy, X-Frame-Options
-    (or frame-ancestors via CSP), and X-Content-Type-Options. The absence of these
-    headers increases the risk of clickjacking, MIME-sniffing attacks, and makes XSS
-    exploitation easier or more impactful.'
-  evidence: 'curl -s -I https://www.classik.ai returned headers including Strict-Transport-Security
-    and Access-Control-Allow-Origin: *, but did not include Content-Security-Policy,
-    X-Frame-Options, or X-Content-Type-Options. Example header excerpt:
-
-
-    HTTP/2 200
-
-    server: Vercel
-
-    strict-transport-security: max-age=63072000; includeSubDomains; preload
-
-    access-control-allow-origin: *
-
-
-    (Missing: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options)'
+  status: confirmed
+  attack_surface_id: 0b4455bc-b7ce-4728-8db4-a6ebfd4b640d
+  description: The application's client-side JavaScript contains logic that checks
+    a boolean `isAdmin` flag and a `role` field (defaulting to "student") on user
+    objects. This reveals the application's authorization model and provides an attacker
+    with clear targets to attempt privilege escalation or social engineering. Client-side
+    checks are not authoritative and must be enforced server-side; exposing role semantics
+    increases the attack surface.
+  evidence: Discovered in /_next/static/chunks/* bundles when searching for 'isAdmin'
+    and 'role' strings. The bundles also contained references to the 'users' collection
+    and logic that conditionally shows admin UI if isAdmin is true.
   reproduction_steps:
-  - 'Run: curl -s -I https://www.classik.ai -H "User-Agent: testing-agent/1.0"'
-  - Inspect response headers for the presence/absence of CSP, X-Frame-Options, and
-    X-Content-Type-Options
-  remediation: 'Add a restrictive Content-Security-Policy appropriate to the application
-    (disallow inline scripts/styles unless necessary, set frame-ancestors to prevent
-    clickjacking). Add X-Frame-Options: DENY (or use CSP frame-ancestors). Add X-Content-Type-Options:
-    nosniff. Ensure these headers are applied to all responses, especially authentication
-    and API endpoints.'
-  discovered_at: 2025-12-28 04:46:12.646222
-  discovered_by: Testing Subagent (shell)
-  validated_by: shell
-- id: 542391c4-2208-45dc-ada6-9e6d2ff1838e
-  title: Missing CSP and clickjacking protections across Classik.ai key pages
+  - 1) curl -sL https://www.classik.ai/ | grep -oE '/_next/static/chunks/[^" ]+\.js'
+    | sort -u
+  - 2) curl -sL https://www.classik.ai/_next/static/chunks/<chunk>.js | grep -nE 'isAdmin|role|users'
+  remediation: Do not rely on client-side checks for authorization. Enforce role/privileges
+    server-side (e.g., via Firebase custom claims, Cloud Functions, or secure Firestore
+    rules). Avoid exposing internal role logic in public bundles where possible.
+  discovered_at: 2026-01-10 20:43:18.249831
+  discovered_by: Testing Subagent (curl + grep on Next.js chunks)
+  validated_by: shell (curl/grep search)
+- id: d2adf43c-e0d7-42d8-8740-fa0978b2029a
+  title: Public user registration enabled via Identity Toolkit (accounts:signUp)
   severity: medium
   status: confirmed
-  attack_surface_id: null
-  description: Multiple key endpoints on https://www.classik.ai/ are served without
-    modern security headers that protect against cross-site scripting (XSS), clickjacking,
-    and MIME-sniffing. In particular, the site-wide responses lack a Content-Security-Policy
-    (CSP), X-Frame-Options (or CSP frame-ancestors), and X-Content-Type-Options. This
-    affects the main landing page and an apparent authentication-related path, meaning
-    that both marketing and potentially sensitive flows can be framed by attackers
-    and do not benefit from CSP-based XSS mitigation. While no active XSS payload
-    was confirmed in this task, the absence of these headers significantly reduces
-    the overall hardening posture and leaves the application more susceptible to successful
-    exploitation of any XSS or UI-redressing bugs that exist at the application layer.
-  evidence: "Using curl -I against several endpoints on the site shows consistent\
-    \ absence of hardening headers:\n\n1) Main page\n\n  curl -k -I https://www.classik.ai/\n\
-    \  - No Content-Security-Policy header present\n  - No X-Frame-Options header\
-    \ present\n  - No X-Content-Type-Options header present\n  - Strict-Transport-Security:\
-    \ max-age=63072000 present\n  - Access-Control-Allow-Origin: * present\n\n2) Login-like\
-    \ page\n\n  curl -k -I https://www.classik.ai/login\n  - No Content-Security-Policy\
-    \ header present\n  - No X-Frame-Options header present\n  - No X-Content-Type-Options\
-    \ header present\n  - Strict-Transport-Security present\n  - Access-Control-Allow-Origin:\
-    \ * present\n\n3) Other routes (/pricing, /app) including 404 responses also lack\
-    \ CSP, X-Frame-Options, X-Content-Type-Options and Referrer-Policy, while still\
-    \ sending HSTS and Access-Control-Allow-Origin: *.\n\nThis indicates that the\
-    \ missing headers are a global configuration issue rather than an isolated route\
-    \ misconfiguration."
+  attack_surface_id: c1e863e7-2079-442e-ae20-c62f23c5ec49
+  description: The Firebase Identity Toolkit API for project 'classik-ai' allows unauthenticated
+    creation of new user accounts via the public Web API key (accounts:signUp). This
+    permits anyone to register an account and obtain idTokens and refreshTokens, which
+    may be abused for account creation, automation, or to probe backend authorization
+    rules.
+  evidence: 'Multiple signUp requests executed successfully using the project API
+    key (example): POST https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyASEDVyFUnHL6iS6rg1ewPDywqvz3bqssE
+    with body {"email":"pentest+firestoretest@example.com","password":"P@ssw0rd1234","returnSecureToken":true}
+    returned localId: Nm7h2PiXysWrlWQxtdEdl543dyl2 and an idToken. Additional test
+    accounts created: RpKfEWLQJdU9mER0Q3gTL4lSapi2, jhLao5twBmVimrxaVZbvrDEN3Qf2.
+    The idToken can be used to make authenticated requests to Firestore/Storage (subject
+    to rules).'
   reproduction_steps:
-  - 'Run: curl -k -I https://www.classik.ai/ and observe that there is no Content-Security-Policy,
-    X-Frame-Options, or X-Content-Type-Options header in the response.'
-  - 'Run: curl -k -I https://www.classik.ai/login and confirm that the same headers
-    (CSP, X-Frame-Options, X-Content-Type-Options) are also absent on this path.'
-  - Optionally, repeat with other routes such as /pricing or /app to confirm that
-    even error responses lack these headers, suggesting a site-wide configuration
-    gap.
-  remediation: 'At the platform (Vercel/Next.js) configuration or edge middleware
-    layer, implement a set of security headers applied consistently to all HTML responses:
+  - 1) Extract apiKey from client bundles (e.g. Ai...bqssE).
+  - 2) POST to https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=<API_KEY>
+    with JSON body {"email":"attacker@example.com","password":"P@ssw0rd1234","returnSecureToken":true}.
+  - 3) Observe successful response with localId, idToken, and refreshToken.
+  remediation: If public sign-up is undesired, disable free registration or require
+    additional verification (email verification, CAPTCHA, invitation flow). Implement
+    server-side checks (Cloud Functions or callable endpoints) for high-privilege
+    operations and monitor for automated account creation.
+  discovered_at: 2026-01-10 20:43:36.689940
+  discovered_by: Testing Subagent (curl to Identity Toolkit)
+  validated_by: shell (curl signUp responses)
+- id: 644ba09a-4556-432f-8de7-02ee9c009617
+  title: Unauthenticated Firestore and Storage access blocked (permissions enforced)
+  severity: info
+  status: confirmed
+  attack_surface_id: c1e863e7-2079-442e-ae20-c62f23c5ec49
+  description: Attempts to access Firestore documents and list Firebase Storage objects
+    without authentication were rejected with PERMISSION_DENIED / Permission denied
+    responses. This indicates that unauthenticated (public) reads and storage listings
+    are blocked by backend security rules.
+  evidence: '1) GET https://firestore.googleapis.com/v1/projects/classik-ai/databases/(default)/documents/users?pageSize=20&key=AIzaSyASEDVyFUnHL6iS6rg1ewPDywqvz3bqssE
+    returned {"error":{"code":403,"message":"Missing or insufficient permissions.","status":"PERMISSION_DENIED"}}
 
-
-    - Define a strict-but-workable Content-Security-Policy, for example restricting
-    script sources to self and known CDNs, disallowing inline scripts unless properly
-    nonce- or hash-based, and setting an explicit frame-ancestors directive to control
-    who can frame the site.
-
-    - Add X-Frame-Options: DENY or SAMEORIGIN (or rely on CSP frame-ancestors) to
-    mitigate clickjacking, especially on any authenticated or sensitive pages.
-
-    - Add X-Content-Type-Options: nosniff to prevent MIME-sniffing.
-
-    - Add a Referrer-Policy header such as strict-origin-when-cross-origin to reduce
-    information leakage via Referer headers.
-
-    - Review the necessity of Access-Control-Allow-Origin: *; for non-API HTML responses,
-    this header is typically unnecessary. For APIs, restrict allowed origins to those
-    that genuinely require cross-origin access.
-
-
-    In Next.js on Vercel, these headers can typically be configured via next.config.js
-    headers() configuration or via Vercel project settings or middleware so they apply
-    uniformly across all routes, including 404/500 pages.'
-  discovered_at: 2026-01-06 20:42:36.478127
-  discovered_by: Testing Subagent
-  validated_by: Testing Subagent
+    2) GET https://firebasestorage.googleapis.com/v0/b/classik-ai.firebasestorage.app/o?key=AIzaSyASEDVyFUnHL6iS6rg1ewPDywqvz3bqssE
+    returned {"error":{"code":403,"message":"Permission denied."}}'
+  reproduction_steps:
+  - 1) Extract apiKey from client bundles.
+  - 2) curl -sS "https://firestore.googleapis.com/v1/projects/classik-ai/databases/(default)/documents/users?pageSize=20&key=<API_KEY>"
+  - 3) curl -sS "https://firebasestorage.googleapis.com/v0/b/classik-ai.firebasestorage.app/o?key=<API_KEY>"
+  remediation: No remediation required — this is the correct secure behavior. Continue
+    to ensure rules remain restrictive and monitor for unintended changes.
+  discovered_at: 2026-01-10 20:44:15.630663
+  discovered_by: Testing Subagent (curl unauthenticated requests)
+  validated_by: shell (curl responses)
 agents_invoked:
 - recon_subagent
-- test_subagent
-total_steps_taken: 98
+total_steps_taken: 29

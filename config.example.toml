@@ -10,6 +10,14 @@ max_tokens = 100000
 auto_summarize = true
 # Directory for saving context files
 persistence_dir = "./contexts"
+# Maximum characters to show per tool output
+max_output_chars = 10000
+# Save truncated outputs to files for AI access via file_read
+save_truncated_outputs = true
+# Directory for truncated output files
+truncated_output_dir = "~/.tempo-sec/truncated_outputs"
+# Hours before truncated output files expire
+truncated_output_ttl_hours = 24
 
 [workflow]
 # Require explicit phase transitions via tool calls

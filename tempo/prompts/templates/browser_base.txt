@@ -21,7 +21,7 @@ You are a **Visual Browser Agent** - you interact with web pages by looking at s
 ## Available Tools
 
 {tools}
-{scope_section}
+{scope_section}{findings_section}
 ## State Management
 
 For authenticated sessions:

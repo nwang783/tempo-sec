@@ -8,8 +8,11 @@ including messages, tool calls, agent state, and frames.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, TYPE_CHECKING
 import uuid
+
+if TYPE_CHECKING:
+    from tempo.infra.protocols import OutputStorage
 
 
 class MessageRole(str, Enum):
@@ -75,47 +78,84 @@ class ToolCall:
         # Rough estimate: 4 chars per token
         return (len(self.raw_output) - len(self.summary)) // 4
     
-    def get_truncated_output(self, max_chars: int = 10000) -> str:
+    def get_truncated_output(
+        self,
+        max_chars: int = 10000,
+        output_storage: "OutputStorage | None" = None,
+    ) -> str:
         """
         Get output for context, truncated to max_chars if necessary.
-        
+
         Shows first (max_chars - instruction_size) chars with range info,
         instructions for viewing more, and a reminder to summarize.
         The instruction is included WITHIN the limit so the AI sees it.
-        
+
+        If output_storage is provided and truncation occurs, saves full
+        output to a file and includes the file path in the truncation message.
+
         Args:
             max_chars: Maximum characters to include
-            
+            output_storage: Optional storage for saving full output
+
         Returns:
             Truncated output with range indicator, or full output if short enough
         """
         output = self.summary if self.summary is not None else self.raw_output
         total = len(output)
-        
+
         if total <= max_chars:
             return output
-        
-        # Build instruction message first to know its length
-        instruction = (
-            f"\n\n[OUTPUT TRUNCATED - Showing {{content_chars:,}} of {total:,} chars]\n"
-            f"Tool call ID: {self.id}\n"
-            f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
-            f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
-        )
-        
+
+        # Save full output to file if storage is available
+        saved_path: str | None = None
+        if output_storage is not None:
+            saved_path = output_storage.save_output(
+                tool_call_id=self.id,
+                content=output,
+                tool_name=self.tool_name,
+            )
+
+        # Build instruction message based on whether we saved to file
+        if saved_path:
+            instruction = (
+                f"\n\n[OUTPUT TRUNCATED - Showing {{content_chars:,}} of {total:,} chars]\n"
+                f"Tool call ID: {self.id}\n"
+                f"FULL OUTPUT SAVED TO: {saved_path}\n"
+                f"To view full output: Use file_read(path=\"{saved_path}\") to read the complete output.\n"
+                f"For incremental viewing: Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M).\n"
+                f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
+            )
+        else:
+            instruction = (
+                f"\n\n[OUTPUT TRUNCATED - Showing {{content_chars:,}} of {total:,} chars]\n"
+                f"Tool call ID: {self.id}\n"
+                f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
+                f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
+            )
+
         # Calculate how much space we have for content
         # Use a placeholder length estimate, then recalculate
         estimated_instruction_len = len(instruction.format(content_chars=max_chars))
         content_chars = max_chars - estimated_instruction_len
-        
+
         # Format with actual content_chars value
-        final_instruction = (
-            f"\n\n[OUTPUT TRUNCATED - Showing {content_chars:,} of {total:,} chars]\n"
-            f"Tool call ID: {self.id}\n"
-            f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
-            f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
-        )
-        
+        if saved_path:
+            final_instruction = (
+                f"\n\n[OUTPUT TRUNCATED - Showing {content_chars:,} of {total:,} chars]\n"
+                f"Tool call ID: {self.id}\n"
+                f"FULL OUTPUT SAVED TO: {saved_path}\n"
+                f"To view full output: Use file_read(path=\"{saved_path}\") to read the complete output.\n"
+                f"For incremental viewing: Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M).\n"
+                f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
+            )
+        else:
+            final_instruction = (
+                f"\n\n[OUTPUT TRUNCATED - Showing {content_chars:,} of {total:,} chars]\n"
+                f"Tool call ID: {self.id}\n"
+                f"Use view_tool_output(tool_call_id='{self.id}', start_char=N, end_char=M) to see more.\n"
+                f"IMPORTANT: You MUST call summarize_previous_tool_output for this tool call."
+            )
+
         return f"{output[:content_chars]}{final_instruction}"
     
     def to_dict(self) -> dict:

@@ -215,39 +215,46 @@ class PromptBuilder:
         self,
         tool_schemas: list[dict],
         scope_content: str | None = None,
+        findings_context: str | None = None,
         state_name: str | None = None,
         save_state_as: str | None = None,
         ttl_days: int = 7,
     ) -> str:
         """
         Build the system prompt for browser agent.
-        
+
         This is a focused prompt for browser automation tasks,
         without phase transitions or security testing context.
-        
+
         Args:
             tool_schemas: List of tool schemas
             scope_content: Optional scope constraints for the browser agent
+            findings_context: Optional prior findings to avoid duplicate work
             state_name: Optional name of saved state to load at start
             save_state_as: Optional name to save state as after completion
             ttl_days: Default TTL for saved states in days
-            
+
         Returns:
             Formatted browser agent system prompt
         """
         tool_descriptions = self.format_tool_descriptions(tool_schemas)
         template = self._load_template("browser_base")
-        
+
         # Build scope section
         scope_section = self._build_scope_section(scope_content)
-        
+
         # Inject permission statement
         if self.PERMISSION_STATEMENT not in scope_section:
             if scope_section:
                 scope_section += f"\n{self.PERMISSION_STATEMENT}\n"
             else:
                 scope_section = f"\n## Permissions\n\n{self.PERMISSION_STATEMENT}\n"
-        
+
+        # Build findings section
+        findings_section = ""
+        if findings_context and findings_context != "No prior findings available.":
+            findings_section = f"\n## Prior Work\n\n{findings_context}\n\nAvoid duplicating this prior work.\n"
+
         # Build state instructions
         state_instructions = ""
         if state_name:
@@ -263,10 +270,11 @@ class PromptBuilder:
             state_instructions = (
                 "\nNo specific state loading or saving required for this task.\n"
             )
-        
+
         return template.format(
             tools=tool_descriptions,
             scope_section=scope_section,
+            findings_section=findings_section,
             state_instructions=state_instructions,
             ttl_days=ttl_days,
         )

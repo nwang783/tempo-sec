@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
+    from tempo.infra.protocols import FindingsUpdater
 
 
 @register_agent
@@ -52,11 +53,12 @@ class BrowserAgent(BaseAgentDefinition):
         scope: str | None = None,
         headless: bool = True,
         state_ttl_days: int = 7,
+        findings: "FindingsUpdater | None" = None,
         **kwargs: Any,
     ):
         """
         Initialize the browser agent.
-        
+
         Args:
             task: Description of the browser task to accomplish
             url: Optional starting URL to navigate to
@@ -65,6 +67,7 @@ class BrowserAgent(BaseAgentDefinition):
             scope: Optional scope constraints for the browser agent
             headless: Whether to run browser in headless mode
             state_ttl_days: Default TTL for saved states in days
+            findings: Optional FindingsDocument for accessing prior work
             **kwargs: Ignored additional args
         """
         self.task = task
@@ -74,6 +77,7 @@ class BrowserAgent(BaseAgentDefinition):
         self.scope = scope
         self.headless = headless
         self.state_ttl_days = state_ttl_days
+        self.findings = findings
     
     @property
     def name(self) -> str:
@@ -165,22 +169,26 @@ class BrowserAgent(BaseAgentDefinition):
     ) -> str:
         """
         Build browser-specific system prompt.
-        
+
         Uses a focused prompt without phase transitions or security testing context.
-        Includes scope constraints if provided.
+        Includes scope constraints and findings context if provided.
         """
+        # Get findings context
+        findings_context = self._get_findings_context()
+
         # Pass scope if it's not a placeholder value
         scope_content = None
         if scope_description and scope_description not in DEFAULT_SCOPE_PLACEHOLDERS:
             scope_content = scope_description
-        
+
         # Also check self.scope which may be passed directly
         if self.scope and not scope_content:
             scope_content = self.scope
-        
+
         return prompts.build_browser_prompt(
             tool_schemas=tool_schemas,
             scope_content=scope_content,
+            findings_context=findings_context,
             state_name=self.state_name,
             save_state_as=self.save_state_as,
             ttl_days=self.state_ttl_days,
@@ -219,5 +227,51 @@ class BrowserAgent(BaseAgentDefinition):
             )
         
         objective_parts.append("\nComplete the task and call `complete_browser_task` with your findings.")
-        
+
         return "\n".join(objective_parts)
+
+    def _get_findings_context(self) -> str:
+        """Get findings context to avoid duplicating prior work."""
+        if not self.findings:
+            return "No prior findings available."
+
+        try:
+            summary = self.findings.get_summary()
+            lines = [
+                f"Target: {summary.get('target', 'Unknown')}",
+                f"Attack Surfaces: {summary.get('total_surfaces', 0)} discovered, "
+                f"{summary.get('tested_surfaces', 0)} tested",
+                f"Findings: {summary.get('total_findings', 0)} total",
+            ]
+
+            # Include all attack surfaces
+            all_surfaces = self.findings.get_all_surfaces()
+            if all_surfaces:
+                lines.append("\n### Attack Surfaces Discovered ###")
+                for s in all_surfaces[:15]:  # Limit to first 15 for browser context
+                    sid = getattr(s, 'id', 'unknown')
+                    stype = getattr(s, 'surface_type', 'unknown')
+                    url = getattr(s, 'url', 'unknown')
+                    tested = getattr(s, 'tested', False)
+                    status_str = "TESTED" if tested else "UNTESTED"
+                    lines.append(f"- [{status_str}] {stype}: {url}")
+
+                if len(all_surfaces) > 15:
+                    lines.append(f"... and {len(all_surfaces) - 15} more")
+
+            # Include findings summaries
+            all_findings = self.findings.get_all_findings()
+            if all_findings:
+                lines.append("\n### Security Findings ###")
+                for f in all_findings[:10]:  # Limit to first 10
+                    title = getattr(f, 'title', 'No Title')
+                    severity = getattr(f, 'severity', 'unknown')
+                    status = getattr(f, 'status', 'unknown')
+                    lines.append(f"- [{severity.upper()}] {title} ({status})")
+
+                if len(all_findings) > 10:
+                    lines.append(f"... and {len(all_findings) - 10} more")
+
+            return "\n".join(lines)
+        except Exception:
+            return "No prior findings available."

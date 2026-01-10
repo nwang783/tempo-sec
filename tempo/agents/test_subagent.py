@@ -118,6 +118,7 @@ class TestSubagent(BaseAgentDefinition):
         tools.register(BrowserTaskTool(
             container_manager=container,
             visualization_collector=visualization,
+            findings_updater=self.findings,
             headless=headless,
         ))
 
@@ -183,34 +184,60 @@ class TestSubagent(BaseAgentDefinition):
     def _get_attack_surfaces_context(self) -> str:
         """Get detailed context including surfaces and prior findings."""
         try:
-            lines = []
+            summary = self.findings.get_summary()
+            lines = [
+                f"Target: {summary.get('target', 'Unknown')}",
+                f"Attack Surfaces: {summary.get('total_surfaces', 0)} discovered, "
+                f"{summary.get('tested_surfaces', 0)} tested",
+                f"Findings: {summary.get('total_findings', 0)} total",
+            ]
 
             # Include untested surfaces (primary focus for test agent)
             untested = self.findings.get_untested_surfaces()
             if untested:
-                lines.append(f"**{len(untested)} untested attack surfaces:**")
-                for surface in untested[:10]:  # Limit to first 10
+                lines.append(f"\n### Untested Attack Surfaces ({len(untested)}) ###")
+                for surface in untested[:15]:  # Limit to first 15
                     surface_id = getattr(surface, 'id', 'unknown')
                     surface_type = getattr(surface, 'surface_type', 'unknown')
                     url = getattr(surface, 'url', 'unknown')
                     priority = getattr(surface, 'priority', 'medium')
                     lines.append(f"- [{priority.upper()}] {surface_type}: {url} (ID: {surface_id})")
 
-                if len(untested) > 10:
-                    lines.append(f"... and {len(untested) - 10} more")
+                if len(untested) > 15:
+                    lines.append(f"... and {len(untested) - 15} more")
             else:
+                lines.append("\n### Untested Attack Surfaces ###")
                 lines.append("No untested attack surfaces available.")
 
-            # Include existing findings for awareness
+            # Include all attack surfaces for full awareness
+            all_surfaces = self.findings.get_all_surfaces()
+            tested_surfaces = [s for s in all_surfaces if getattr(s, 'tested', False)]
+            if tested_surfaces:
+                lines.append(f"\n### Already Tested Surfaces ({len(tested_surfaces)}) ###")
+                for surface in tested_surfaces[:10]:  # Limit to first 10
+                    surface_id = getattr(surface, 'id', 'unknown')
+                    surface_type = getattr(surface, 'surface_type', 'unknown')
+                    url = getattr(surface, 'url', 'unknown')
+                    lines.append(f"- [TESTED] {surface_type}: {url} (ID: {surface_id})")
+
+                if len(tested_surfaces) > 10:
+                    lines.append(f"... and {len(tested_surfaces) - 10} more")
+
+            # Include existing findings with more detail
             all_findings = self.findings.get_all_findings()
             if all_findings:
-                lines.append("\n### Prior Findings (for reference) ###")
-                for f in all_findings:
+                lines.append(f"\n### Security Findings ({len(all_findings)}) ###")
+                for f in all_findings[:15]:  # Show more findings
                     fid = getattr(f, 'id', 'unknown')
                     title = getattr(f, 'title', 'No Title')
                     severity = getattr(f, 'severity', 'unknown')
                     status = getattr(f, 'status', 'unknown')
-                    lines.append(f"- [{severity.upper()}] {title} ({status}) | ID: {fid}")
+                    surface_id = getattr(f, 'surface_id', '')
+                    location = f" (Surface: {surface_id})" if surface_id else ""
+                    lines.append(f"- [{severity.upper()}] {title} ({status}){location}")
+
+                if len(all_findings) > 15:
+                    lines.append(f"... and {len(all_findings) - 15} more")
 
             return "\n".join(lines)
         except Exception:

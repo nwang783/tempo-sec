@@ -161,11 +161,90 @@ class TestToolCall:
         """Test that short outputs are not modified."""
         short_output = "Short output"
         tc = ToolCall(tool_name="test", raw_output=short_output)
-        
+
         result = tc.get_truncated_output(max_chars=10000)
-        
+
         assert result == short_output
         assert "TRUNCATED" not in result
+
+    def test_truncated_output_includes_file_path(self):
+        """Test that truncated output includes file path when storage provided."""
+        from unittest.mock import Mock
+
+        long_output = "A" * 20000
+        tc = ToolCall(tool_name="test", raw_output=long_output)
+
+        mock_storage = Mock()
+        mock_storage.save_output.return_value = "/tmp/test-output.txt"
+
+        result = tc.get_truncated_output(max_chars=10000, output_storage=mock_storage)
+
+        # Verify file was saved
+        mock_storage.save_output.assert_called_once_with(
+            tool_call_id=tc.id,
+            content=long_output,
+            tool_name="test",
+        )
+
+        # Verify message includes file path
+        assert "FULL OUTPUT SAVED TO: /tmp/test-output.txt" in result
+        assert "file_read(path=\"/tmp/test-output.txt\")" in result
+        assert "OUTPUT TRUNCATED" in result
+
+    def test_truncated_output_no_storage(self):
+        """Test truncated output works without storage."""
+        long_output = "A" * 20000
+        tc = ToolCall(tool_name="test", raw_output=long_output)
+
+        result = tc.get_truncated_output(max_chars=10000, output_storage=None)
+
+        # Should not include file path information
+        assert "FULL OUTPUT SAVED TO" not in result
+        assert "file_read" not in result
+        # Should still have view_tool_output instruction
+        assert "view_tool_output" in result
+        assert "OUTPUT TRUNCATED" in result
+
+    def test_truncated_output_storage_save_fails(self):
+        """Test truncated output when storage save fails."""
+        from unittest.mock import Mock
+
+        long_output = "A" * 20000
+        tc = ToolCall(tool_name="test", raw_output=long_output)
+
+        mock_storage = Mock()
+        mock_storage.save_output.return_value = None  # Save failed
+
+        result = tc.get_truncated_output(max_chars=10000, output_storage=mock_storage)
+
+        # Should fall back to regular truncation message
+        assert "FULL OUTPUT SAVED TO" not in result
+        assert "view_tool_output" in result
+        assert "OUTPUT TRUNCATED" in result
+
+    def test_truncated_output_uses_summary_if_available(self):
+        """Test that truncation uses summary instead of raw output when available."""
+        from unittest.mock import Mock
+
+        long_raw = "A" * 20000
+        short_summary = "B" * 15000  # Still long enough to trigger truncation
+        tc = ToolCall(tool_name="test", raw_output=long_raw, summary=short_summary)
+
+        mock_storage = Mock()
+        mock_storage.save_output.return_value = "/tmp/test-output.txt"
+
+        result = tc.get_truncated_output(max_chars=10000, output_storage=mock_storage)
+
+        # Should save the summary, not the raw output
+        mock_storage.save_output.assert_called_once_with(
+            tool_call_id=tc.id,
+            content=short_summary,  # Should use summary
+            tool_name="test",
+        )
+
+        # Result should contain 'B's from summary, not 'A's from raw
+        assert "BBB" in result
+        assert "AAA" not in result
 
 
 class TestAgentState:
