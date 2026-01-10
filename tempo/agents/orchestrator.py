@@ -11,12 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
-from tempo.prompts.phases import Phase
 
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
-    from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
     from tempo.findings.document import FindingsDocument
@@ -47,7 +45,6 @@ class OrchestratorAgent(BaseAgentDefinition):
 
     _name = "orchestrator"
     _model = "openai/gpt-5.1"  # Smartest model for strategic planning
-    _initial_phase = Phase.RECON
 
     def __init__(
         self,
@@ -158,7 +155,6 @@ class OrchestratorAgent(BaseAgentDefinition):
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        workflow: "WorkflowManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
         """

@@ -9,14 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
-from tempo.prompts.phases import Phase
 from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
 
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
     from tempo.infra.browser_state import BrowserStateManager
-    from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
 
@@ -35,13 +33,12 @@ class BrowserAgent(BaseAgentDefinition):
     - Visual tools (screenshot, coordinate click, scroll, wait)
     - Task completion tool to signal done and return findings
     - Scope support for constrained browsing
-    - Focused, single-purpose prompt (no phase transitions)
+    - Focused, single-purpose prompt
     - Fast model for quick browser tasks
     """
     
     _name = "browser"
     _model = "openai/gpt-5.1"  # Vision-capable model for visual browsing
-    _initial_phase = Phase.RECON  # Single phase, no transitions
     
     def __init__(
         self,
@@ -87,7 +84,6 @@ class BrowserAgent(BaseAgentDefinition):
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        workflow: "WorkflowManager | None" = None,
         state_manager: "BrowserStateManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
@@ -166,7 +162,7 @@ class BrowserAgent(BaseAgentDefinition):
         """
         Build browser-specific system prompt.
         
-        Uses a focused prompt without phase transitions or security testing context.
+        Uses a focused prompt without security testing context.
         Includes scope constraints if provided.
         """
         # Pass scope if it's not a placeholder value

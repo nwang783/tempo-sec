@@ -175,7 +175,6 @@ class TestAgentState:
         """Test default agent state."""
         state = AgentState()
         
-        assert state.current_phase == "recon"
         assert state.hypotheses == []
         assert state.findings == []
         assert state.notes == []
@@ -184,7 +183,6 @@ class TestAgentState:
     def test_state_roundtrip(self):
         """Test serialization/deserialization roundtrip."""
         original = AgentState(
-            current_phase="test",
             hypotheses=[{"id": 1, "desc": "SQL injection on login"}],
             findings=[{"vuln": "XSS", "severity": "high"}],
             notes=["Check auth endpoints"],
@@ -193,7 +191,6 @@ class TestAgentState:
         
         restored = AgentState.from_dict(original.to_dict())
         
-        assert restored.current_phase == original.current_phase
         assert restored.hypotheses == original.hypotheses
         assert restored.findings == original.findings
         assert restored.notes == original.notes
@@ -241,7 +238,7 @@ class TestContextFrame:
             tool_calls=[
                 ToolCall(tool_name="file_read", input={"path": "/etc/passwd"}),
             ],
-            state=AgentState(current_phase="hypothesize"),
+            state=AgentState(),
             label="After recon",
             is_branch_point=True,
             branch_objective="Test SQL injection",
@@ -253,7 +250,6 @@ class TestContextFrame:
         assert restored.parent_id == original.parent_id
         assert len(restored.messages) == 1
         assert len(restored.tool_calls) == 1
-        assert restored.state.current_phase == "hypothesize"
         assert restored.label == original.label
         assert restored.is_branch_point is True
         assert restored.branch_objective == "Test SQL injection"

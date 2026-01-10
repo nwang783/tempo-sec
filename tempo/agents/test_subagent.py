@@ -9,14 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
-from tempo.prompts.phases import Phase
 
 from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
 
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
-    from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
     from tempo.infra.protocols import FindingsUpdater
@@ -40,7 +38,6 @@ class TestSubagent(BaseAgentDefinition):
 
     _name = "test_subagent"
     _model = "openai/gpt-5-mini"  # Fast model for subagent tasks
-    _initial_phase = Phase.TEST
 
     def __init__(
         self,
@@ -74,7 +71,6 @@ class TestSubagent(BaseAgentDefinition):
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        workflow: "WorkflowManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
         """
@@ -140,7 +136,7 @@ class TestSubagent(BaseAgentDefinition):
         """
         Build the test subagent system prompt.
 
-        Uses a focused prompt for testing without phase transitions.
+        Uses a focused prompt for testing.
         """
         # Get attack surfaces context
         attack_surfaces_context = self._get_attack_surfaces_context()

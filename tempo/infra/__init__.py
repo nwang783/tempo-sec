@@ -7,14 +7,11 @@ Exports:
     - LLMResponse: LLM response model
     - ContainerManager: Docker container management
     - Protocols: Type interfaces for cross-component type hints
-    - Phase: Workflow phase enum
 """
 
 from tempo.infra.llm import LLMClient, LiteLLMClient, LLMResponse
 from tempo.infra.container import ContainerManager
-from tempo.infra.phases import Phase
 from tempo.infra.protocols import (
-    PhaseTransitioner,
     ContextSummarizer,
     BranchSpawner,
     ToolOutputViewer,
@@ -26,9 +23,7 @@ __all__ = [
     "LiteLLMClient",
     "LLMResponse",
     "ContainerManager",
-    "Phase",
     # Protocols
-    "PhaseTransitioner",
     "ContextSummarizer",
     "BranchSpawner",
     "ToolOutputViewer",

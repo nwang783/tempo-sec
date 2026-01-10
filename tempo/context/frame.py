@@ -153,7 +153,6 @@ class ToolCall:
 @dataclass
 class AgentState:
     """Working memory for the agent - hypotheses, notes, findings."""
-    current_phase: str = "recon"
     hypotheses: list[dict[str, Any]] = field(default_factory=list)
     findings: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -163,7 +162,6 @@ class AgentState:
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
-            "current_phase": self.current_phase,
             "hypotheses": self.hypotheses,
             "findings": self.findings,
             "notes": self.notes,
@@ -175,7 +173,6 @@ class AgentState:
     def from_dict(cls, data: dict) -> "AgentState":
         """Deserialize from dictionary."""
         return cls(
-            current_phase=data.get("current_phase", "recon"),
             hypotheses=data.get("hypotheses", []),
             findings=data.get("findings", []),
             notes=data.get("notes", []),
