@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, TYPE_CHECKING
 
 from tempo.agent.config import AgentConfig
-from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
 
 from tempo.agent.branch_coordinator import BranchCoordinator, SubtaskResult
@@ -18,7 +17,6 @@ from tempo.context.frame import MessageRole, ToolCall
 from tempo.infra.llm import LLMClient, LLMResponse
 from tempo.infra.tokenizer import count_tokens
 from tempo.prompts.builder import PromptBuilder
-from tempo.prompts.phases import Phase
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.base import ToolResult
 
@@ -44,7 +42,6 @@ class StepResult:
     step_number: int
     llm_response: LLMResponse
     tool_calls: list[ToolCall] = field(default_factory=list)
-    phase_transition: Phase | None = None
     should_continue: bool = True
     error: str | None = None
 
@@ -55,7 +52,6 @@ class AgentResult:
     success: bool
     objective: str
     steps_taken: int
-    final_phase: Phase
     findings: list[dict] = field(default_factory=list)
     hypotheses: list[dict] = field(default_factory=list)
     context_id: str = ""  # For resumption
@@ -66,8 +62,8 @@ class Agent:
     """
     Main agent class that orchestrates the security testing workflow.
     
-    Manages the agent loop, tool execution, phase transitions,
-    and context management.
+    Manages the agent loop, tool execution, and context management.
+    Note: Phase logic has been removed; phases are now soft guidance in prompts only.
     """
     
     def __init__(
@@ -77,7 +73,6 @@ class Agent:
         tools: ToolRegistry,
         context: ContextStore | None = None,
         prompts: PromptBuilder | None = None,
-        workflow: "WorkflowManager | None" = None,
         on_step: "Callable[[StepResult], None] | None" = None,
         on_tool_call: "Callable[[ToolCall], None] | None" = None,
         visualization_collector: "VisualizationCollector | None" = None,
@@ -93,7 +88,6 @@ class Agent:
             tools: Tool registry
             context: Context store (created if not provided)
             prompts: Prompt builder (created if not provided)
-            workflow: Workflow manager (created if not provided, pass to share with tools)
             on_step: Callback invoked after each step completes
             on_tool_call: Callback invoked after each tool execution
             stop_event: Event to signal forced stop
@@ -111,8 +105,6 @@ class Agent:
         self._prompt_manager = prompt_manager
         self.stop_event = stop_event
         
-        # Use provided workflow manager or create one (share with TransitionPhaseTool!)
-        self.workflow = workflow or WorkflowManager(config)
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
 
         self.branch_coordinator = BranchCoordinator(
@@ -139,7 +131,7 @@ class Agent:
     
     # Tools exempt from summarization requirement (meta tools and control tools)
     _SUMMARIZATION_EXEMPT_TOOLS: set[str] = {
-        "summarize_previous_tool_output", "view_tool_output", "transition_phase",
+        "summarize_previous_tool_output", "view_tool_output",
         "continue_analysis", "create_test_plan", "add_todo", "complete_todo",
         "branch_to_subtasks", "finish_subtask", "complete_recon",
         "complete_browser_task", "complete_subtask", "finalize_analysis",
@@ -171,23 +163,14 @@ class Agent:
         tokens = count_tokens(tool_call.raw_output)
         return tokens > SUMMARIZATION_TOKEN_THRESHOLD
 
-    def _get_phase_filtered_tools(self) -> list[dict]:
+    def _get_available_tools(self) -> list[dict]:
         """
-        Get tool schemas filtered by current phase and summarization state.
+        Get tool schemas filtered by summarization state.
 
         Summarization requirement takes priority:
         - If pending summarizations exist, ONLY summarize_previous_tool_output is available
-
-        Phase tool restrictions:
-        - RECON: Standard tools, hide meta tools
-        - HYPOTHESIZE:
-            * If NO plan exists: Only create_test_plan (forces structured output)
-            * If plan EXISTS: Only add_todo, complete_todo, transition_phase (manage existing plan)
-        - TEST: All tools + add_todo/complete_todo, hide continue_analysis
-        - REFLECT: Only continue_analysis + add_todo + complete_todo
+        - Otherwise, return all tools except summarization tool
         """
-        from tempo.prompts.phases import Phase
-
         all_schemas = self.tools.get_schemas()
 
         # CRITICAL: If there are pending summarizations, ONLY allow summarize_previous_tool_output
@@ -199,58 +182,10 @@ class Agent:
         
         # No pending summarizations - hide summarize_previous_tool_output entirely
         # This prevents premature/placeholder calls to the summarization tool
-        all_schemas = [
+        return [
             s for s in all_schemas
             if s.get("function", {}).get("name") != "summarize_previous_tool_output"
         ]
-
-        phase = self.workflow.current_phase
-
-        if phase == Phase.REFLECT:
-            # REFLECT: continue_analysis, add_todo, complete_todo
-            allowed = {"continue_analysis", "add_todo", "complete_todo"}
-            return [
-                s for s in all_schemas
-                if s.get("function", {}).get("name") in allowed
-            ]
-
-        elif phase == Phase.HYPOTHESIZE:
-            # Check if a test plan already exists
-            has_plan = (
-                self.context.current_frame.state.test_plan is not None
-                and len(self.context.current_frame.state.test_plan) > 0
-            )
-
-            if has_plan:
-                # Plan exists - allow todo management and phase transition
-                allowed = {"add_todo", "complete_todo", "transition_phase"}
-                return [
-                    s for s in all_schemas
-                    if s.get("function", {}).get("name") in allowed
-                ]
-            else:
-                # No plan - force plan creation
-                return [
-                    s for s in all_schemas
-                    if s.get("function", {}).get("name") == "create_test_plan"
-                ]
-
-        elif phase == Phase.TEST:
-            # TEST: All tools except continue_analysis and create_test_plan
-            hidden = {"continue_analysis", "create_test_plan"}
-            return [
-                s for s in all_schemas
-                if s.get("function", {}).get("name") not in hidden
-            ]
-
-        else:
-            # RECON: Hide checklist tools and continue_analysis
-            hidden = {"continue_analysis", "create_test_plan", "add_todo", "complete_todo"}
-            return [
-                s for s in all_schemas
-                if s.get("function", {}).get("name") not in hidden
-            ]
-    
 
     
     def _create_subagent_executor(self):
@@ -286,7 +221,6 @@ class Agent:
     async def run(
         self,
         objective: str,
-        initial_phase: Phase = Phase.RECON,
         max_steps: int | None = None,
         start_step: int = 0,
     ) -> AgentResult:
@@ -295,7 +229,6 @@ class Agent:
         
         Args:
             objective: What the agent should accomplish
-            initial_phase: Starting phase (default: RECON)
             max_steps: Override max steps from config
             start_step: Starting step number (for resumed sessions)
             
@@ -310,10 +243,6 @@ class Agent:
         if self._viz_collector:
             self._viz_collector.on_agent_start(objective, self.config.model)
         
-        # Only reset workflow if starting fresh
-        if start_step == 0:
-            self.workflow.reset(initial_phase)
-        
         # If we are effectively starting from scratch (step_count == 0), add initial prompts
         # If resuming (step_count > 0), assume context is already primed
         is_resuming = start_step > 0
@@ -322,7 +251,6 @@ class Agent:
         if not is_resuming:
             # Add initial system message
             system_prompt = self.prompts.build_full_prompt(
-                current_phase=initial_phase,
                 tool_schemas=self.tools.get_schemas(),
                 scope_description=self.config.scope or "No specific scope defined.",
             )
@@ -343,7 +271,6 @@ class Agent:
                         success=False,
                         objective=objective,
                         steps_taken=self._step_count,
-                        final_phase=self.workflow.current_phase,
                         findings=self._findings,
                         hypotheses=self._hypotheses,
                         context_id=self.context.current_frame.id,
@@ -363,7 +290,7 @@ class Agent:
                 # Checkpoint after step if enabled
                 if self.config.auto_checkpoint:
                     self.checkpoint(
-                        label=f"Step {self._step_count}: {self.workflow.current_phase.value}"
+                        label=f"Step {self._step_count}"
                     )
                 
                 # Check for user prompts between steps
@@ -384,7 +311,6 @@ class Agent:
                         success=False,
                         objective=objective,
                         steps_taken=self._step_count,
-                        final_phase=self.workflow.current_phase,
                         findings=self._findings,
                         hypotheses=self._hypotheses,
                         context_id=self.context.current_frame.id,
@@ -395,7 +321,6 @@ class Agent:
                 success=True,
                 objective=objective,
                 steps_taken=self._step_count,
-                final_phase=self.workflow.current_phase,
                 findings=self._findings,
                 hypotheses=self._hypotheses,
                 context_id=self.context.current_frame.id,
@@ -406,7 +331,6 @@ class Agent:
                 success=False,
                 objective=objective,
                 steps_taken=self._step_count,
-                final_phase=self.workflow.current_phase,
                 findings=self._findings,
                 hypotheses=self._hypotheses,
                 context_id=self.context.current_frame.id,
@@ -417,18 +341,14 @@ class Agent:
         """
         Execute a single agent step.
         
-        1. Build prompt from current context and phase
+        1. Build prompt from current context
         2. Call LLM
         3. If tool call: execute tool, update context
-        4. Handle special tools (phase transition, branching, finish)
+        4. Handle special tools (branching, finish)
         5. Return step result
         """
         self._step_count += 1
-        self.workflow.record_step()
-        
 
-        # Note: Phase transition logic has been removed - agents no longer use phases
-        
         # Check context size and optimize if needed
         if self.config.max_context_tokens and getattr(self.config, 'auto_summarize', True):
             await self.context.optimize(
@@ -442,8 +362,8 @@ class Agent:
             max_output_chars=self.config.max_output_chars
         )
         
-        # Get phase-filtered tool schemas (REFLECT: only continue_analysis)
-        tool_schemas = self._get_phase_filtered_tools()
+        # Get available tool schemas (respects summarization state)
+        tool_schemas = self._get_available_tools()
         
         # Emit available tools to visualization
         if self._viz_collector:
@@ -563,7 +483,7 @@ class Agent:
         special: SpecialToolResult,
     ) -> StepResult:
         """
-        Apply the effects of a special tool result to the step and workflow.
+        Apply the effects of a special tool result to the step.
         
         Args:
             step_result: Current step result to update
@@ -574,30 +494,13 @@ class Agent:
             Updated step result
         """
         if special.tool_name == "continue_analysis":
-            if special.should_continue and special.phase_transition:
-                # Agent wants to continue - transition to the specified phase
-                self.workflow.transition(special.phase_transition)
-                
-                # Keep persisted context state in sync with workflow for UI/debugging
-                self.context.update_state(current_phase=special.phase_transition.value)
-
-                # Build phase-specific message
-                phase_msg = f"[Continuing analysis] {tool_call.raw_output}\nYou are now back in the {special.phase_transition.value.upper()} phase."
-
-                # For HYPOTHESIZE phase, inject phase-specific instructions based on plan existence
-                if special.phase_transition == Phase.HYPOTHESIZE:
-                    has_plan = (
-                        self.context.current_frame.state.test_plan is not None
-                        and len(self.context.current_frame.state.test_plan) > 0
-                    )
-                    phase_instructions = self.prompts.build_phase_prompt(
-                        special.phase_transition,
-                        has_test_plan=has_plan
-                    )
-                    phase_msg += f"\n\n{phase_instructions}"
-
-                self.context.add_message(MessageRole.SYSTEM, phase_msg)
-            elif not special.should_continue:
+            if special.should_continue:
+                # Agent wants to continue - just keep going
+                self.context.add_message(
+                    MessageRole.SYSTEM,
+                    f"[Continuing analysis] {tool_call.raw_output}"
+                )
+            else:
                 # Agent is done
                 step_result.should_continue = False
                 if special.findings:
@@ -606,32 +509,6 @@ class Agent:
                         "step": self._step_count,
                     })
         
-        elif special.tool_name == "transition_phase":
-            if special.phase_transition:
-                step_result.phase_transition = special.phase_transition
-
-                # Keep persisted context state in sync with workflow for resume/debugging.
-                # Only do this when the tool actually succeeded; otherwise we'd lie in history.
-                if tool_call.success:
-                    self.context.update_state(current_phase=special.phase_transition.value)
-
-                    # Build phase-specific message with appropriate guidance
-                    phase_msg = f"[System] Transitioned to {special.phase_transition.value.upper()} phase."
-
-                    # For HYPOTHESIZE phase, inject phase-specific instructions based on plan existence
-                    if special.phase_transition == Phase.HYPOTHESIZE:
-                        has_plan = (
-                            self.context.current_frame.state.test_plan is not None
-                            and len(self.context.current_frame.state.test_plan) > 0
-                        )
-                        phase_instructions = self.prompts.build_phase_prompt(
-                            special.phase_transition,
-                            has_test_plan=has_plan
-                        )
-                        phase_msg += f"\n\n{phase_instructions}"
-
-                    self.context.add_message(MessageRole.SYSTEM, phase_msg)
-        
         elif special.tool_name == "branch_to_subtasks":
             if special.branch_id:
                 # Handle branching - wait for subagents (async)
@@ -639,14 +516,11 @@ class Agent:
                 pass  # Branch handling is asynchronous
         
         elif special.tool_name == "create_test_plan":
-            # Auto-transition to TEST phase
-            if special.phase_transition:
-                step_result.phase_transition = special.phase_transition
-                self.workflow.transition(special.phase_transition)
+            # Test plan created - just acknowledge, no phase transition needed
+            if tool_call.success:
                 self.context.add_message(
                     MessageRole.SYSTEM,
-                    f"[System] Test plan created. Transitioned to {special.phase_transition.value.upper()} phase. "
-                    "Work through your test plan items by priority."
+                    "[System] Test plan created. Work through your test plan items by priority."
                 )
         
         elif special.tool_name == "complete_recon":
@@ -820,11 +694,9 @@ class Agent:
             if self._viz_collector:
                 self._viz_collector.on_agent_resumed()
             
-            # Transition back to RECON to continue work
-            self.workflow.transition(Phase.RECON)
             self.context.add_message(
                 MessageRole.SYSTEM,
-                "[System] Resuming analysis based on user input. You are now in RECON phase."
+                "[System] Resuming analysis based on user input."
             )
             
             return True

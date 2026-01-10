@@ -5,8 +5,6 @@ Exports:
     - AgentConfig: Agent configuration dataclass
     - BranchCoordinator: Manages agent-initiated branching
     - SubtaskResult: Result from a subtask
-    - WorkflowManager: Phase transition management
-    - WorkflowError: Workflow rule violation
     - OutputSummarizer: Tool output summarization
     - StepHandler: Handles individual step execution
     - SpecialToolResult: Result from processing special tools
@@ -23,7 +21,6 @@ from tempo.agent.branch_coordinator import (
     SubtaskResult,
     PendingBranch,
 )
-from tempo.agent.workflow import WorkflowManager, WorkflowError
 from tempo.agent.summarizer import OutputSummarizer
 from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.agent.event_bus import EventBus, AgentEvent
@@ -34,8 +31,6 @@ __all__ = [
     "BranchCoordinator",
     "SubtaskResult",
     "PendingBranch",
-    "WorkflowManager",
-    "WorkflowError",
     "OutputSummarizer",
     "StepHandler",
     "SpecialToolResult",

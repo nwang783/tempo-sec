@@ -5,7 +5,6 @@ import pytest
 from tempo.agent.config import AgentConfig
 from tempo.agent.runner import Agent, AgentResult, StepResult, SUMMARIZATION_TOKEN_THRESHOLD
 from tempo.context.store import ContextStore
-from tempo.prompts.phases import Phase
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 from tempo.infra.llm import LLMResponse
@@ -74,7 +73,6 @@ class TestAgentResult:
             success=True,
             objective="Find vulnerabilities",
             steps_taken=5,
-            final_phase=Phase.REFLECT,
         )
         
         assert result.success is True
@@ -86,7 +84,6 @@ class TestAgentResult:
             success=False,
             objective="Find vulnerabilities",
             steps_taken=3,
-            final_phase=Phase.TEST,
             error="Tool execution failed",
         )
         
@@ -258,8 +255,8 @@ class TestSummarizationRequirement:
         from tempo.context.frame import ToolCall
         long_output = " ".join(["word"] * 500)
         
-        # Create tool calls for exempt tools
-        for tool_name in ["summarize_previous_tool_output", "transition_phase", "continue_analysis"]:
+        # Create tool calls for exempt tools (transition_phase removed)
+        for tool_name in ["summarize_previous_tool_output", "continue_analysis"]:
             tc = ToolCall(
                 tool_name=tool_name,
                 raw_output=long_output,
@@ -303,7 +300,7 @@ class TestSummarizationRequirement:
         agent = Agent(config, llm, tools, context=context)
         
         # Initially, summarize_previous_tool_output should be HIDDEN (no pending summarizations)
-        filtered = agent._get_phase_filtered_tools()
+        filtered = agent._get_available_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         assert "dummy" in tool_names
         assert "summarize_previous_tool_output" not in tool_names  # Hidden when no pending
@@ -312,7 +309,7 @@ class TestSummarizationRequirement:
         agent.context.add_pending_summarization("test-id")
         
         # Now ONLY summarize_previous_tool_output should be available
-        filtered = agent._get_phase_filtered_tools()
+        filtered = agent._get_available_tools()
         tool_names = [t.get("function", {}).get("name") for t in filtered]
         assert tool_names == ["summarize_previous_tool_output"]
     
@@ -333,4 +330,3 @@ class TestSummarizationRequirement:
         
         # Pending should now be empty
         assert not agent.context.has_pending_summarization()
-

@@ -135,7 +135,7 @@ async def main() -> None:
     load_dotenv()
     
     # Imports
-    from tempo import Agent, ContextStore, LiteLLMClient, WorkflowManager
+    from tempo import Agent, ContextStore, LiteLLMClient
     from tempo.infra.container import ContainerConfig, ContainerManager
     from tempo.prompts.builder import PromptBuilder
     from tempo.context.frame import MessageRole
@@ -254,7 +254,7 @@ async def main() -> None:
     prompts = PromptBuilder()
     
     # Execution Wrapper
-    async def run_agent(tools, workflow):
+    async def run_agent(tools):
 
         # Build Objective
         try:
@@ -301,7 +301,6 @@ async def main() -> None:
             tools=tools,
             context=context,
             prompts=prompts,
-            workflow=workflow,
             visualization_collector=viz_collector,
             prompt_manager=prompt_manager,
             stop_event=stop_event,
@@ -311,7 +310,6 @@ async def main() -> None:
         # Run Agent
         result = await agent.run(
             objective=objective,
-            initial_phase=agent_def.initial_phase,
             max_steps=args.max_steps or config.max_total_steps,
             start_step=run_start_step,
         )
@@ -323,16 +321,6 @@ async def main() -> None:
     use_container = not args.local and os.getenv("TEMPO_LOCAL_MODE", "").lower() != "true"
     
     try:
-        # Create Workflow Manager
-        # When resuming, use the persisted phase from context; otherwise use agent's initial phase
-        if args.context and context.current_frame and context.current_frame.state.current_phase:
-            from tempo.prompts.phases import Phase
-            persisted_phase = Phase(context.current_frame.state.current_phase)
-            print(f"📍 Resuming in phase: {persisted_phase.value.upper()}")
-            workflow = WorkflowManager(config, initial_phase=persisted_phase)
-        else:
-            workflow = WorkflowManager(config, initial_phase=agent_def.initial_phase)
-        
         if use_container:
             print("🐳 Initializing container sandbox...")
             container_config = ContainerConfig(
@@ -357,7 +345,7 @@ async def main() -> None:
 
                 # Create tools with container
                 try:
-                    tools = agent_def.create_tools(context, container, workflow, visualization=viz_collector, config=config)
+                    tools = agent_def.create_tools(context, container, visualization=viz_collector, config=config)
 
                 except Exception as e:
 
@@ -367,7 +355,7 @@ async def main() -> None:
                 
                 try:
 
-                    result = await run_agent(tools, workflow)
+                    result = await run_agent(tools)
 
                 except Exception as e:
 
@@ -377,8 +365,8 @@ async def main() -> None:
         else:
             print("⚠️  Running in LOCAL mode (no sandbox)...")
             # Create local tools
-            tools = agent_def.create_tools(context, None, workflow, visualization=viz_collector, config=config)
-            result = await run_agent(tools, workflow)
+            tools = agent_def.create_tools(context, None, visualization=viz_collector, config=config)
+            result = await run_agent(tools)
             
         # Final Report
         print(f"\n{'='*50}")

@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from tempo.prompts.builder import PromptBuilder, TEMPLATES_DIR
-from tempo.prompts.phases import Phase
 
 
 class TestPromptBuilder:
@@ -33,7 +32,6 @@ class TestPromptBuilder:
         template = builder._load_template("system")
         
         assert "cybersecurity" in template.lower()
-        assert "{current_phase}" in template
     
     def test_load_template_caching(self):
         """Test that templates are cached."""
@@ -57,14 +55,10 @@ class TestPromptBuilder:
         builder = PromptBuilder()
         
         prompt = builder.build_system_prompt(
-            current_phase=Phase.RECON,
             tool_descriptions="### shell\nExecute commands",
             scope_description="Only test example.com",
-            hypotheses_count=2,
-            findings_count=1,
         )
         
-        assert "recon" in prompt.lower()
         assert "shell" in prompt
         assert "example.com" in prompt
     
@@ -198,4 +192,3 @@ class TestPromptBuilder:
         
         assert "example.com" in prompt
         assert "dispatch_subagent" in prompt
-

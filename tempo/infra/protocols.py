@@ -19,27 +19,6 @@ from typing import Protocol, Any
 DEFAULT_SCOPE_PLACEHOLDERS = frozenset({"Subagent task", "No specific scope constraints."})
 
 
-class PhaseTransitioner(Protocol):
-    """Protocol for components that can transition workflow phases."""
-    
-    def transition(self, phase: str) -> bool:
-        """
-        Transition to a new workflow phase.
-        
-        Args:
-            phase: Target phase name (recon, hypothesize, test, reflect)
-            
-        Returns:
-            True if transition succeeded
-        """
-        ...
-    
-    @property
-    def current_phase(self) -> str:
-        """Get the current phase name."""
-        ...
-
-
 class ContextSummarizer(Protocol):
     """Protocol for components that can summarize tool call outputs."""
     
@@ -433,7 +412,6 @@ class AgentDefinition(Protocol):
     - What model to use
     - Which tools to register
     - How to build prompts and objectives
-    - Starting phase
     
     This enables a single unified runner that can load and execute different
     agent types based on CLI arguments.
@@ -443,9 +421,8 @@ class AgentDefinition(Protocol):
             name = "recon"
             description = "Reconnaissance agent for target discovery"
             model = "anthropic/claude-sonnet-4-20250514"
-            initial_phase = Phase.RECON
             
-            def create_tools(self, context, container=None, workflow=None, **kwargs):
+            def create_tools(self, context, container=None, **kwargs):
                 tools = ToolRegistry()
                 tools.register(ShellTool(container))
                 # ...
@@ -467,16 +444,10 @@ class AgentDefinition(Protocol):
         """LLM model to use (e.g., 'anthropic/claude-sonnet-4-20250514')."""
         ...
     
-    @property
-    def initial_phase(self) -> Any:
-        """Starting workflow phase (Phase enum value)."""
-        ...
-    
     def create_tools(
         self,
         context: Any,
         container: Any | None = None,
-        workflow: Any | None = None,
         **kwargs: Any,
     ) -> Any:
         """
@@ -485,7 +456,6 @@ class AgentDefinition(Protocol):
         Args:
             context: ContextStore instance
             container: Optional ContainerManager for sandboxed execution
-            workflow: Optional WorkflowManager for phase transitions
             **kwargs: Additional agent-specific parameters
             
         Returns:
