@@ -51,7 +51,7 @@ class BranchSpawner(Protocol):
 
 class ToolOutputViewer(Protocol):
     """Protocol for viewing tool output ranges."""
-    
+
     def get_tool_output_range(
         self,
         tool_call_id: str,
@@ -60,15 +60,42 @@ class ToolOutputViewer(Protocol):
     ) -> str | None:
         """
         Get a specific range of a tool call's output.
-        
+
         Args:
             tool_call_id: ID of the tool call
             start_char: Starting character position
             end_char: Ending character position
-            
+
         Returns:
             The requested output range, or None if not found
         """
+        ...
+
+
+class OutputStorage(Protocol):
+    """Protocol for storing truncated tool outputs to files."""
+
+    def save_output(
+        self,
+        tool_call_id: str,
+        content: str,
+        tool_name: str = "",
+    ) -> str | None:
+        """
+        Save tool output to a file.
+
+        Args:
+            tool_call_id: Unique ID of the tool call
+            content: Full output content to save
+            tool_name: Name of the tool (for metadata)
+
+        Returns:
+            File path where content was saved, or None if saving disabled/failed
+        """
+        ...
+
+    def cleanup_expired(self) -> int:
+        """Remove expired output files. Returns count of deleted files."""
         ...
 
 

@@ -114,6 +114,7 @@ class ReconSubagent(BaseAgentDefinition):
         tools.register(BrowserTaskTool(
             container_manager=container,
             visualization_collector=visualization,
+            findings_updater=self.findings,
             headless=headless,
         ))
 

@@ -8,6 +8,7 @@ branching, and context rendering.
 import logging
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from tempo.context.frame import (
     AgentState,
@@ -23,6 +24,9 @@ from tempo.context.persistence import (
 )
 from tempo.infra.tokenizer import count_tokens
 
+if TYPE_CHECKING:
+    from tempo.infra.output_storage import TruncatedOutputStorage
+
 
 class ContextStore:
     """
@@ -34,13 +38,15 @@ class ContextStore:
         self,
         persistence_dir: str = "./contexts",
         session_id: str | None = None,
+        output_storage: "TruncatedOutputStorage | None" = None,
     ):
         """
         Initialize a new context store.
-        
+
         Args:
             persistence_dir: Directory for saving context files
             session_id: Optional ID to resume an existing session
+            output_storage: Optional storage for saving truncated outputs
         """
         self._persistence_dir = persistence_dir
         self._session_id = session_id or str(uuid.uuid4())
@@ -48,7 +54,8 @@ class ContextStore:
         self._current_frame_id: str | None = None
         # Track tool calls that need summarization (shared between runner and tools)
         self._pending_summarization: set[str] = set()
-        
+        self._output_storage = output_storage
+
         # Create root frame
         root = ContextFrame()
         self._frames[root.id] = root
@@ -616,9 +623,12 @@ class ContextStore:
                     "role": "assistant",
                     "content": f"[Tool: {tc.tool_name}]\nInput: {tc.input}",
                 })
-                
+
                 # Check if tool result has base64 image data (for vision models)
-                tool_output = tc.get_truncated_output(max_output_chars)
+                tool_output = tc.get_truncated_output(
+                    max_output_chars,
+                    output_storage=self._output_storage,
+                )
                 base64_image = tc.metadata.get("base64") if tc.metadata else None
                 
                 if base64_image:

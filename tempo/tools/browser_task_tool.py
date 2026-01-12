@@ -11,7 +11,7 @@ from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
     from tempo.infra.llm import LLMClient
-    from tempo.infra.protocols import VisualizationObserver
+    from tempo.infra.protocols import VisualizationObserver, FindingsUpdater
 
 
 class BrowserTaskTool(Tool):
@@ -42,20 +42,23 @@ class BrowserTaskTool(Tool):
         container_manager: "ContainerManager | None" = None,
         llm_client: "LLMClient | None" = None,
         visualization_collector: "VisualizationObserver | None" = None,
+        findings_updater: "FindingsUpdater | None" = None,
         headless: bool = True,
     ):
         """
         Initialize the browser task tool.
-        
+
         Args:
             container_manager: Container for sandboxed browser execution
             llm_client: LLM client for the browser agent (if None, creates new one)
             visualization_collector: Collector for UI event propagation
+            findings_updater: Optional findings document for prior work context
             headless: Whether to run browser in headless mode (default: True)
         """
         self._container_manager = container_manager
         self._llm_client = llm_client
         self._visualization_collector = visualization_collector
+        self._findings_updater = findings_updater
         self._headless = headless
     
     async def execute(
@@ -101,6 +104,7 @@ class BrowserTaskTool(Tool):
             save_state_as=save_state_as if save_state_as else None,
             scope=scope if scope else None,
             headless=self._headless,
+            findings=self._findings_updater,
         )
         
         # Create isolated context for browser agent

@@ -172,7 +172,8 @@ class TestTestSubagent:
 
         context = agent._get_attack_surfaces_context()
 
-        assert "2 untested attack surfaces" in context
+        assert "Untested Attack Surfaces (2)" in context
+        assert "Attack Surfaces: 2 discovered, 0 tested" in context
         assert "HIGH" in context
         assert "MEDIUM" in context
         assert "endpoint" in context
