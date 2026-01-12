@@ -9,14 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
-from tempo.prompts.phases import Phase
 from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
 
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
     from tempo.infra.browser_state import BrowserStateManager
-    from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
     from tempo.infra.protocols import FindingsUpdater
@@ -36,13 +34,12 @@ class BrowserAgent(BaseAgentDefinition):
     - Visual tools (screenshot, coordinate click, scroll, wait)
     - Task completion tool to signal done and return findings
     - Scope support for constrained browsing
-    - Focused, single-purpose prompt (no phase transitions)
+    - Focused, single-purpose prompt
     - Fast model for quick browser tasks
     """
     
     _name = "browser"
     _model = "openai/gpt-5.1"  # Vision-capable model for visual browsing
-    _initial_phase = Phase.RECON  # Single phase, no transitions
     
     def __init__(
         self,
@@ -91,7 +88,6 @@ class BrowserAgent(BaseAgentDefinition):
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        workflow: "WorkflowManager | None" = None,
         state_manager: "BrowserStateManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
@@ -108,11 +104,22 @@ class BrowserAgent(BaseAgentDefinition):
         from tempo.tools.browser_tools import (
             BrowserSession,
             BrowserNavigateTool,
+            BrowserSnapshotTool,
             BrowserScreenshotTool,
+            # DOM-based tools (PRIMARY - more reliable)
+            BrowserClickTool,
+            BrowserTypeTool,
+            BrowserSelectTool,
+            BrowserFillFormTool,
+            # Coordinate-based tools (FALLBACK)
             BrowserClickCoordsTool,
             BrowserTypeCoordsTool,
             BrowserScrollTool,
             BrowserWaitTool,
+            # Debugging tools
+            BrowserConsoleTool,
+            BrowserNetworkTool,
+            BrowserEvaluateTool,
         )
         from tempo.tools.browser_state_tools import (
             BrowserListStatesTool,
@@ -138,13 +145,27 @@ class BrowserAgent(BaseAgentDefinition):
             state_manager=state_manager,
         )
         
-        # Core visual browser tools (no DOM-based tools)
+        # Page inspection tools
         tools.register(BrowserNavigateTool(browser_session))
+        tools.register(BrowserSnapshotTool(browser_session))
         tools.register(BrowserScreenshotTool(browser_session))
+        
+        # DOM-based interaction tools (PRIMARY - most reliable)
+        tools.register(BrowserClickTool(browser_session))
+        tools.register(BrowserTypeTool(browser_session))
+        tools.register(BrowserSelectTool(browser_session))
+        tools.register(BrowserFillFormTool(browser_session))
+        
+        # Coordinate-based tools (FALLBACK for complex UIs)
         tools.register(BrowserClickCoordsTool(browser_session))
         tools.register(BrowserTypeCoordsTool(browser_session))
         tools.register(BrowserScrollTool(browser_session))
         tools.register(BrowserWaitTool(browser_session))
+        
+        # Debugging tools
+        tools.register(BrowserConsoleTool(browser_session))
+        tools.register(BrowserNetworkTool(browser_session))
+        tools.register(BrowserEvaluateTool(browser_session))
         
         # State management tools
         tools.register(BrowserListStatesTool(state_manager))
@@ -170,7 +191,7 @@ class BrowserAgent(BaseAgentDefinition):
         """
         Build browser-specific system prompt.
 
-        Uses a focused prompt without phase transitions or security testing context.
+        Uses a focused prompt without security testing context.
         Includes scope constraints and findings context if provided.
         """
         # Get findings context

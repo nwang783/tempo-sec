@@ -6,14 +6,11 @@ to improve cohesion and testability.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable
 
 from tempo.context.frame import ToolCall
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.base import ToolResult
-
-if TYPE_CHECKING:
-    from tempo.prompts.phases import Phase
 
 
 @dataclass
@@ -21,7 +18,6 @@ class SpecialToolResult:
     """Result from processing a special meta tool."""
     tool_name: str
     should_continue: bool = True
-    phase_transition: "Phase | None" = None
     findings: dict[str, Any] | None = None
     branch_id: str | None = None
     error: str | None = None
@@ -130,8 +126,8 @@ class StepHandler:
         
         Handles:
         - continue_analysis: Determines whether to continue or finish
-        - transition_phase: Changes the workflow phase
         - branch_to_subtasks: Spawns parallel subagents
+        - complete_*: Agent completion tools
         
         Args:
             tool_call: The executed tool call to check
@@ -139,15 +135,12 @@ class StepHandler:
         Returns:
             SpecialToolResult if this was a special tool, None otherwise
         """
-        from tempo.prompts.phases import Phase
-        
         if tool_call.tool_name == "continue_analysis":
             if tool_call.metadata.get("continue"):
-                # Agent wants to continue - loop back to HYPOTHESIZE for next testing cycle
+                # Agent wants to continue
                 return SpecialToolResult(
                     tool_name="continue_analysis",
                     should_continue=True,
-                    phase_transition=Phase.HYPOTHESIZE,
                 )
             elif tool_call.metadata.get("finish"):
                 # Agent is done
@@ -158,20 +151,6 @@ class StepHandler:
                         "description": tool_call.metadata.get("findings", ""),
                         "reasoning": tool_call.metadata.get("reasoning", ""),
                     },
-                )
-        
-        elif tool_call.tool_name == "transition_phase":
-            phase_str = tool_call.input.get("phase", "")
-            try:
-                target_phase = Phase(phase_str)
-                return SpecialToolResult(
-                    tool_name="transition_phase",
-                    phase_transition=target_phase,
-                )
-            except ValueError:
-                return SpecialToolResult(
-                    tool_name="transition_phase",
-                    error=f"Invalid phase: {phase_str}",
                 )
         
         elif tool_call.tool_name == "branch_to_subtasks":
@@ -196,11 +175,10 @@ class StepHandler:
                 )
         
         elif tool_call.tool_name == "create_test_plan":
-            # Test plan created - auto-transition to TEST phase
+            # Test plan created
             if tool_call.metadata.get("plan_created"):
                 return SpecialToolResult(
                     tool_name="create_test_plan",
-                    phase_transition=Phase.TEST,
                 )
         
         elif tool_call.tool_name == "complete_browser_task":

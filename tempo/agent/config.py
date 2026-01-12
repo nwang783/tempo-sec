@@ -2,7 +2,7 @@
 Agent configuration dataclass.
 
 Contains all settings for the agent runtime including model settings,
-context management, workflow, branching, container, scope, and debugging.
+context management, branching, container, scope, and debugging.
 """
 
 from dataclasses import dataclass, field
@@ -25,9 +25,7 @@ class AgentConfig:
     truncated_output_dir: str = "~/.tempo-sec/truncated_outputs"  # Directory for truncated output files
     truncated_output_ttl_hours: int = 24    # Hours before truncated output files expire
     
-    # Workflow settings
-    enforce_phases: bool = True             # Require explicit phase transitions
-    max_steps_per_phase: int = 20           # Prevent runaway phases
+    # Step limits
     max_total_steps: int = 100              # Hard limit on agent steps
     
     # Branching settings
@@ -91,7 +89,6 @@ class AgentConfig:
         The TOML file sections are mapped to AgentConfig fields:
         - [model].provider → model
         - [context].* → max_context_tokens, auto_summarize, persistence_dir, etc.
-        - [workflow].* → enforce_phases, max_steps_per_phase, max_total_steps
         - [branching].* → max_branches, max_branch_depth, branch_step_limit
         - [container].* → container_image, container_timeout
         - [scope].* → allowed_domains, excluded_domains, allow_subdomains
@@ -160,15 +157,11 @@ class AgentConfig:
             if "truncated_output_ttl_hours" in ctx:
                 kwargs["truncated_output_ttl_hours"] = ctx["truncated_output_ttl_hours"]
         
-        # [workflow] section
-        if "workflow" in data:
-            wf = data["workflow"]
-            if "enforce_phases" in wf:
-                kwargs["enforce_phases"] = wf["enforce_phases"]
-            if "max_steps_per_phase" in wf:
-                kwargs["max_steps_per_phase"] = wf["max_steps_per_phase"]
-            if "max_total_steps" in wf:
-                kwargs["max_total_steps"] = wf["max_total_steps"]
+        # [agent] section (for step limits)
+        if "agent" in data:
+            ag = data["agent"]
+            if "max_total_steps" in ag:
+                kwargs["max_total_steps"] = ag["max_total_steps"]
         
         # [branching] section
         if "branching" in data:
@@ -249,4 +242,3 @@ class AgentConfig:
                 kwargs["browser_tool_call_delay"] = br["tool_call_delay"]
 
         return cls(**kwargs)
-

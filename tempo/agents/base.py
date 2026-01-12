@@ -11,11 +11,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
-    from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
-
-from tempo.prompts.phases import Phase
 
 
 class BaseAgentDefinition(ABC):
@@ -33,15 +30,11 @@ class BaseAgentDefinition(ABC):
     
     Optional overrides:
     - model (default: claude-sonnet-4)
-    - initial_phase (default: RECON)
     - build_system_prompt() (default: uses PromptBuilder.build_full_prompt)
     """
     
     # Default model - subclasses can override
     _model: str = "anthropic/claude-sonnet-4-20250514"
-    
-    # Default initial phase - subclasses can override
-    _initial_phase: Phase = Phase.RECON
     
     @property
     @abstractmethod
@@ -60,17 +53,11 @@ class BaseAgentDefinition(ABC):
         """LLM model to use."""
         return self._model
     
-    @property
-    def initial_phase(self) -> Phase:
-        """Starting workflow phase."""
-        return self._initial_phase
-    
     @abstractmethod
     def create_tools(
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        workflow: "WorkflowManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
         """
@@ -79,7 +66,6 @@ class BaseAgentDefinition(ABC):
         Args:
             context: ContextStore instance
             container: Optional ContainerManager for sandboxed execution
-            workflow: Optional WorkflowManager for phase transitions
             **kwargs: Additional agent-specific parameters
             
         Returns:
@@ -108,7 +94,6 @@ class BaseAgentDefinition(ABC):
             Formatted system prompt string
         """
         return prompts.build_full_prompt(
-            current_phase=self.initial_phase,
             tool_schemas=tool_schemas,
             scope_description=scope_description,
         )

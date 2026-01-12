@@ -5,6 +5,7 @@ This module provides tools that mimic the Playwright MCP server's functionality,
 enabling ref-based element targeting via accessibility snapshots.
 """
 
+from collections import deque
 from typing import TYPE_CHECKING, Any
 import asyncio
 import json
@@ -59,8 +60,9 @@ class BrowserSession:
         self._browser = None
         self._page = None
         self._snapshot_refs: dict[str, Any] = {}  # ref -> element info
-        self._console_messages: list[dict] = []
-        self._network_requests: list[dict] = []
+        # Bounded deques to prevent unbounded memory growth
+        self._console_messages: deque[dict] = deque(maxlen=1000)
+        self._network_requests: deque[dict] = deque(maxlen=1000)
     
     async def ensure_browser(self) -> None:
         """Ensure browser is initialized with configured headless mode."""
@@ -78,8 +80,12 @@ class BrowserSession:
         # Set up console message capture
         self._page.on("console", self._on_console_message)
 
-        # Set up network request capture
+        # Set up network request capture with response handler
         self._page.on("request", self._on_request)
+        self._page.on("response", self._on_response)
+
+        # Auto-clear page data on navigation to keep context relevant
+        self._page.on("domcontentloaded", lambda _: self.clear_page_data())
     
     def _on_console_message(self, msg) -> None:
         """Capture console messages."""
@@ -95,7 +101,74 @@ class BrowserSession:
             "url": request.url,
             "method": request.method,
             "resource_type": request.resource_type,
+            "status": None,  # Will be updated by _on_response
         })
+    
+    def _on_response(self, response) -> None:
+        """Capture response status codes and update matching request."""
+        url = response.url
+        status = response.status
+        # Find and update the matching request
+        for req in reversed(self._network_requests):
+            if req["url"] == url and req["status"] is None:
+                req["status"] = status
+                break
+    
+    # Console message level ordering (more severe = higher number)
+    _CONSOLE_LEVELS = {
+        "debug": 0,
+        "log": 1,
+        "info": 2,
+        "warning": 3,
+        "error": 4,
+    }
+    
+    def get_console_messages(self, min_level: str = "info") -> list[dict]:
+        """
+        Get console messages filtered by minimum level.
+        
+        Args:
+            min_level: Minimum level to return. Each level includes more severe messages.
+                       Options: "debug", "log", "info", "warning", "error"
+                       
+        Returns:
+            List of console message dicts with type, text, and location
+        """
+        min_level_num = self._CONSOLE_LEVELS.get(min_level, 2)
+        return [
+            msg for msg in self._console_messages
+            if self._CONSOLE_LEVELS.get(msg["type"], 2) >= min_level_num
+        ]
+    
+    # Resource types considered static (typically excluded from network analysis)
+    _STATIC_RESOURCE_TYPES = {"image", "font", "script", "stylesheet"}
+    
+    def get_network_requests(self, include_static: bool = False) -> list[dict]:
+        """
+        Get network requests, optionally filtering out static resources.
+        
+        Args:
+            include_static: If True, include static resources (images, fonts, scripts, stylesheets).
+                           Default False excludes them.
+                           
+        Returns:
+            List of request dicts with url, method, resource_type, and status
+        """
+        if include_static:
+            return list(self._network_requests)
+        return [
+            req for req in self._network_requests
+            if req["resource_type"] not in self._STATIC_RESOURCE_TYPES
+        ]
+    
+    def clear_page_data(self) -> None:
+        """
+        Clear accumulated page data (console messages and network requests).
+        
+        Called automatically on navigation to keep data relevant to current page.
+        """
+        self._console_messages.clear()
+        self._network_requests.clear()
     
     @property
     def page(self):
@@ -260,6 +333,9 @@ class BrowserNavigateTool(Tool):
         """
         try:
             await self.session.ensure_browser()
+            
+            # Clear previous page data before navigating
+            self.session.clear_page_data()
             
             if self.session.container is not None:
                 return await self._execute_in_container(url)
@@ -557,10 +633,95 @@ class BrowserSnapshotTool(Tool):
             return ToolResult(success=False, output="", error=str(e))
     
     async def _extract_interactive_elements(self) -> list[dict]:
-        """Extract interactive elements from DOM as fallback."""
+        """Extract interactive elements from DOM with robust selectors."""
         return await self.session.page.evaluate("""
             () => {
                 const elements = [];
+                
+                // Helper function to generate robust selectors
+                function generateSelector(el) {
+                    // Helper to check uniqueness
+                    const isUnique = (sel) => {
+                        try {
+                            return document.querySelectorAll(sel).length === 1;
+                        } catch (e) {
+                            return false;
+                        }
+                    };
+                
+                    // 1. ID is most reliable
+                    if (el.id) {
+                        const sel = `#${el.id}`;
+                        if (isUnique(sel)) return sel;
+                    }
+                    
+                    // 2. Name attribute (for form elements)
+                    if (el.name) {
+                        const tag = el.tagName.toLowerCase();
+                        const sel = `${tag}[name="${el.name}"]`;
+                        if (isUnique(sel)) return sel;
+                    }
+                    
+                    // 3. Unique aria-label
+                    const ariaLabel = el.getAttribute('aria-label');
+                    if (ariaLabel) {
+                        const sel = `[aria-label="${ariaLabel}"]`;
+                        if (isUnique(sel)) return sel;
+                    }
+                    
+                    // 4. Test ID (common in React/Vue apps)
+                    const testId = el.getAttribute('data-testid') || 
+                                   el.getAttribute('data-test-id') ||
+                                   el.getAttribute('data-cy');
+                    if (testId) {
+                        const sel = `[data-testid="${testId}"]`;
+                        if (isUnique(sel)) return sel;
+                    }
+                    
+                    // 5. Unique class combinations (fallback)
+                    if (el.className && typeof el.className === 'string') {
+                        const classes = el.className.split(' ').filter(c => c && !c.match(/^(ng-|_|is-|has-)/));
+                        if (classes.length > 0) {
+                            const tag = el.tagName.toLowerCase();
+                            // Try 1, 2, then 3 classes
+                            for (let i = 1; i <= Math.min(3, classes.length); i++) {
+                                const sel = `${tag}.${classes.slice(0, i).join('.')}`;
+                                if (isUnique(sel)) return sel;
+                            }
+                        }
+                    }
+                    
+                    // 6. Path-based selector (last resort)
+                    // Construct a path of tag:nth-child up to 3 levels
+                    let path = [];
+                    let current = el;
+                    let valid = true;
+                    
+                    for (let i = 0; i < 3 && current && current.tagName !== 'BODY'; i++) {
+                        const parent = current.parentElement;
+                        if (!parent) break;
+                        
+                        const tag = current.tagName.toLowerCase();
+                        const siblings = Array.from(parent.children).filter(c => c.tagName === current.tagName);
+                        
+                        if (siblings.length === 1) {
+                            path.unshift(tag);
+                        } else {
+                            const index = siblings.indexOf(current);
+                            path.unshift(`${tag}:nth-of-type(${index + 1})`);
+                        }
+                        
+                        current = parent;
+                    }
+                    
+                    if (path.length > 0) {
+                        const sel = path.join(' > ');
+                        // Only use if unique (it might not be if we stopped traversing too early)
+                        if (isUnique(sel)) return sel;
+                    }
+                    
+                    return null;
+                }
                 
                 // Links
                 document.querySelectorAll('a[href]').forEach((el, i) => {
@@ -569,7 +730,7 @@ class BrowserSnapshotTool(Tool):
                             type: 'link',
                             text: el.innerText?.trim() || el.getAttribute('aria-label') || 'unnamed',
                             href: el.href,
-                            selector: `a[href="${el.getAttribute('href')}"]`
+                            selector: generateSelector(el) || `a[href="${el.getAttribute('href')}"]`
                         });
                     }
                 });
@@ -580,18 +741,28 @@ class BrowserSnapshotTool(Tool):
                         elements.push({
                             type: 'button',
                             text: el.innerText?.trim() || el.value || el.getAttribute('aria-label') || 'unnamed',
-                            selector: el.id ? `#${el.id}` : null
+                            selector: generateSelector(el)
                         });
                     }
                 });
                 
                 // Text inputs
-                document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="search"], textarea').forEach((el, i) => {
+                document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="tel"], input[type="url"], input[type="number"], textarea').forEach((el, i) => {
                     if (i < 15) {
+                        // Get associated label text
+                        let labelText = el.placeholder || '';
+                        if (el.id) {
+                            const label = document.querySelector(`label[for="${el.id}"]`);
+                            if (label) labelText = label.innerText?.trim() || labelText;
+                        }
+                        if (!labelText && el.labels && el.labels.length > 0) {
+                            labelText = el.labels[0].innerText?.trim() || '';
+                        }
+                        
                         elements.push({
                             type: 'textbox',
-                            text: el.placeholder || el.name || el.id || 'input',
-                            selector: el.id ? `#${el.id}` : (el.name ? `[name="${el.name}"]` : null)
+                            text: labelText || el.name || el.id || 'input',
+                            selector: generateSelector(el)
                         });
                     }
                 });
@@ -603,18 +774,37 @@ class BrowserSnapshotTool(Tool):
                         elements.push({
                             type: el.type,
                             text: label,
-                            selector: el.id ? `#${el.id}` : null
+                            selector: generateSelector(el)
                         });
                     }
                 });
                 
-                // Select dropdowns
+                // Select dropdowns with options
                 document.querySelectorAll('select').forEach((el, i) => {
                     if (i < 10) {
+                        // Get option details
+                        const options = Array.from(el.options).slice(0, 10).map(opt => ({
+                            text: opt.text,
+                            value: opt.value,
+                            selected: opt.selected
+                        }));
+                        
+                        // Get label
+                        let labelText = '';
+                        if (el.id) {
+                            const label = document.querySelector(`label[for="${el.id}"]`);
+                            if (label) labelText = label.innerText?.trim() || '';
+                        }
+                        
+                        const optionsSummary = options.map(o => o.text).join(', ');
+                        const currentSelection = options.find(o => o.selected)?.text || '';
+                        
                         elements.push({
                             type: 'combobox',
-                            text: el.name || el.id || 'dropdown',
-                            selector: el.id ? `#${el.id}` : null
+                            text: labelText || el.name || el.id || 'dropdown',
+                            selector: generateSelector(el),
+                            options: optionsSummary,
+                            selectedOption: currentSelection
                         });
                     }
                 });
@@ -730,14 +920,44 @@ class BrowserClickTool(Tool):
                 await locator.click(**click_kwargs)
                 action = "Clicked"
             
+            # Verify click action
+            verification = await self._verify_click(locator)
+            
             return ToolResult(
                 success=True,
-                output=f"{action} on {element} (ref: {ref})",
-                metadata={"ref": ref, "element": element, "action": action},
+                output=f"{action} on {element} (ref: {ref}). {verification}",
+                metadata={"ref": ref, "element": element, "action": action, "verification": verification},
             )
             
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
+    
+    async def _verify_click(self, locator) -> str:
+        """Verify click had expected effect."""
+        try:
+            # Wait briefly for any state changes
+            await self.session.page.wait_for_timeout(100)
+            
+            # Check if element is still visible (button might hide after click)
+            try:
+                is_visible = await locator.is_visible(timeout=500)
+                if not is_visible:
+                    return "Element no longer visible (may have triggered navigation or modal)"
+            except Exception:
+                return "Element state unknown after click"
+            
+            # Check if element has focus (for form elements)
+            try:
+                is_focused = await locator.evaluate("el => el === document.activeElement")
+                if is_focused:
+                    return "Element now has focus"
+            except Exception:
+                pass
+            
+            return "Click completed, element still visible"
+            
+        except Exception as e:
+            return f"Verification inconclusive: {e}"
     
     def get_schema(self) -> ToolSchema:
         return ToolSchema(
@@ -853,14 +1073,28 @@ class BrowserTypeTool(Tool):
             if submit:
                 await locator.press("Enter", timeout=DEFAULT_TIMEOUT_MS)
             
-            result_text = f"Typed '{text}' into {element}"
+            # Verify input value matches what we typed
+            verification = ""
+            try:
+                actual_value = await locator.input_value(timeout=1000)
+                if actual_value == text:
+                    display_text = f"'{text[:20]}...'" if len(text) > 20 else f"'{text}'"
+                    verification = f"Verified: input contains {display_text}"
+                elif text in actual_value or actual_value in text:
+                    verification = f"Partial match: input contains '{actual_value[:30]}'"
+                else:
+                    verification = f"Warning: input has '{actual_value[:30]}' instead of expected text"
+            except Exception:
+                verification = "Could not verify input value"
+            
+            result_text = f"Typed '{text}' into {element}. {verification}"
             if submit:
-                result_text += " and submitted"
+                result_text = f"Typed '{text}' into {element} and submitted. {verification}"
             
             return ToolResult(
                 success=True,
                 output=result_text,
-                metadata={"ref": ref, "text": text, "submitted": submit},
+                metadata={"ref": ref, "text": text, "submitted": submit, "verification": verification},
             )
             
         except Exception as e:
@@ -1024,6 +1258,139 @@ class BrowserFillFormTool(Tool):
                     },
                 },
                 "required": ["fields"],
+            },
+        )
+
+
+class BrowserSelectTool(Tool):
+    """Select an option from a dropdown element."""
+    
+    name = "browser_select"
+    description = (
+        "Select an option from a dropdown (<select> element). "
+        "Use after browser_snapshot to get the element ref. "
+        "Can select by visible text (default), value attribute, or index."
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        element: str,
+        ref: str,
+        option: str,
+        by: str = "text",
+        purpose: str = "",
+    ) -> ToolResult:
+        """
+        Select a dropdown option.
+        
+        Args:
+            element: Human-readable description of the dropdown
+            ref: Element reference from snapshot
+            option: The option to select (text, value, or index)
+            by: Selection method - "text", "value", or "index"
+            purpose: Why this selection is being made
+            
+        Returns:
+            ToolResult with selection status
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            element_info = self.session.get_element_by_ref(ref)
+            if element_info is None:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Ref not found: {ref}. Run browser_snapshot first.",
+                )
+            
+            selector = element_info.get("selector", "")
+            role = element_info.get("role", "")
+            
+            # Verify element is a dropdown
+            if role != "combobox" and not selector:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Element {ref} does not appear to be a dropdown (role: {role})",
+                )
+            
+            # Locate the select element
+            if selector:
+                locator = self.session.page.locator(selector)
+            else:
+                # Fallback to role-based lookup
+                name = element_info.get("name", "")
+                if name:
+                    locator = self.session.page.get_by_role("combobox", name=name)
+                else:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error="No selector available for dropdown",
+                    )
+            
+            # Perform selection based on method
+            if by == "text":
+                await locator.select_option(label=option, timeout=DEFAULT_TIMEOUT_MS)
+            elif by == "value":
+                await locator.select_option(value=option, timeout=DEFAULT_TIMEOUT_MS)
+            elif by == "index":
+                await locator.select_option(index=int(option), timeout=DEFAULT_TIMEOUT_MS)
+            else:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Invalid selection method: {by}. Use 'text', 'value', or 'index'",
+                )
+            
+            # Verify selection by getting current value
+            try:
+                selected_value = await locator.input_value(timeout=1000)
+                verification = f"Current value: {selected_value}"
+            except Exception:
+                verification = "Selection completed"
+            
+            return ToolResult(
+                success=True,
+                output=f"Selected '{option}' in {element} (ref: {ref}). {verification}",
+                metadata={"ref": ref, "option": option, "by": by},
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "element": {
+                        "type": "string",
+                        "description": "Human-readable dropdown description",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Element reference from browser_snapshot",
+                    },
+                    "option": {
+                        "type": "string",
+                        "description": "Option to select (text, value, or index depending on 'by')",
+                    },
+                    "by": {
+                        "type": "string",
+                        "enum": ["text", "value", "index"],
+                        "description": "How to select: by visible text (default), value attribute, or index",
+                        "default": "text",
+                    },
+                },
+                "required": ["element", "ref", "option"],
             },
         )
 
@@ -1421,234 +1788,6 @@ class BrowserWaitTool(Tool):
         )
 
 
-class BrowserSmartFillTool(Tool):
-    """
-    Intelligently fill a form based on field hints.
-    
-    Analyzes the current page's form fields and fills them based on
-    provided hints, matching field names/labels/placeholders using
-    fuzzy matching.
-    """
-    
-    name = "browser_smart_fill"
-    description = (
-        "Fill a form intelligently using field hints. "
-        "Matches your hints (like 'email', 'password', 'name') to actual form fields "
-        "using fuzzy matching on field names, labels, and placeholders. "
-        "Example: browser_smart_fill(fields={'email': 'test@example.com', 'password': 'secret'})"
-    )
-    category = ToolCategory.BROWSING
-    
-    def __init__(self, session: BrowserSession):
-        self.session = session
-    
-    async def execute(
-        self,
-        fields: dict[str, str],
-        submit: bool = False,
-        purpose: str = "",
-        **kwargs,
-    ) -> ToolResult:
-        """
-        Analyze page forms and fill matching fields.
-        
-        Args:
-            fields: Dictionary mapping field hints to values.
-                   Hints can be partial names like 'email', 'password', 'username'.
-            submit: Whether to click the submit button after filling.
-        """
-        try:
-            await self.session.ensure_browser()
-            
-            if not fields:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="No fields provided",
-                )
-            
-            # Extract all form fields from the page with their attributes
-            page_fields = await self.session.page.evaluate("""
-                () => {
-                    const fields = [];
-                    const inputs = document.querySelectorAll('input, textarea, select');
-                    
-                    inputs.forEach((el, idx) => {
-                        // Skip hidden and submit inputs
-                        if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') {
-                            return;
-                        }
-                        
-                        // Get associated label text
-                        let labelText = '';
-                        if (el.id) {
-                            const label = document.querySelector(`label[for="${el.id}"]`);
-                            if (label) labelText = label.innerText?.trim() || '';
-                        }
-                        if (!labelText && el.labels && el.labels.length > 0) {
-                            labelText = el.labels[0].innerText?.trim() || '';
-                        }
-                        
-                        fields.push({
-                            index: idx,
-                            tag: el.tagName.toLowerCase(),
-                            type: el.type || el.tagName.toLowerCase(),
-                            name: el.name || '',
-                            id: el.id || '',
-                            placeholder: el.placeholder || '',
-                            ariaLabel: el.getAttribute('aria-label') || '',
-                            label: labelText,
-                            selector: el.id ? `#${el.id}` : (el.name ? `[name="${el.name}"]` : null)
-                        });
-                    });
-                    
-                    return fields;
-                }
-            """)
-            
-            if not page_fields:
-                return ToolResult(
-                    success=False,
-                    output="",
-                    error="No form fields found on page",
-                )
-            
-            filled = []
-            errors = []
-            unmatched_hints = []
-            
-            # Match each hint to a field using fuzzy matching
-            for hint, value in fields.items():
-                hint_lower = hint.lower()
-                best_match = None
-                best_score = 0
-                
-                for field in page_fields:
-                    # Check if hint appears in any field attribute
-                    score = 0
-                    searchable = [
-                        field.get('name', '').lower(),
-                        field.get('id', '').lower(),
-                        field.get('placeholder', '').lower(),
-                        field.get('ariaLabel', '').lower(),
-                        field.get('label', '').lower(),
-                        field.get('type', '').lower(),
-                    ]
-                    
-                    for text in searchable:
-                        if not text:
-                            continue
-                        # Exact match in attribute
-                        if hint_lower == text:
-                            score = 100
-                        # Hint is substring
-                        elif hint_lower in text:
-                            score = max(score, 80)
-                        # Attribute is substring of hint
-                        elif text in hint_lower:
-                            score = max(score, 60)
-                        # Common patterns
-                        elif hint_lower in ['email', 'mail'] and 'email' in text:
-                            score = max(score, 90)
-                        elif hint_lower in ['pass', 'password', 'pwd'] and 'pass' in text:
-                            score = max(score, 90)
-                        elif hint_lower in ['user', 'username', 'login'] and ('user' in text or 'login' in text):
-                            score = max(score, 90)
-                        elif hint_lower in ['name', 'fullname', 'full_name'] and 'name' in text:
-                            score = max(score, 85)
-                    
-                    if score > best_score:
-                        best_score = score
-                        best_match = field
-                
-                if best_match and best_score >= 50:
-                    # Fill the matched field
-                    selector = best_match.get('selector')
-                    if selector:
-                        try:
-                            locator = self.session.page.locator(selector)
-                            await locator.fill(value, timeout=DEFAULT_TIMEOUT_MS)
-                            filled.append(f"{hint} -> {best_match.get('name') or best_match.get('id')} = '{value}'")
-                        except Exception as e:
-                            errors.append(f"Failed to fill {hint}: {e}")
-                    else:
-                        # Fallback: use nth input based on index
-                        try:
-                            inputs = self.session.page.locator('input, textarea, select')
-                            await inputs.nth(best_match['index']).fill(value, timeout=DEFAULT_TIMEOUT_MS)
-                            filled.append(f"{hint} -> field[{best_match['index']}] = '{value}'")
-                        except Exception as e:
-                            errors.append(f"Failed to fill {hint}: {e}")
-                else:
-                    unmatched_hints.append(hint)
-            
-            # Optionally click submit button
-            submit_clicked = False
-            if submit:
-                try:
-                    submit_button = self.session.page.locator(
-                        'button[type="submit"], input[type="submit"], button:has-text("Submit"), '
-                        'button:has-text("Sign Up"), button:has-text("Login"), button:has-text("Register")'
-                    ).first
-                    await submit_button.click(timeout=DEFAULT_TIMEOUT_MS)
-                    submit_clicked = True
-                except Exception as e:
-                    errors.append(f"Submit button not found or not clickable: {e}")
-            
-            # Build output
-            output_parts = []
-            if filled:
-                output_parts.append(f"Filled {len(filled)} field(s):")
-                output_parts.extend(f"  • {f}" for f in filled)
-            if unmatched_hints:
-                output_parts.append(f"\nUnmatched hints (no matching fields found): {', '.join(unmatched_hints)}")
-            if submit_clicked:
-                output_parts.append("\n✓ Clicked submit button")
-            if errors:
-                output_parts.append(f"\nErrors:")
-                output_parts.extend(f"  • {e}" for e in errors)
-            
-            return ToolResult(
-                success=len(filled) > 0,
-                output="\n".join(output_parts),
-                metadata={
-                    "filled_count": len(filled),
-                    "unmatched_count": len(unmatched_hints),
-                    "submit_clicked": submit_clicked,
-                    "error_count": len(errors),
-                },
-            )
-            
-        except Exception as e:
-            return ToolResult(success=False, output="", error=str(e))
-    
-    def get_schema(self) -> ToolSchema:
-        return ToolSchema(
-            name=self.name,
-            description=self.description,
-            parameters={
-                "type": "object",
-                "properties": {
-                    "fields": {
-                        "type": "object",
-                        "description": (
-                            "Mapping of field hints to values. "
-                            "Keys are hints like 'email', 'password', 'username'. "
-                            "Values are what to fill in those fields."
-                        ),
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "submit": {
-                        "type": "boolean",
-                        "description": "Click the submit button after filling",
-                        "default": False,
-                    },
-                },
-                "required": ["fields"],
-            },
-        )
-
-
 class BrowserVisionSnapshotTool(Tool):
     """
     Capture a screenshot and analyze it with a vision model.
@@ -1811,5 +1950,279 @@ ELEMENT: Menu hamburger icon at (50, 30) - opens navigation menu
                     },
                 },
                 "required": [],
+            },
+        )
+
+
+class BrowserConsoleTool(Tool):
+    """Get console messages from the current page."""
+    
+    name = "browser_console_messages"
+    description = (
+        "Returns all console messages (log, info, warn, error) captured since page load. "
+        "Useful for debugging JavaScript errors, identifying security issues, or understanding page behavior."
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        level: str = "info",
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Get console messages filtered by level.
+        
+        Args:
+            level: Minimum level to return - "debug", "log", "info", "warning", "error".
+                   Defaults to "info". Each level includes more severe messages.
+            purpose: Why console messages are being retrieved
+            
+        Returns:
+            ToolResult with list of console messages
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            # Validate level
+            valid_levels = ["debug", "log", "info", "warning", "error"]
+            if level not in valid_levels:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Invalid level '{level}'. Must be one of: {', '.join(valid_levels)}",
+                )
+            
+            messages = self.session.get_console_messages(min_level=level)
+            
+            if not messages:
+                return ToolResult(
+                    success=True,
+                    output=f"No console messages at level '{level}' or higher.",
+                    metadata={"count": 0, "level": level},
+                )
+            
+            # Format output
+            output_lines = [f"## Console Messages (level >= {level})"]
+            output_lines.append(f"Total: {len(messages)} message(s)\n")
+            
+            for msg in messages:
+                msg_type = msg["type"].upper()
+                text = msg["text"]
+                location = msg.get("location", "")
+                
+                if location:
+                    output_lines.append(f"[{msg_type}] {text}")
+                    output_lines.append(f"       at {location}")
+                else:
+                    output_lines.append(f"[{msg_type}] {text}")
+            
+            return ToolResult(
+                success=True,
+                output="\n".join(output_lines),
+                metadata={"count": len(messages), "level": level},
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "level": {
+                        "type": "string",
+                        "description": (
+                            "Minimum level to return. Each level includes more severe messages. "
+                            "Options: debug, log, info, warning, error"
+                        ),
+                        "enum": ["debug", "log", "info", "warning", "error"],
+                        "default": "info",
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserNetworkTool(Tool):
+    """List network requests made by the page."""
+    
+    name = "browser_network_requests"
+    description = (
+        "Returns all network requests since loading the page. "
+        "Useful for identifying API endpoints, analyzing request patterns, and finding potential security issues."
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        includeStatic: bool = False,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Get network requests, optionally including static resources.
+        
+        Args:
+            includeStatic: Include static resources (images, fonts, scripts, stylesheets).
+                          Defaults to false.
+            purpose: Why network requests are being retrieved
+            
+        Returns:
+            ToolResult with list of network requests
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            requests = self.session.get_network_requests(include_static=includeStatic)
+            
+            if not requests:
+                filter_note = " (excluding static resources)" if not includeStatic else ""
+                return ToolResult(
+                    success=True,
+                    output=f"No network requests captured{filter_note}.",
+                    metadata={"count": 0, "include_static": includeStatic},
+                )
+            
+            # Format output
+            filter_note = "all requests" if includeStatic else "excluding static (images, fonts, scripts, stylesheets)"
+            output_lines = [f"## Network Requests ({filter_note})"]
+            output_lines.append(f"Total: {len(requests)} request(s)\n")
+            
+            for req in requests:
+                method = req["method"]
+                url = req["url"]
+                resource_type = req["resource_type"]
+                status = req.get("status")
+                
+                status_str = f" -> {status}" if status else " -> (pending)"
+                output_lines.append(f"[{method}] {url}")
+                output_lines.append(f"       type: {resource_type}{status_str}")
+            
+            return ToolResult(
+                success=True,
+                output="\n".join(output_lines),
+                metadata={"count": len(requests), "include_static": includeStatic},
+            )
+            
+        except Exception as e:
+            return ToolResult(success=False, output="", error=str(e))
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "includeStatic": {
+                        "type": "boolean",
+                        "description": (
+                            "Include static resources (images, fonts, scripts, stylesheets). "
+                            "Defaults to false to show only dynamic requests."
+                        ),
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        )
+
+
+class BrowserEvaluateTool(Tool):
+    """Evaluate JavaScript in the browser.
+    
+    WARNING: This is a write tool that can execute arbitrary JavaScript.
+    Intentional for security testing (XSS detection, DOM manipulation, etc.)
+    """
+    
+    name = "browser_evaluate"
+    description = (
+        "Evaluate JavaScript expression on the page and return the result. "
+        "Useful for XSS testing, DOM inspection, extracting data, or manipulating page state. "
+        "Expression should be a function body like '() => { return document.title; }'"
+    )
+    category = ToolCategory.BROWSING
+    
+    def __init__(self, session: BrowserSession):
+        self.session = session
+    
+    async def execute(
+        self,
+        expression: str,
+        purpose: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        """
+        Evaluate JavaScript expression on the page.
+        
+        Args:
+            expression: JavaScript code to evaluate. Should be a function body
+                       like '() => { return document.title; }'
+            purpose: Why this JavaScript is being evaluated
+            
+        Returns:
+            ToolResult with the serialized result
+        """
+        try:
+            await self.session.ensure_browser()
+            
+            if not expression or not expression.strip():
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error="Expression is required",
+                )
+            
+            # Execute JavaScript
+            result = await self.session.page.evaluate(expression)
+            
+            # Serialize result for output
+            if result is None:
+                output = "Result: null"
+            elif isinstance(result, (dict, list)):
+                output = f"Result:\n{json.dumps(result, indent=2, default=str)}"
+            else:
+                output = f"Result: {result}"
+            
+            return ToolResult(
+                success=True,
+                output=output,
+                metadata={"expression": expression[:100]},
+            )
+            
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"JavaScript evaluation failed: {str(e)}",
+            )
+    
+    def get_schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": (
+                            "JavaScript code to evaluate. Should be a function body "
+                            "like '() => { return document.title; }' or '() => document.cookie'"
+                        ),
+                    },
+                },
+                "required": ["expression"],
             },
         )

@@ -293,133 +293,36 @@ class ContextStore:
         recent_protection_tokens: int = 20000
     ) -> bool:
         """
-        Optimize context by summarizing old phases if over threshold.
+        Optimize context by summarizing old message blocks if over threshold.
+        
+        Note: Phase-based summarization has been removed. This method now
+        uses a simpler truncation strategy.
         
         Args:
-            llm_client: Client to use for summarization
+            llm_client: Client to use for summarization (unused)
             threshold: Token limit to trigger optimization
             recent_protection_tokens: Number of recent tokens to protect
             
         Returns:
             True if optimization was performed
         """
-        # 1. Check total size
+        # Check total size
         total_tokens = self.estimate_tokens()
         if total_tokens < threshold:
             return False
-            
-        # 2. Identify phase blocks
-        blocks = self.identify_phase_blocks()
-        if not blocks:
-            return False
-            
-        # 3. Define protected window (indices)
-        # We walk backwards summing tokens until we hit protection limit
-        protected_start_index = len(self.current_frame.messages)
-        content_tokens = 0
         
-        for i in range(len(self.current_frame.messages) - 1, -1, -1):
-            msg = self.current_frame.messages[i]
-            # Rough estimate
-            tokens = count_tokens(msg.content)
-            content_tokens += tokens
-            protected_start_index = i
-            if content_tokens >= recent_protection_tokens:
-                break
-        
-        # 4. Find oldest *completed* phase that is fully before protected window
-        # We start looking from index 1 (skipping potential initial system setup/objective block)
-        target_block = None
-        
-        # Skip the very first block if it's uniquely small or just setup, 
-        # but usually RECON is the first real block.
-        # We also DON'T want to summarize the CURRENT phase (last block).
-        
-        summarizable_blocks = blocks[:-1] # Exclude current phase
-        
-        # Identify Preamble end to protect it
-        # We detect the first ASSISTANT message as the start of "real work"
-        preamble_end_index = 0
-        for i, msg in enumerate(self.current_frame.messages):
-             if msg.role == MessageRole.ASSISTANT:
-                 preamble_end_index = i
-                 break
-        if preamble_end_index == 0 and len(self.current_frame.messages) > 0 and self.current_frame.messages[0].role != MessageRole.ASSISTANT:
-             # If we never found an assistant message, but have history, maybe it's all preamble?
-             # But for optimization, we assume we have phases.
-             # If NO assistant message exists, we probably shouldn't summarize anything yet.
-             # But let's safe-guard: if we found blocks, we assume we can summarize.
-             # Let's default to preserving first 2 messages if no assistant found (System + User)
-             preamble_end_index = 2
-             
-        for block in summarizable_blocks:
-            # Check if block overlaps with protected window
-            if block["end_index"] > protected_start_index:
-                continue
-                
-            # Adjust start_index to preserve Preamble
-            if block["start_index"] < preamble_end_index:
-                block["start_index"] = preamble_end_index
-            
-            # If adjustment made block valid range empty or negative, skip
-            if block["start_index"] >= block["end_index"]:
-                continue
-                
-            # Check if block is long enough to be worth summarizing (> 1000 tokens)
-            # Estimate size
-            block_content = "".join([
-                self.current_frame.messages[j].content 
-                for j in range(block["start_index"], block["end_index"])
-            ])
-            if count_tokens(block_content) < 1000:
-                continue
-                
-            # Found a candidate!
-            target_block = block
-            break
-            
-        if not target_block:
-            return False
-            
-        # 5. Summarize
-        from tempo.agent.summarizer import PhaseSummarizer
-        summarizer = PhaseSummarizer(llm_client)
+        # Note: Previously this method used PhaseSummarizer to summarize
+        # old phase blocks. Since phase logic has been removed, we rely on
+        # the truncation strategy in render_messages instead.
+        # Future enhancement: implement a generic message block summarizer.
         
         import logging
-        logging.info(f"Summarizing phase {target_block['phase']} (indices {target_block['start_index']}-{target_block['end_index']})")
+        logging.info(
+            f"Context size ({total_tokens} tokens) exceeds threshold ({threshold}). "
+            "Relying on render_messages truncation."
+        )
         
-        # Extract messages for summary
-        msgs_to_summarize = [
-            self.current_frame.messages[j].to_dict() 
-            for j in range(target_block["start_index"], target_block["end_index"])
-        ]
-        
-        try:
-            summary = await summarizer.summarize_phase(
-                target_block["phase"],
-                msgs_to_summarize
-            )
-            
-            # Format the replacement
-            summary_text = (
-                f"## Phase Summary: {target_block['phase']}\n"
-                f"**Actions:**\n- " + "\n- ".join(summary.actions) + "\n\n"
-                f"**Key Findings:**\n- " + "\n- ".join(summary.key_findings) + "\n\n"
-                f"**Narrative:**\n{summary.narrative_summary}"
-            )
-            
-            # 6. Replace
-            self.replace_messages_with_summary(
-                target_block["start_index"],
-                target_block["end_index"],
-                summary_text,
-                role=MessageRole.SYSTEM 
-            )
-            return True
-            
-        except Exception as e:
-            logging.error(f"Phase summarization failed: {e}")
-            return False
+        return False
 
     # === State Management ===
     

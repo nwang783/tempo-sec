@@ -50,19 +50,16 @@ class TestStateManagement:
         store = ContextStore()
         state = store.get_state()
         
-        assert state.current_phase == "recon"
         assert state.hypotheses == []
     
     def test_update_state(self):
         """Test updating state."""
         store = ContextStore()
         store.update_state(
-            current_phase="hypothesize",
             hypotheses=[{"id": 1, "desc": "SQL injection"}],
         )
         
         state = store.get_state()
-        assert state.current_phase == "hypothesize"
         assert len(state.hypotheses) == 1
 
 
@@ -237,7 +234,7 @@ class TestPersistence:
             # Create and populate store
             store = ContextStore(persistence_dir=tmpdir)
             store.add_message(MessageRole.USER, "Test message")
-            store.update_state(current_phase="test")
+            store.update_state(notes=["Test note"])
             
             # Save
             path = store.save()

@@ -7,7 +7,6 @@ from tempo import (
     AgentConfig,
     ContextStore,
     ToolRegistry,
-    Phase,
     PromptBuilder,
 )
 from tempo.infra.llm import LLMResponse
@@ -24,9 +23,9 @@ class MockLLMClient:
                 content="Beginning reconnaissance of target.",
                 tool_calls=[],
             ),
-            # Transition to hypothesize
+            # Continue analysis
             LLMResponse(
-                content="Transitioning to hypothesis phase.",
+                content="Continuing analysis of target.",
                 tool_calls=[],
             ),
             # Finish task
@@ -130,30 +129,6 @@ class TestIntegration:
         
         assert "example.com" in prompt
         assert "test_tool" in prompt
-    
-    @pytest.mark.asyncio
-    async def test_workflow_phase_tracking(self):
-        """Test workflow manager tracks phases correctly."""
-        from tempo.agent import WorkflowManager
-        
-        config = AgentConfig()
-        wf = WorkflowManager(config)
-        
-        # Start in RECON
-        assert wf.current_phase == Phase.RECON
-        
-        # Record steps
-        for _ in range(3):
-            wf.record_step()
-        
-        assert wf.get_step_count(Phase.RECON) == 3
-        
-        # Transition
-        wf.transition(Phase.HYPOTHESIZE)
-        assert wf.current_phase == Phase.HYPOTHESIZE
-        
-        # History tracked
-        assert len(wf.transition_history) == 1
 
 
 class TestModuleImports:
@@ -162,23 +137,23 @@ class TestModuleImports:
     def test_main_package_imports(self):
         """Test imports from main tempo package."""
         from tempo import Agent, AgentConfig, ContextStore
-        from tempo import ToolRegistry, Phase, PromptBuilder
+        from tempo import ToolRegistry, PromptBuilder
         
         assert Agent is not None
         assert AgentConfig is not None
     
     def test_subpackage_imports(self):
         """Test imports from subpackages."""
-        from tempo.agent import Agent, WorkflowManager
+        from tempo.agent import Agent
         from tempo.context import ContextStore, BranchManager
         from tempo.infra import LiteLLMClient, ContainerManager
-        from tempo.prompts import PromptBuilder, Phase
+        from tempo.prompts import PromptBuilder
         from tempo.tools import ToolRegistry, ShellTool
         
         assert all([
-            Agent, WorkflowManager,
+            Agent,
             ContextStore, BranchManager,
             LiteLLMClient, ContainerManager,
-            PromptBuilder, Phase,
+            PromptBuilder,
             ToolRegistry, ShellTool,
         ])

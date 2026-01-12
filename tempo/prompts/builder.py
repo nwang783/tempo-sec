@@ -5,8 +5,6 @@ Prompt builder for assembling prompts from templates.
 from pathlib import Path
 from typing import Any
 
-from tempo.prompts.phases import Phase
-
 
 # Default template directory
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -17,8 +15,8 @@ class PromptBuilder:
     Assembles prompts from templates with dynamic injection.
     
     Loads templates from the templates directory and provides
-    methods for building system prompts, phase prompts, and
-    specialized prompts for summarization and subagents.
+    methods for building system prompts and specialized prompts
+    for summarization and subagents.
     """
     
     def __init__(self, templates_dir: Path | str | None = None):
@@ -46,21 +44,15 @@ class PromptBuilder:
 
     def build_system_prompt(
         self,
-        current_phase: Phase,
         tool_descriptions: str,
         scope_description: str = "No specific scope defined.",
-        hypotheses_count: int = 0,
-        findings_count: int = 0,
     ) -> str:
         """
         Build the main system prompt.
         
         Args:
-            current_phase: Current workflow phase
             tool_descriptions: Formatted tool descriptions
             scope_description: Scope/limits for testing
-            hypotheses_count: Number of current hypotheses
-            findings_count: Number of current findings
             
         Returns:
             Formatted system prompt
@@ -72,11 +64,8 @@ class PromptBuilder:
             scope_description = f"{scope_description}\n\n{self.PERMISSION_STATEMENT}"
             
         return template.format(
-            current_phase=current_phase.value,
             tool_descriptions=tool_descriptions,
             scope_description=scope_description,
-            hypotheses_count=hypotheses_count,
-            findings_count=findings_count,
         )
     
     def build_summarization_prompt(
@@ -224,7 +213,7 @@ class PromptBuilder:
         Build the system prompt for browser agent.
 
         This is a focused prompt for browser automation tasks,
-        without phase transitions or security testing context.
+        without security testing context.
 
         Args:
             tool_schemas: List of tool schemas
@@ -303,67 +292,27 @@ class PromptBuilder:
         """Build a formatted scope constraints section for prompts."""
         return f"\n## Scope Constraints\n\n{scope_content}\n" if scope_content else ""
     
-    def build_phase_prompt(self, phase: Phase, has_test_plan: bool = False) -> str:
-        """
-        Build a minimal phase-specific prompt.
-        
-        NOTE: Full phase templates have been removed as part of legacy cleanup.
-        This method now returns a simple phase identifier for the Agent runner.
-        The orchestrator architecture uses specialized subagent prompts instead.
-        
-        Args:
-            phase: The workflow phase
-            has_test_plan: Whether a test plan exists (unused, kept for compatibility)
-            
-        Returns:
-            Simple phase identifier string
-        """
-        # Return minimal phase guidance - full prompts are in orchestrator/subagent templates
-        phase_guidance = {
-            Phase.RECON: "Focus on discovering attack surfaces and understanding the target.",
-            Phase.HYPOTHESIZE: "Create a structured test plan based on discovered surfaces.",
-            Phase.TEST: "Execute tests against identified attack surfaces.",
-            Phase.REFLECT: "Analyze results and decide whether to continue or finalize.",
-        }
-        return f"## Current Phase: {phase.value.upper()}\n\n{phase_guidance.get(phase, '')}"
-    
     def build_full_prompt(
         self,
-        current_phase: Phase,
         tool_schemas: list[dict],
         scope_description: str = "No specific scope defined.",
-        hypotheses_count: int = 0,
-        findings_count: int = 0,
     ) -> str:
         """
-        Build the complete system prompt with phase instructions.
-        
-        NOTE: This is a backward compatibility method for the base Agent runner.
-        The orchestrator uses build_orchestrator_prompt instead.
+        Build the complete system prompt.
         
         Args:
-            current_phase: Current workflow phase
             tool_schemas: List of tool schemas
             scope_description: Scope/limits for testing
-            hypotheses_count: Number of current hypotheses
-            findings_count: Number of current findings
             
         Returns:
-            Combined system + phase prompt
+            Complete system prompt
         """
         tool_descriptions = self.format_tool_descriptions(tool_schemas)
         
-        system_prompt = self.build_system_prompt(
-            current_phase=current_phase,
+        return self.build_system_prompt(
             tool_descriptions=tool_descriptions,
             scope_description=scope_description,
-            hypotheses_count=hypotheses_count,
-            findings_count=findings_count,
         )
-        
-        phase_prompt = self.build_phase_prompt(current_phase)
-        
-        return f"{system_prompt}\n\n---\n\n{phase_prompt}"
 
     def build_recon_subagent_prompt(
         self,
@@ -497,4 +446,3 @@ class PromptBuilder:
             tools=tool_descriptions,
             scope_section=scope_section,
         )
-

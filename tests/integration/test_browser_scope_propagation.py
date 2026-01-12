@@ -83,7 +83,7 @@ class TestScopePropagation:
         # Should not have scope section
         assert "Scope Constraints" not in prompt
         # Should still have the rest of the prompt
-        assert "Visual Browser Agent" in prompt
+        assert "Browser Agent" in prompt
 
     def test_browser_prompt_with_state_instructions(self):
         """Test that browser prompt includes state loading/saving instructions."""

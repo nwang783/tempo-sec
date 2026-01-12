@@ -381,43 +381,62 @@ class TestToolFactoryIntegration:
         assert "browser_fill_form" in registry
 
 
-class TestBrowserSmartFillTool:
-    """Tests for BrowserSmartFillTool."""
+class TestBrowserSelectTool:
+    """Tests for BrowserSelectTool."""
     
     def test_tool_metadata(self):
         """Tool has correct metadata."""
-        from tempo.tools.browser_tools import BrowserSmartFillTool
+        from tempo.tools.browser_tools import BrowserSelectTool
         session = BrowserSession()
-        tool = BrowserSmartFillTool(session)
+        tool = BrowserSelectTool(session)
         
-        assert tool.name == "browser_smart_fill"
+        assert tool.name == "browser_select"
         assert tool.category == ToolCategory.BROWSING
-        assert "intelligent" in tool.description.lower() or "fill" in tool.description.lower()
+        assert "dropdown" in tool.description.lower() or "select" in tool.description.lower()
     
-    def test_schema_requires_fields(self):
-        """Schema requires fields parameter."""
-        from tempo.tools.browser_tools import BrowserSmartFillTool
+    def test_schema_requires_element_ref_option(self):
+        """Schema requires element, ref, and option parameters."""
+        from tempo.tools.browser_tools import BrowserSelectTool
         session = BrowserSession()
-        tool = BrowserSmartFillTool(session)
+        tool = BrowserSelectTool(session)
         schema = tool.get_schema()
         
-        assert "fields" in schema.parameters["properties"]
-        assert "fields" in schema.parameters["required"]
-        assert "submit" in schema.parameters["properties"]
+        assert "element" in schema.parameters["properties"]
+        assert "ref" in schema.parameters["properties"]
+        assert "option" in schema.parameters["properties"]
+        assert "by" in schema.parameters["properties"]
+        assert "element" in schema.parameters["required"]
+        assert "ref" in schema.parameters["required"]
+        assert "option" in schema.parameters["required"]
+    
+    def test_schema_by_has_enum(self):
+        """Schema 'by' parameter has correct enum values."""
+        from tempo.tools.browser_tools import BrowserSelectTool
+        session = BrowserSession()
+        tool = BrowserSelectTool(session)
+        schema = tool.get_schema()
+        
+        by_prop = schema.parameters["properties"]["by"]
+        assert by_prop["enum"] == ["text", "value", "index"]
+        assert by_prop["default"] == "text"
     
     @pytest.mark.asyncio
-    async def test_execute_empty_fields(self):
-        """Execute returns error for empty fields."""
-        from tempo.tools.browser_tools import BrowserSmartFillTool
+    async def test_execute_missing_ref(self):
+        """Execute returns error for missing ref."""
+        from tempo.tools.browser_tools import BrowserSelectTool
         session = BrowserSession()
-        tool = BrowserSmartFillTool(session)
+        tool = BrowserSelectTool(session)
         
         session.ensure_browser = AsyncMock()
         
-        result = await tool.execute(fields={})
+        result = await tool.execute(
+            element="Country dropdown",
+            ref="ref_nonexistent",
+            option="Canada",
+        )
         
         assert not result.success
-        assert "No fields provided" in result.error
+        assert "Ref not found" in result.error
 
 
 class TestBrowserVisionSnapshotTool:
@@ -462,3 +481,159 @@ class TestBrowserVisionSnapshotTool:
         assert "coordinates" in tool.VISION_PROMPT.lower()
         assert "{width}" in tool.VISION_PROMPT
         assert "{height}" in tool.VISION_PROMPT
+
+
+class TestBrowserConsoleTool:
+    """Tests for BrowserConsoleTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserConsoleTool
+        session = BrowserSession()
+        tool = BrowserConsoleTool(session)
+        
+        assert tool.name == "browser_console_messages"
+        assert tool.category == ToolCategory.BROWSING
+        assert "console" in tool.description.lower()
+    
+    def test_schema_has_optional_level(self):
+        """Schema has optional level parameter with enum values."""
+        from tempo.tools.browser_tools import BrowserConsoleTool
+        session = BrowserSession()
+        tool = BrowserConsoleTool(session)
+        schema = tool.get_schema()
+        
+        props = schema.parameters["properties"]
+        assert "level" in props
+        assert props["level"]["enum"] == ["debug", "log", "info", "warning", "error"]
+        assert schema.parameters["required"] == []
+    
+    @pytest.mark.asyncio
+    async def test_execute_returns_console_messages(self):
+        """Execute returns filtered console messages."""
+        from tempo.tools.browser_tools import BrowserConsoleTool
+        session = BrowserSession()
+        tool = BrowserConsoleTool(session)
+        
+        # Mock session
+        session.ensure_browser = AsyncMock()
+        session._console_messages = [
+            {"type": "log", "text": "Log message", "location": None},
+            {"type": "info", "text": "Info message", "location": "page.js:10"},
+            {"type": "error", "text": "Error message", "location": "app.js:42"},
+        ]
+        
+        result = await tool.execute(level="info")
+        
+        assert result.success
+        assert "Info message" in result.output
+        assert "Error message" in result.output
+        # Log is below info level, should be excluded
+        assert "Log message" not in result.output
+        assert result.metadata["count"] == 2
+
+
+class TestBrowserNetworkTool:
+    """Tests for BrowserNetworkTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserNetworkTool
+        session = BrowserSession()
+        tool = BrowserNetworkTool(session)
+        
+        assert tool.name == "browser_network_requests"
+        assert tool.category == ToolCategory.BROWSING
+        assert "network" in tool.description.lower()
+    
+    def test_schema_has_optional_includeStatic(self):
+        """Schema has optional includeStatic parameter."""
+        from tempo.tools.browser_tools import BrowserNetworkTool
+        session = BrowserSession()
+        tool = BrowserNetworkTool(session)
+        schema = tool.get_schema()
+        
+        props = schema.parameters["properties"]
+        assert "includeStatic" in props
+        assert props["includeStatic"]["type"] == "boolean"
+        assert schema.parameters["required"] == []
+    
+    @pytest.mark.asyncio
+    async def test_execute_filters_static_by_default(self):
+        """Execute filters out static resources by default."""
+        from tempo.tools.browser_tools import BrowserNetworkTool
+        session = BrowserSession()
+        tool = BrowserNetworkTool(session)
+        
+        # Mock session
+        session.ensure_browser = AsyncMock()
+        session._network_requests = [
+            {"url": "https://api.example.com/data", "method": "GET", "resource_type": "xhr", "status": 200},
+            {"url": "https://example.com/logo.png", "method": "GET", "resource_type": "image", "status": 200},
+            {"url": "https://example.com/app.js", "method": "GET", "resource_type": "script", "status": 200},
+        ]
+        
+        result = await tool.execute(includeStatic=False)
+        
+        assert result.success
+        assert "api.example.com/data" in result.output
+        assert "logo.png" not in result.output
+        assert "app.js" not in result.output
+        assert result.metadata["count"] == 1
+
+
+class TestBrowserEvaluateTool:
+    """Tests for BrowserEvaluateTool."""
+    
+    def test_tool_metadata(self):
+        """Tool has correct metadata."""
+        from tempo.tools.browser_tools import BrowserEvaluateTool
+        session = BrowserSession()
+        tool = BrowserEvaluateTool(session)
+        
+        assert tool.name == "browser_evaluate"
+        assert tool.category == ToolCategory.BROWSING
+        assert "javascript" in tool.description.lower()
+    
+    def test_schema_requires_expression(self):
+        """Schema requires expression parameter."""
+        from tempo.tools.browser_tools import BrowserEvaluateTool
+        session = BrowserSession()
+        tool = BrowserEvaluateTool(session)
+        schema = tool.get_schema()
+        
+        assert "expression" in schema.parameters["properties"]
+        assert "expression" in schema.parameters["required"]
+    
+    @pytest.mark.asyncio
+    async def test_execute_evaluates_javascript(self):
+        """Execute evaluates JavaScript and returns result."""
+        from tempo.tools.browser_tools import BrowserEvaluateTool
+        session = BrowserSession()
+        tool = BrowserEvaluateTool(session)
+        
+        # Mock session and page
+        session.ensure_browser = AsyncMock()
+        session._page = MagicMock()
+        session._page.evaluate = AsyncMock(return_value="Test Page Title")
+        
+        result = await tool.execute(expression="() => document.title")
+        
+        assert result.success
+        assert "Test Page Title" in result.output
+        session.page.evaluate.assert_called_once_with("() => document.title")
+    
+    @pytest.mark.asyncio
+    async def test_execute_empty_expression_fails(self):
+        """Execute returns error for empty expression."""
+        from tempo.tools.browser_tools import BrowserEvaluateTool
+        session = BrowserSession()
+        tool = BrowserEvaluateTool(session)
+        
+        session.ensure_browser = AsyncMock()
+        
+        result = await tool.execute(expression="")
+        
+        assert not result.success
+        assert "required" in result.error.lower()
+

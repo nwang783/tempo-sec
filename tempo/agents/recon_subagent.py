@@ -9,14 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 from tempo.agents.base import BaseAgentDefinition
 from tempo.agents import register_agent
-from tempo.prompts.phases import Phase
 
 from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
 
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
-    from tempo.agent.workflow import WorkflowManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
     from tempo.infra.protocols import FindingsUpdater
@@ -40,7 +38,6 @@ class ReconSubagent(BaseAgentDefinition):
 
     _name = "recon_subagent"
     _model = "openai/gpt-5-mini"  # Fast model for subagent tasks
-    _initial_phase = Phase.RECON
 
     def __init__(
         self,
@@ -74,7 +71,6 @@ class ReconSubagent(BaseAgentDefinition):
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        workflow: "WorkflowManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
         """
@@ -141,7 +137,7 @@ class ReconSubagent(BaseAgentDefinition):
         """
         Build the recon subagent system prompt.
 
-        Uses a focused prompt for reconnaissance without phase transitions.
+        Uses a focused prompt for reconnaissance.
         """
         # Get findings context summary
         findings_context = self._get_findings_context()
