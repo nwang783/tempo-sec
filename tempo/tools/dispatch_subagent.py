@@ -189,7 +189,6 @@ The subagent will:
             # Run subagent
             result = await subagent.run(
                 objective=subagent_objective,
-                initial_phase=subagent_def.initial_phase,
             )
 
             # Save findings after subagent completion using async-safe method if available

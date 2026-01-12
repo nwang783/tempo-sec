@@ -100,11 +100,19 @@ class BrowserAgent(BaseAgentDefinition):
         from tempo.tools.browser_tools import (
             BrowserSession,
             BrowserNavigateTool,
+            BrowserSnapshotTool,
             BrowserScreenshotTool,
+            # DOM-based tools (PRIMARY - more reliable)
+            BrowserClickTool,
+            BrowserTypeTool,
+            BrowserSelectTool,
+            BrowserFillFormTool,
+            # Coordinate-based tools (FALLBACK)
             BrowserClickCoordsTool,
             BrowserTypeCoordsTool,
             BrowserScrollTool,
             BrowserWaitTool,
+            # Debugging tools
             BrowserConsoleTool,
             BrowserNetworkTool,
             BrowserEvaluateTool,
@@ -133,9 +141,18 @@ class BrowserAgent(BaseAgentDefinition):
             state_manager=state_manager,
         )
         
-        # Core visual browser tools (no DOM-based tools)
+        # Page inspection tools
         tools.register(BrowserNavigateTool(browser_session))
+        tools.register(BrowserSnapshotTool(browser_session))
         tools.register(BrowserScreenshotTool(browser_session))
+        
+        # DOM-based interaction tools (PRIMARY - most reliable)
+        tools.register(BrowserClickTool(browser_session))
+        tools.register(BrowserTypeTool(browser_session))
+        tools.register(BrowserSelectTool(browser_session))
+        tools.register(BrowserFillFormTool(browser_session))
+        
+        # Coordinate-based tools (FALLBACK for complex UIs)
         tools.register(BrowserClickCoordsTool(browser_session))
         tools.register(BrowserTypeCoordsTool(browser_session))
         tools.register(BrowserScrollTool(browser_session))

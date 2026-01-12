@@ -381,43 +381,62 @@ class TestToolFactoryIntegration:
         assert "browser_fill_form" in registry
 
 
-class TestBrowserSmartFillTool:
-    """Tests for BrowserSmartFillTool."""
+class TestBrowserSelectTool:
+    """Tests for BrowserSelectTool."""
     
     def test_tool_metadata(self):
         """Tool has correct metadata."""
-        from tempo.tools.browser_tools import BrowserSmartFillTool
+        from tempo.tools.browser_tools import BrowserSelectTool
         session = BrowserSession()
-        tool = BrowserSmartFillTool(session)
+        tool = BrowserSelectTool(session)
         
-        assert tool.name == "browser_smart_fill"
+        assert tool.name == "browser_select"
         assert tool.category == ToolCategory.BROWSING
-        assert "intelligent" in tool.description.lower() or "fill" in tool.description.lower()
+        assert "dropdown" in tool.description.lower() or "select" in tool.description.lower()
     
-    def test_schema_requires_fields(self):
-        """Schema requires fields parameter."""
-        from tempo.tools.browser_tools import BrowserSmartFillTool
+    def test_schema_requires_element_ref_option(self):
+        """Schema requires element, ref, and option parameters."""
+        from tempo.tools.browser_tools import BrowserSelectTool
         session = BrowserSession()
-        tool = BrowserSmartFillTool(session)
+        tool = BrowserSelectTool(session)
         schema = tool.get_schema()
         
-        assert "fields" in schema.parameters["properties"]
-        assert "fields" in schema.parameters["required"]
-        assert "submit" in schema.parameters["properties"]
+        assert "element" in schema.parameters["properties"]
+        assert "ref" in schema.parameters["properties"]
+        assert "option" in schema.parameters["properties"]
+        assert "by" in schema.parameters["properties"]
+        assert "element" in schema.parameters["required"]
+        assert "ref" in schema.parameters["required"]
+        assert "option" in schema.parameters["required"]
+    
+    def test_schema_by_has_enum(self):
+        """Schema 'by' parameter has correct enum values."""
+        from tempo.tools.browser_tools import BrowserSelectTool
+        session = BrowserSession()
+        tool = BrowserSelectTool(session)
+        schema = tool.get_schema()
+        
+        by_prop = schema.parameters["properties"]["by"]
+        assert by_prop["enum"] == ["text", "value", "index"]
+        assert by_prop["default"] == "text"
     
     @pytest.mark.asyncio
-    async def test_execute_empty_fields(self):
-        """Execute returns error for empty fields."""
-        from tempo.tools.browser_tools import BrowserSmartFillTool
+    async def test_execute_missing_ref(self):
+        """Execute returns error for missing ref."""
+        from tempo.tools.browser_tools import BrowserSelectTool
         session = BrowserSession()
-        tool = BrowserSmartFillTool(session)
+        tool = BrowserSelectTool(session)
         
         session.ensure_browser = AsyncMock()
         
-        result = await tool.execute(fields={})
+        result = await tool.execute(
+            element="Country dropdown",
+            ref="ref_nonexistent",
+            option="Canada",
+        )
         
         assert not result.success
-        assert "No fields provided" in result.error
+        assert "Ref not found" in result.error
 
 
 class TestBrowserVisionSnapshotTool:
