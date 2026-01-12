@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import sys
 
-from tempo.tools.dispatch_subagent import DispatchSubagentTool
+from tempo.tools.dispatch_subagents import DispatchSubagentsTool
 from tempo.tools.base import ToolCategory
 from tempo.findings.document import FindingsDocument
 # Import these to ensure they are in sys.modules for mocking
@@ -12,7 +12,7 @@ import tempo.agents.recon_subagent
 import tempo.agents.test_subagent
 
 
-class TestDispatchSubagentTool:
+class TestDispatchSubagentsTool:
     """Tests for DispatchSubagentTool."""
 
     @pytest.fixture
@@ -22,15 +22,15 @@ class TestDispatchSubagentTool:
 
     def test_tool_properties(self, findings_doc):
         """Test tool has correct properties."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
-        assert tool.name == "dispatch_subagent"
+        assert tool.name == "dispatch_subagents"
         assert tool.category == ToolCategory.META
         assert "subagent" in tool.description.lower()
 
     def test_init(self, findings_doc):
         """Test tool initialization."""
-        tool = DispatchSubagentTool(
+        tool = DispatchSubagentsTool(
             findings=findings_doc,
             container_manager=None,
         )
@@ -41,7 +41,7 @@ class TestDispatchSubagentTool:
     @pytest.mark.asyncio
     async def test_execute_invalid_subagent_type(self, findings_doc):
         """Test execution with invalid subagent type."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
         result = await tool.execute(
             subagent_type="invalid",
@@ -53,10 +53,10 @@ class TestDispatchSubagentTool:
 
     def test_get_schema(self, findings_doc):
         """Test schema is properly formatted for OpenAI compatibility."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
         schema = tool.get_schema()
 
-        assert schema.name == "dispatch_subagent"
+        assert schema.name == "dispatch_subagents"
         
         # Schema must be type object without oneOf/anyOf/allOf at top level (OpenAI requirement)
         assert schema.parameters["type"] == "object"
@@ -73,7 +73,7 @@ class TestDispatchSubagentTool:
 
     def test_schema_includes_enum(self, findings_doc):
         """Test schema includes enum for strict type definition."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
         schema = tool.get_schema()
 
         props = schema.parameters["properties"]
@@ -85,7 +85,7 @@ class TestDispatchSubagentTool:
 
     def test_valid_subagent_types_documented(self, findings_doc):
         """Test that valid subagent types are documented in description."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
         schema = tool.get_schema()
 
         # Valid types should be mentioned in description
@@ -94,7 +94,7 @@ class TestDispatchSubagentTool:
         assert "test" in desc
 
 
-class TestDispatchSubagentToolWithMocks:
+class TestDispatchSubagentsToolWithMocks:
     """Tests for DispatchSubagentTool with mocked dependencies."""
 
     @pytest.fixture
@@ -105,7 +105,7 @@ class TestDispatchSubagentToolWithMocks:
     @pytest.mark.asyncio
     async def test_recon_subagent_creation(self, findings_doc):
         """Test that recon subagent is properly created."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
         # Create mocks for the imports that happen inside execute
         mock_agent = MagicMock()
@@ -145,7 +145,7 @@ class TestDispatchSubagentToolWithMocks:
     @pytest.mark.asyncio
     async def test_test_subagent_creation(self, findings_doc):
         """Test that test subagent is properly created."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=MagicMock(

@@ -48,7 +48,7 @@ class OrchestratorAgent(BaseAgentDefinition):
 
     def __init__(
         self,
-        target: str,
+        target: str = "See scope file",
         findings_path: str | None = None,
         max_iterations: int = 10,
         scope_content: str | None = None,
@@ -58,13 +58,14 @@ class OrchestratorAgent(BaseAgentDefinition):
         Initialize the orchestrator agent.
 
         Args:
-            target: The target to analyze (URL, domain, etc.)
+            target: Legacy target field (deprecated, use scope_content instead)
             findings_path: Optional path to findings document.
                           If provided and exists: loads existing document.
                           If provided but doesn't exist: creates new at that path.
-                          If None: auto-generates path from target.
+                          If None: auto-generates path based on timestamp.
             max_iterations: Maximum orchestrator iterations (default: 10)
-            scope_content: Optional scope constraints from scope file
+            scope_content: Scope file content containing target(s) and constraints.
+                          This is injected directly into the system prompt.
             **kwargs: Ignored additional args (for compatibility)
         """
         self.target = target
@@ -162,14 +163,14 @@ class OrchestratorAgent(BaseAgentDefinition):
 
         Includes:
         - Core tools: shell, filesystem (for direct analysis if needed)
-        - Subagent dispatch: dispatch_subagent
+        - Subagent dispatch: dispatch_subagents
         - Findings management: read_findings, add_finding, add_attack_surface
         - Meta tools: summarize_previous_tool_output, finalize_analysis
         """
         from tempo.tools.registry import ToolRegistry
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.dispatch_subagent import DispatchSubagentTool
+        from tempo.tools.dispatch_subagents import DispatchSubagentsTool
         from tempo.tools.findings_tools import (
             ReadFindingsTool,
             AddFindingTool,
@@ -193,7 +194,7 @@ class OrchestratorAgent(BaseAgentDefinition):
         tools.register(FileWriteTool(container_manager=container))
 
         # Subagent dispatch - combined single/parallel dispatch tool
-        tools.register(DispatchSubagentTool(
+        tools.register(DispatchSubagentsTool(
             findings=self.findings,
             container_manager=container,
             visualization=visualization,
@@ -260,7 +261,7 @@ class OrchestratorAgent(BaseAgentDefinition):
             f"Coordinate a comprehensive security analysis of the target.",
             f"",
             f"1. Start by calling `read_findings` to understand the current state",
-            f"2. Dispatch subagents as needed (`dispatch_subagent`)",
+            f"2. Dispatch subagents as needed (`dispatch_subagents`)",
             f"3. Review results and determine next steps",
             f"4. Continue until adequate coverage is achieved",
             f"5. Call `finalize_analysis` to generate the final report",

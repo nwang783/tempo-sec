@@ -71,7 +71,7 @@ class TestPromptBuilderScopeSupport:
     def test_build_orchestrator_prompt_with_scope(self):
         """Test prompt builder includes scope content."""
         prompts = PromptBuilder()
-        mock_schemas = [{"function": {"name": "dispatch_subagent", "description": "test"}}]
+        mock_schemas = [{"function": {"name": "dispatch_subagents", "description": "test"}}]
 
         prompt = prompts.build_orchestrator_prompt(
             tool_schemas=mock_schemas,
@@ -86,7 +86,7 @@ class TestPromptBuilderScopeSupport:
     def test_build_orchestrator_prompt_without_scope(self):
         """Test prompt builder works without scope content."""
         prompts = PromptBuilder()
-        mock_schemas = [{"function": {"name": "dispatch_subagent", "description": "test"}}]
+        mock_schemas = [{"function": {"name": "dispatch_subagents", "description": "test"}}]
 
         prompt = prompts.build_orchestrator_prompt(
             tool_schemas=mock_schemas,

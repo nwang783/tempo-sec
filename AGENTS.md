@@ -61,11 +61,11 @@ The **OrchestratorAgent** is the recommended entry point for comprehensive secur
 ```
 OrchestratorAgent (claude-sonnet-4)
     |
-    +-- dispatch_subagent("recon") --> ReconSubagent
+    +-- dispatch_subagents("recon") --> ReconSubagent
     |       |                              |
     |       +-- Updates shared findings <--+
     |
-    +-- dispatch_subagent("test") --> TestSubagent
+    +-- dispatch_subagents("test") --> TestSubagent
     |       |                              |
     |       +-- Updates shared findings <--+
     |

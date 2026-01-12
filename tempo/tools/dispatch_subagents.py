@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from tempo.infra.protocols import FindingsUpdater, VisualizationObserver
 
 
-class DispatchSubagentTool(Tool):
+class DispatchSubagentsTool(Tool):
     """
     Dispatch specialized subagents to perform focused tasks.
 
@@ -30,20 +30,20 @@ class DispatchSubagentTool(Tool):
     - Parallel dispatch: Pass dispatch_requests array for concurrent execution
     """
 
-    name = "dispatch_subagent"
-    description = """Dispatch specialized subagents to perform focused tasks.
+    name = "dispatch_subagents"
+    description = """Dispatch one or more specialized subagents to perform focused tasks.
 
 Available subagent types:
 - "recon": ReconSubagent for discovering attack surfaces
 - "test": TestSubagent for testing attack surfaces and finding vulnerabilities
 
-The subagent will:
-1. Execute with its own context and tools
+The subagent(s) will:
+1. Execute with their own context and tools
 2. Update the shared findings document
-3. Return a summary of its work
+3. Return a summary of their work
 
-**Single dispatch**: Pass subagent_type and objective directly.
-**Parallel dispatch**: Pass dispatch_requests array to run multiple subagents concurrently."""
+**Single dispatch**: Pass subagent_type and objective directly to dispatch one subagent.
+**Parallel dispatch**: Pass dispatch_requests array to dispatch multiple subagents concurrently."""
     category = ToolCategory.META
 
     def __init__(

@@ -67,9 +67,9 @@ def parse_args() -> argparse.Namespace:
     
     # Agent-specific arguments (passed to agent constructor/methods)
     parser.add_argument(
-        "--target",
+        "--scope-file",
         type=str,
-        help="Target domain/URL (for recon/scan agents)",
+        help="Path to scope file containing target(s) and constraints (required for orchestrator)",
     )
     
     parser.add_argument(
@@ -102,11 +102,7 @@ def parse_args() -> argparse.Namespace:
         help="Maximum iterations for orchestrator",
     )
 
-    parser.add_argument(
-        "--scope-file",
-        type=str,
-        help="Path to text file containing scope constraints for analysis",
-    )
+    # --scope-file is defined above with agent-specific arguments
 
     # Parse known args first to allow agents to add their own?
     # For now, we take all args and pass relevant ones
@@ -161,7 +157,6 @@ async def main() -> None:
     try:
         # Build kwargs for agent constructor
         agent_kwargs = {
-            "target": args.target,
             "manifest_path": args.manifest,
             "output_path": args.output,
             "session_id": str(uuid.uuid4()),
@@ -189,12 +184,10 @@ async def main() -> None:
     except Exception as e:
         print(f"Error initializing agent '{args.agent}': {e}")
         # Hint at missing args
-        if args.agent == "recon" and not args.target:
-            print("Hint: 'recon' agent requires --target")
         if args.agent == "test_cycle" and not args.manifest:
             print("Hint: 'test_cycle' agent requires --manifest")
-        if args.agent == "orchestrator" and not args.target:
-            print("Hint: 'orchestrator' agent requires --target")
+        if args.agent == "orchestrator" and not args.scope_file:
+            print("Hint: 'orchestrator' agent requires --scope-file")
         sys.exit(1)
 
     # Resolve Model
@@ -260,7 +253,6 @@ async def main() -> None:
         try:
             # Pass args that might be relevant
             objective = agent_def.build_objective(
-                target=args.target,
                 manifest_path=args.manifest
             )
 
@@ -342,26 +334,9 @@ async def main() -> None:
                 sys.exit(1)
             
             async with container:
-
                 # Create tools with container
-                try:
-                    tools = agent_def.create_tools(context, container, visualization=viz_collector, config=config)
-
-                except Exception as e:
-
-                    import traceback
-                    traceback.print_exc()
-                    raise
-                
-                try:
-
-                    result = await run_agent(tools)
-
-                except Exception as e:
-
-                    import traceback
-                    traceback.print_exc()
-                    raise
+                tools = agent_def.create_tools(context, container, visualization=viz_collector, config=config)
+                result = await run_agent(tools)
         else:
             print("⚠️  Running in LOCAL mode (no sandbox)...")
             # Create local tools

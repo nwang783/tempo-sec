@@ -184,11 +184,11 @@ class TestPromptBuilder:
         
         prompt = builder.build_orchestrator_prompt(
             tool_schemas=[
-                {"type": "function", "function": {"name": "dispatch_subagent", "description": "Dispatch a subagent"}},
+                {"type": "function", "function": {"name": "dispatch_subagents", "description": "Dispatch a subagent"}},
             ],
             target="https://example.com",
             findings_summary="No findings yet",
         )
         
         assert "example.com" in prompt
-        assert "dispatch_subagent" in prompt
+        assert "dispatch_subagents" in prompt
