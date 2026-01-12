@@ -18,6 +18,7 @@ from tempo.findings.schema import (
     Finding,
     FindingsDocumentSchema,
     ReconSummary,
+    SessionSummary,
     Severity,
 )
 from tempo.findings.persistence import load_from_yaml, save_to_yaml
@@ -350,6 +351,86 @@ class FindingsDocument:
         """
         self._data.total_steps_taken += count
         self._data.updated_at = datetime.utcnow()
+
+    # Session history methods
+
+    def add_session_summary(
+        self,
+        session_id: str,
+        summary: str,
+        agent_type: str = "orchestrator",
+        surfaces_discovered: int = 0,
+        findings_added: int = 0,
+        key_actions: list[str] | None = None,
+    ) -> SessionSummary:
+        """
+        Add a session summary to the findings document.
+
+        Args:
+            session_id: Unique session identifier (UUID)
+            summary: 2-3 sentence summary of what was accomplished
+            agent_type: Type of agent (recon, test, orchestrator)
+            surfaces_discovered: Number of attack surfaces found this session
+            findings_added: Number of security findings added this session
+            key_actions: Key actions taken during the session
+
+        Returns:
+            The created SessionSummary
+        """
+        session = SessionSummary(
+            session_id=session_id,
+            started_at=self._data.created_at,  # Use document creation as session start
+            ended_at=datetime.utcnow(),
+            agent_type=agent_type,
+            summary=summary,
+            surfaces_discovered=surfaces_discovered,
+            findings_added=findings_added,
+            key_actions=key_actions or [],
+        )
+
+        self._data.session_history.append(session)
+        self._data.updated_at = datetime.utcnow()
+
+        return session
+
+    def get_session_history(self) -> list[SessionSummary]:
+        """
+        Get all session summaries in chronological order.
+
+        Returns:
+            List of all session summaries
+        """
+        return self._data.session_history
+
+    def get_session_history_summary(self) -> str:
+        """
+        Get a formatted text summary of all sessions for prompt injection.
+
+        This is designed to be included in agent system prompts so they
+        can understand what work has already been done.
+
+        Returns:
+            Formatted multi-line string summarizing all sessions
+        """
+        if not self._data.session_history:
+            return "No prior sessions recorded."
+
+        lines = []
+        for i, session in enumerate(self._data.session_history, 1):
+            lines.append(f"### Session {i} ({session.agent_type})")
+            lines.append(f"- **When**: {session.ended_at.strftime('%Y-%m-%d %H:%M UTC')}")
+            lines.append(f"- **Summary**: {session.summary}")
+            if session.surfaces_discovered > 0:
+                lines.append(f"- **Surfaces discovered**: {session.surfaces_discovered}")
+            if session.findings_added > 0:
+                lines.append(f"- **Findings added**: {session.findings_added}")
+            if session.key_actions:
+                lines.append("- **Key actions**:")
+                for action in session.key_actions:
+                    lines.append(f"  - {action}")
+            lines.append("")
+
+        return "\n".join(lines)
 
     # Direct access to underlying data (for advanced use cases)
 

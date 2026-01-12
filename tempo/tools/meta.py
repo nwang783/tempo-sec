@@ -3,7 +3,9 @@ Meta tools for agent control and subagent coordination.
 """
 
 from typing import TYPE_CHECKING
+import logging
 import re
+import uuid
 from pathlib import Path
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
@@ -238,8 +240,13 @@ class FinalizeAnalysisTool(Tool):
 
     Provide:
     - final_report: Comprehensive summary of findings
+    - session_summary: 2-3 sentence summary of what you accomplished THIS session (required)
+    - key_actions: List of key actions taken (e.g., "Crawled /api endpoints", "Tested XSS on login")
     - executive_summary: Brief overview for stakeholders (optional)
     - risk_level: Overall risk assessment (optional)
+
+    The session_summary helps future sessions understand what has already been done,
+    avoiding repetition and enabling deeper investigation on subsequent runs.
 
     This tool saves the findings document and terminates the orchestrator."""
     category = ToolCategory.META
@@ -256,6 +263,8 @@ class FinalizeAnalysisTool(Tool):
     async def execute(
         self,
         final_report: str,
+        session_summary: str = "",
+        key_actions: list[str] | None = None,
         executive_summary: str = "",
         risk_level: str = "medium",
         purpose: str = "",
@@ -265,6 +274,8 @@ class FinalizeAnalysisTool(Tool):
 
         Args:
             final_report: Comprehensive summary of findings
+            session_summary: 2-3 sentence summary of what was accomplished this session
+            key_actions: List of key actions taken during this session
             executive_summary: Brief overview for stakeholders
             risk_level: Overall risk assessment (low, medium, high, critical)
             purpose: Why this tool is being called
@@ -276,6 +287,24 @@ class FinalizeAnalysisTool(Tool):
         valid_risk_levels = {"low", "medium", "high", "critical"}
         if risk_level.lower() not in valid_risk_levels:
             risk_level = "medium"
+
+        # Record session summary if provided
+        session_recorded = False
+        if session_summary and hasattr(self.findings, 'add_session_summary'):
+            try:
+                # Get current counts for the session
+                summary_data = self.findings.get_summary() if hasattr(self.findings, 'get_summary') else {}
+                self.findings.add_session_summary(
+                    session_id=str(uuid.uuid4()),
+                    summary=session_summary,
+                    agent_type="orchestrator",
+                    surfaces_discovered=summary_data.get('total_surfaces', 0),
+                    findings_added=summary_data.get('total_findings', 0),
+                    key_actions=key_actions or [],
+                )
+                session_recorded = True
+            except Exception as e:
+                logging.warning(f"Session recording failed: {e}")
 
         # Save the findings document if it has a save method
         try:
@@ -364,6 +393,7 @@ class FinalizeAnalysisTool(Tool):
                 "executive_summary": executive_summary,
                 "final_report": final_report,
                 "report_path": saved_path,
+                "session_recorded": session_recorded,
             },
         )
 
@@ -379,6 +409,21 @@ class FinalizeAnalysisTool(Tool):
                         "type": "string",
                         "description": "Comprehensive summary of the security analysis findings.",
                     },
+                    "session_summary": {
+                        "type": "string",
+                        "description": (
+                            "2-3 sentence summary of what YOU accomplished THIS session. "
+                            "This helps future sessions avoid repeating your work."
+                        ),
+                    },
+                    "key_actions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of key actions taken this session "
+                            "(e.g., 'Crawled /api endpoints', 'Tested XSS vulnerabilities')."
+                        ),
+                    },
                     "executive_summary": {
                         "type": "string",
                         "description": "Brief overview suitable for stakeholders (optional).",
@@ -389,7 +434,7 @@ class FinalizeAnalysisTool(Tool):
                         "description": "Overall risk assessment for the target.",
                     },
                 },
-                "required": ["final_report"],
+                "required": ["final_report", "session_summary"],
             },
         )
 
