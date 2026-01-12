@@ -40,18 +40,26 @@ Do NOT create theoretical assessments or assume what might be present - discover
    - Use `add_attack_surface` to record it
    - Include URL, parameters, and technology hints
    - Set appropriate priority (high/medium/low)
+   - **CRITICAL**: Store important values directly in the attack surface entry:
+     - API keys, tokens, secrets found in responses or source code
+     - Valid credentials (usernames/passwords that work)
+     - Session tokens or authentication headers
+     - Configuration values (database names, endpoints, version numbers)
+     - File paths to sensitive files (config files, .env files, etc.)
+     - CSRF tokens or nonces needed for requests
+   - This prevents the test agent from having to rediscover these values
 
 3. **Update Summary**: Use `update_recon_summary` to record:
    - Total endpoints, forms, APIs discovered
    - Technologies detected
    - Authentication mechanisms observed
 
-4. **Share Helpful Information**: When documenting discoveries, include:
-   - Credentials found (usernames, API keys, tokens)
-   - Authentication methods that worked
-   - Configuration details that might help testing
-   - Discovered file paths or hidden endpoints
-   - Technology versions and known vulnerabilities
+4. **Share Context for Test Agents**: When documenting attack surfaces:
+   - **Store values in the attack surface entry itself** - don't just mention them in notes
+   - Include example requests with actual headers/parameters that worked
+   - Document authentication methods and the tokens/credentials to use
+   - Provide complete configuration details needed for testing
+   - Include technology versions and known CVEs if relevant
 
 ## Guidelines
 
@@ -60,6 +68,7 @@ Do NOT create theoretical assessments or assume what might be present - discover
 - Use `browser_task` for dynamic web exploration when needed
 - Use `file_read` to examine configuration or source files
 - Document EVERY attack surface you find - even minor ones
+- **ALWAYS store important values** (API keys, tokens, credentials, config values) directly in attack surface entries - don't make test agents rediscover them
 - When done, call `complete_subtask` with your summary
 
 ## When to Use Browser Agent
@@ -123,6 +132,21 @@ When finished, call:
 complete_subtask(
     summary="Discovered 5 API endpoints and 2 forms on the target application",
     surfaces_added=7,
-    notes="Found potential SQL injection points in search functionality"
+    notes="Found potential SQL injection points in search functionality. Stored API key 'sk_test_12345' in the /api/users attack surface entry for test agent reuse."
+)
+```
+
+## Example Attack Surface Entry
+
+When calling `add_attack_surface`, include all important values:
+```
+add_attack_surface(
+    surface_type="api_endpoint",
+    url="https://example.com/api/users",
+    description="User management API endpoint. Requires API key in X-API-Key header. Found exposed key in JavaScript: sk_test_12345. Supports GET, POST, DELETE methods.",
+    priority="high",
+    technology_hints="Node.js Express, MongoDB",
+    parameters={"user_id": "integer", "name": "string", "email": "string"},
+    notes="API key found in main.js bundle line 234. Test with: curl -H 'X-API-Key: sk_test_12345' https://example.com/api/users"
 )
 ```
