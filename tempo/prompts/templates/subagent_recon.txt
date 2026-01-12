@@ -146,7 +146,7 @@ add_attack_surface(
     description="User management API endpoint. Requires API key in X-API-Key header. Found exposed key in JavaScript: sk_test_12345. Supports GET, POST, DELETE methods.",
     priority="high",
     technology_hints="Node.js Express, MongoDB",
-    parameters={"user_id": "integer", "name": "string", "email": "string"},
+    parameters={{"user_id": "integer", "name": "string", "email": "string"}},
     notes="API key found in main.js bundle line 234. Test with: curl -H 'X-API-Key: sk_test_12345' https://example.com/api/users"
 )
 ```
