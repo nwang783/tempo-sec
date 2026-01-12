@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from tempo.findings.document import FindingsDocument
 from tempo.agents.orchestrator import OrchestratorAgent
 from tempo.tools.meta import FinalizeAnalysisTool
-from tempo.tools.dispatch_subagent import DispatchSubagentTool
+from tempo.tools.dispatch_subagents import DispatchSubagentsTool
 from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.context.frame import ToolCall
 from tempo.context.store import ContextStore
@@ -66,8 +66,8 @@ class TestOrchestratorFlowIntegration:
         assert result.findings["risk_level"] == "high"
         assert result.findings["final_report"] == "Comprehensive analysis complete"
 
-    def test_orchestrator_tools_include_dispatch_subagent(self, temp_findings_path):
-        """Test that OrchestratorAgent has dispatch_subagent tool."""
+    def test_orchestrator_tools_include_dispatch_subagents(self, temp_findings_path):
+        """Test that OrchestratorAgent has dispatch_subagents tool."""
         agent = OrchestratorAgent(
             target="https://example.com",
             findings_path=str(temp_findings_path),
@@ -77,7 +77,7 @@ class TestOrchestratorFlowIntegration:
         tools = agent.create_tools(context=context)
         tool_names = tools.list_tools()
 
-        assert "dispatch_subagent" in tool_names
+        assert "dispatch_subagents" in tool_names
         assert "finalize_analysis" in tool_names
         assert "read_findings" in tool_names
         assert "add_finding" in tool_names
@@ -107,7 +107,7 @@ class TestOrchestratorFlowIntegration:
         tools = agent.create_tools(context=context)
 
         # Get dispatch tool and verify it has the same findings
-        dispatch_tool = tools.get("dispatch_subagent")
+        dispatch_tool = tools.get("dispatch_subagents")
         assert dispatch_tool is not None
         assert dispatch_tool._findings == agent.findings
 
@@ -188,7 +188,7 @@ class TestOrchestratorFlowIntegration:
 
         # This simulates the orchestrator's decision logic
         # When no surfaces exist, dispatch recon
-        dispatch_tool = DispatchSubagentTool(findings=findings_doc)
+        dispatch_tool = DispatchSubagentsTool(findings=findings_doc)
 
         # Verify the tool is configured correctly
         schema = dispatch_tool.get_schema()
@@ -213,7 +213,7 @@ class TestOrchestratorFlowIntegration:
         assert untested[0].url == "https://example.com/api/auth"
 
         # Now test subagent should be dispatched
-        dispatch_tool = DispatchSubagentTool(findings=findings_doc)
+        dispatch_tool = DispatchSubagentsTool(findings=findings_doc)
 
         # Verify test is a valid subagent type
         schema = dispatch_tool.get_schema()
@@ -251,7 +251,7 @@ class TestOrchestratorPromptBuilder:
         """Test building orchestrator prompt."""
         builder = PromptBuilder()
         schemas = [
-            {"function": {"name": "dispatch_subagent", "description": "Dispatch subagent"}},
+            {"function": {"name": "dispatch_subagents", "description": "Dispatch subagent"}},
             {"function": {"name": "read_findings", "description": "Read findings"}},
             {"function": {"name": "finalize_analysis", "description": "Finalize analysis"}},
         ]
@@ -264,7 +264,7 @@ class TestOrchestratorPromptBuilder:
 
         assert "Orchestrator" in prompt
         assert "https://example.com" in prompt
-        assert "dispatch_subagent" in prompt
+        assert "dispatch_subagents" in prompt
         assert "finalize_analysis" in prompt
         assert "5 discovered" in prompt
 
@@ -272,7 +272,7 @@ class TestOrchestratorPromptBuilder:
         """Test orchestrator prompt with no findings."""
         builder = PromptBuilder()
         schemas = [
-            {"function": {"name": "dispatch_subagent", "description": "Dispatch"}},
+            {"function": {"name": "dispatch_subagents", "description": "Dispatch"}},
         ]
 
         prompt = builder.build_orchestrator_prompt(

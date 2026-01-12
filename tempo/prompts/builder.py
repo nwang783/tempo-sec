@@ -140,7 +140,7 @@ class PromptBuilder:
             "Use when investigating multiple things independently. Each subtask spawns "
             "a subagent that works in parallel. Subagents call `finish_subtask` when done."
         ),
-        "dispatch_subagent": (
+        "dispatch_subagents": (
             "Dispatch a specialized subagent for focused investigation. Subagents have "
             "access to the shared findings document and return a summary when complete."
         ),

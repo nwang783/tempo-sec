@@ -131,7 +131,7 @@ class TestOrchestratorAgent:
         assert "file_write" in tool_names
 
         # Subagent dispatch tool - key orchestration capability
-        assert "dispatch_subagent" in tool_names
+        assert "dispatch_subagents" in tool_names
 
         # Findings management tools
         assert "read_findings" in tool_names
@@ -166,7 +166,7 @@ class TestOrchestratorAgent:
         assert "https://example.com" in objective
         assert "5" in objective  # max iterations
         assert "read_findings" in objective
-        assert "dispatch_subagent" in objective
+        assert "dispatch_subagents" in objective
         assert "finalize_analysis" in objective
 
     def test_build_objective_with_override_target(self):
@@ -192,7 +192,7 @@ class TestOrchestratorAgent:
             prompts = PromptBuilder()
             mock_schemas = [
                 {"function": {"name": "shell", "description": "Execute commands"}},
-                {"function": {"name": "dispatch_subagent", "description": "Dispatch subagent"}},
+                {"function": {"name": "dispatch_subagents", "description": "Dispatch subagent"}},
                 {"function": {"name": "finalize_analysis", "description": "Finalize analysis"}},
             ]
 
@@ -205,7 +205,7 @@ class TestOrchestratorAgent:
             assert "Orchestrator" in prompt
             assert "https://example.com" in prompt
             assert "shell" in prompt
-            assert "dispatch_subagent" in prompt
+            assert "dispatch_subagents" in prompt
 
     def test_get_findings_summary_empty(self):
         """Test findings summary generation with empty document."""

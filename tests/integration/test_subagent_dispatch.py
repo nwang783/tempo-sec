@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from tempo.findings.document import FindingsDocument
 from tempo.agents.recon_subagent import ReconSubagent
 from tempo.agents.test_subagent import TestSubagent
-from tempo.tools.dispatch_subagent import DispatchSubagentTool
+from tempo.tools.dispatch_subagents import DispatchSubagentsTool
 from tempo.tools.complete_subtask import CompleteSubtaskTool
 from tempo.agent.step_handler import StepHandler, SpecialToolResult
 from tempo.context.frame import ToolCall
@@ -132,7 +132,7 @@ class TestSubagentDispatchIntegration:
 
     def test_dispatch_tool_creates_correct_subagent_type(self, findings_doc):
         """Test that dispatch tool creates the correct subagent type."""
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
         # Test schema specifies valid types
         schema = tool.get_schema()
@@ -145,7 +145,7 @@ class TestSubagentDispatchIntegration:
     async def test_full_recon_dispatch_flow(self, findings_doc):
         """Test full recon subagent dispatch flow with mocks."""
         import sys
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
         # Create mock agent that will be used by the dispatch tool
         mock_agent = MagicMock()
@@ -198,7 +198,7 @@ class TestSubagentDispatchIntegration:
     async def test_full_test_dispatch_flow(self, findings_doc):
         """Test full test subagent dispatch flow with mocks."""
         import sys
-        tool = DispatchSubagentTool(findings=findings_doc)
+        tool = DispatchSubagentsTool(findings=findings_doc)
 
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=MagicMock(

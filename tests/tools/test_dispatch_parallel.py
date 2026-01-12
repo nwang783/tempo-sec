@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from tempo.tools.dispatch_subagent import DispatchSubagentTool, ToolResult
+from tempo.tools.dispatch_subagents import DispatchSubagentsTool, ToolResult
 from tempo.findings.document import FindingsDocument
 from tempo.tools.base import ToolCategory
 
@@ -17,11 +17,11 @@ class TestDispatchSubagentToolParallel:
     @pytest.fixture
     def tool(self, findings_doc):
         """Create the tool instance."""
-        return DispatchSubagentTool(findings=findings_doc, max_concurrent=2)
+        return DispatchSubagentsTool(findings=findings_doc, max_concurrent=2)
 
     def test_tool_properties(self, tool):
         """Test tool properties."""
-        assert tool.name == "dispatch_subagent"
+        assert tool.name == "dispatch_subagents"
         assert tool.category == ToolCategory.META
         assert tool._max_concurrent == 2
         assert "parallel" in tool.description.lower()
@@ -142,7 +142,7 @@ class TestDispatchSubagentToolParallel:
     def test_get_schema_includes_parallel_option(self, tool):
         """Test schema includes dispatch_requests for parallel dispatch."""
         schema = tool.get_schema()
-        assert schema.name == "dispatch_subagent"
+        assert schema.name == "dispatch_subagents"
         
         props = schema.parameters["properties"]
         # Single dispatch params

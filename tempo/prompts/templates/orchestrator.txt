@@ -94,7 +94,7 @@ Maximize efficiency by parallelizing independent work:
 
 ### Initial Reconnaissance (single)
 ```
-dispatch_subagent(
+dispatch_subagents(
     subagent_type="recon",
     objective="Perform comprehensive reconnaissance of the target",
     focus_area=""
@@ -116,7 +116,7 @@ All three run concurrently, results are aggregated when complete.
 
 ### Sequential Testing (dependencies)
 ```
-dispatch_subagent(
+dispatch_subagents(
     subagent_type="test",
     objective="Test authentication endpoints for bypass vulnerabilities",
     focus_area="authentication"
@@ -125,7 +125,7 @@ dispatch_subagent(
 
 ### Follow-up Investigation
 ```
-dispatch_subagent(
+dispatch_subagents(
     subagent_type="recon",
     objective="Deep dive into API endpoints discovered during initial recon",
     focus_area="/api/"
