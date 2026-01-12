@@ -117,6 +117,45 @@ class ReconSummary(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class SessionSummary(BaseModel):
+    """
+    Summary of work done in a single agent session.
+
+    Captures what was accomplished so future sessions can avoid
+    repeating the same work and build on prior discoveries.
+    """
+    session_id: str = Field(description="Unique session identifier (UUID)")
+    started_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="When this session started"
+    )
+    ended_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="When this session ended"
+    )
+    agent_type: str = Field(
+        default="orchestrator",
+        description="Type of agent (recon, test, orchestrator)"
+    )
+    summary: str = Field(
+        description="2-3 sentence summary of what was accomplished"
+    )
+    surfaces_discovered: int = Field(
+        default=0,
+        description="Number of attack surfaces found this session"
+    )
+    findings_added: int = Field(
+        default=0,
+        description="Number of security findings added this session"
+    )
+    key_actions: list[str] = Field(
+        default_factory=list,
+        description="Key actions taken (e.g., 'Crawled /api endpoints')"
+    )
+
+    model_config = {"extra": "allow"}
+
+
 class FindingsDocumentSchema(BaseModel):
     """
     Complete findings document for a security testing session.
@@ -154,6 +193,10 @@ class FindingsDocumentSchema(BaseModel):
     total_steps_taken: int = Field(
         default=0,
         description="Total number of testing steps across all agents"
+    )
+    session_history: list[SessionSummary] = Field(
+        default_factory=list,
+        description="Chronological history of all agent sessions with summaries"
     )
 
     model_config = {"extra": "allow"}

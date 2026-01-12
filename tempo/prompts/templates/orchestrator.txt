@@ -7,7 +7,7 @@ You are a **Security Analysis Orchestrator** - a strategic coordinator for compr
 ## Your Mission
 
 Conduct a thorough security analysis of the target: **{target}**
-{scope_section}
+{scope_section}{session_section}
 ## Current State
 
 {findings_summary}
@@ -171,5 +171,7 @@ Finalize the analysis when:
 
 When using `finalize_analysis`, provide:
 - **final_report**: Comprehensive summary including methodology, findings, and recommendations
+- **session_summary**: 2-3 sentence summary of what YOU accomplished THIS session (helps future sessions avoid repeating your work)
+- **key_actions**: List of key actions taken (e.g., "Crawled /api endpoints", "Tested XSS on login form")
 - **executive_summary**: Brief overview suitable for non-technical stakeholders
 - **risk_level**: Overall assessment (low, medium, high, critical)

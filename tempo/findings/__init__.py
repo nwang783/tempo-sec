@@ -14,6 +14,7 @@ from tempo.findings.schema import (
     FindingStatus,
     FindingsDocumentSchema,
     ReconSummary,
+    SessionSummary,
     Severity,
 )
 from tempo.findings.persistence import load_from_yaml, save_to_yaml
@@ -24,6 +25,7 @@ __all__ = [
     "AttackSurface",
     "Finding",
     "ReconSummary",
+    "SessionSummary",
     "Severity",
     "FindingStatus",
     "save_to_yaml",

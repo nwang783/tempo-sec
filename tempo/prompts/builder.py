@@ -406,6 +406,7 @@ class PromptBuilder:
         tool_schemas: list[dict],
         target: str,
         findings_summary: str = "",
+        session_history: str = "",
         scope_content: str | None = None,
     ) -> str:
         """
@@ -418,6 +419,7 @@ class PromptBuilder:
             tool_schemas: List of tool schemas
             target: The target being analyzed
             findings_summary: Current findings summary (from FindingsDocument)
+            session_history: Formatted history of prior sessions (from FindingsDocument)
             scope_content: Optional scope constraints from scope file
 
         Returns:
@@ -429,6 +431,15 @@ class PromptBuilder:
         # Provide a default message if no findings yet
         if not findings_summary:
             findings_summary = "No findings yet. Start with reconnaissance to discover attack surfaces."
+
+        # Build session history section if provided
+        session_section = ""
+        if session_history and session_history != "No prior sessions recorded.":
+            session_section = (
+                "\n## Prior Sessions\n\n"
+                f"{session_history}\n"
+                "Build upon prior work. Avoid repeating actions from previous sessions.\n"
+            )
 
         # Build scope section if provided
         scope_section = self._build_scope_section(scope_content)
@@ -443,6 +454,7 @@ class PromptBuilder:
         return template.format(
             target=target,
             findings_summary=findings_summary,
+            session_section=session_section,
             tools=tool_descriptions,
             scope_section=scope_section,
         )
