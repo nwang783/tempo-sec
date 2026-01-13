@@ -132,9 +132,17 @@ When finished, call:
 complete_subtask(
     summary="Discovered 5 API endpoints and 2 forms on the target application",
     surfaces_added=7,
-    notes="Found potential SQL injection points in search functionality. Stored API key 'sk_test_12345' in the /api/users attack surface entry for test agent reuse."
+    notes="Found potential SQL injection points in search functionality. Stored API key 'sk_test_12345' in the /api/users attack surface entry for test agent reuse.",
+    limitations="Could not access /admin/* endpoints (403 Forbidden). JavaScript bundle was minified, limiting static analysis. Rate limiting prevented exhaustive endpoint enumeration."
 )
 ```
+
+**When to Report Limitations**:
+- Pages/endpoints you couldn't access (auth required, 403/401/500 errors)
+- Technologies you identified but couldn't fully analyze
+- Time constraints that limited exploration depth
+- Tools that failed or areas where automation wasn't possible
+- Functionality that needs manual testing or deeper investigation
 
 ## Example Attack Surface Entry
 
@@ -150,3 +158,4 @@ add_attack_surface(
     notes="API key found in main.js bundle line 234. Test with: curl -H 'X-API-Key: sk_test_12345' https://example.com/api/users"
 )
 ```
+

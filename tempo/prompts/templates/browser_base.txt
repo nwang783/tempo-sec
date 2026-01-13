@@ -97,3 +97,25 @@ browser_snapshot()
 - Scroll down if content is below the fold with `browser_scroll`
 - Wait after navigation for page to fully load with `browser_wait`
 - Check console messages with `browser_console_messages` for JavaScript errors
+
+## Reporting Limitations
+
+When completing your task, report any limitations you encountered:
+
+```
+complete_browser_task(
+    findings="Successfully logged in and captured admin panel screenshot",
+    success=true,
+    extracted_data="Admin users: alice, bob, charlie",
+    limitations="Session expired after 5 minutes, preventing full panel exploration. Some pages used CAPTCHA that couldn't be bypassed. Download links required click confirmation not supported."
+)
+```
+
+**Common limitations to report**:
+- Pages that didn't load or timed out
+- Elements that couldn't be interacted with (hidden, disabled, iframe blocked)
+- Auth flows that failed or sessions that expired
+- JavaScript errors that blocked functionality
+- CAPTCHA, rate limiting, or bot detection
+- Areas that need manual browser testing
+
