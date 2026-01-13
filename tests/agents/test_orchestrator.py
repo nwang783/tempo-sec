@@ -125,18 +125,18 @@ class TestOrchestratorAgent:
         tools = agent.create_tools(context=context)
         tool_names = tools.list_tools()
 
-        # Core tools for lightweight direct analysis
-        assert "shell" in tool_names
-        assert "file_read" in tool_names
-        assert "file_write" in tool_names
+        # Orchestrator should NOT have execution tools (delegates to subagents)
+        assert "shell" not in tool_names
+        assert "file_read" not in tool_names
+        assert "file_write" not in tool_names
 
         # Subagent dispatch tool - key orchestration capability
         assert "dispatch_subagents" in tool_names
 
-        # Findings management tools
+        # Findings management - read only (subagents handle writes)
         assert "read_findings" in tool_names
-        assert "add_finding" in tool_names
-        assert "add_attack_surface" in tool_names
+        assert "add_finding" not in tool_names
+        assert "add_attack_surface" not in tool_names
 
         # Meta tools
         assert "summarize_previous_tool_output" in tool_names
