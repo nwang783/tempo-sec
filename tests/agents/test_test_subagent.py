@@ -38,12 +38,12 @@ class TestTestSubagent:
 
         assert agent.focus_area == ""
 
-    def test_model_is_fast(self, findings_doc):
-        """Test that test subagent uses a fast model."""
+    def test_model_is_capable(self, findings_doc):
+        """Test that test subagent uses a capable model."""
         agent = TestSubagent(objective="test", findings=findings_doc)
 
-        # Should use a lightweight model for fast execution
-        assert "mini" in agent.model or "4o" in agent.model
+        # Should use a capable model for security testing
+        assert "gpt-5" in agent.model
 
     def test_description(self, findings_doc):
         """Test agent description."""

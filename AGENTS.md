@@ -39,11 +39,14 @@ Use `tempo/infra/protocols.py` for cross-component type hints.
 - `tempo/infra/phases.py` — Workflow phase definitions (Phase enum)
 - `tempo/infra/protocols.py` — Cross-component type interfaces
 
-## Workflow Phases
+## Workflow
 
-The agent follows a security researcher workflow: **RECON** → **HYPOTHESIZE** → **TEST** → **REFLECT**
+The agent follows a security researcher workflow via the **orchestrator pattern**:
+1. **Reconnaissance**: Dispatch `recon` subagents to discover attack surfaces
+2. **Testing**: Dispatch `test` subagents to validate vulnerabilities
+3. **Reporting**: Finalize analysis with comprehensive report
 
-Phase transitions happen via tool calls (`transition_phase`), not hardcoded logic.
+The orchestrator coordinates subagent dispatch dynamically based on findings state.
 
 ## Testing
 

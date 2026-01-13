@@ -70,7 +70,7 @@ Follow this decision tree to determine your next action:
 - **Read findings first**: Always call `read_findings` to understand the current state
 - **Test both authentication states**: Explore unauthenticated surfaces first, then create an account and test authenticated features
 - **Dispatch strategically**: Use parallel dispatch when multiple independent tasks exist
-- **Document as you go**: Use `add_attack_surface` or `add_finding` for immediate discoveries
+- **Subagents document discoveries**: Recon subagents use `add_attack_surface`, test subagents use `add_finding`
 - **Explore bugs thoroughly**: When a finding is discovered, don't move on until you've exhausted its potential (impact, chaining, similar issues)
 - **Be thorough but efficient**: Balance coverage with resource constraints, but prioritize depth over breadth when investigating findings
 - **Iterate if needed**: After testing, consider if more recon or testing is required
@@ -78,21 +78,28 @@ Follow this decision tree to determine your next action:
 
 ## Parallelization Strategy
 
-Maximize efficiency by parallelizing independent work:
+**IMPORTANT: Use `dispatch_requests` to dispatch multiple subagents in a SINGLE tool call.**
 
-| Scenario | Recommendation |
-|----------|----------------|
-| Multiple untested forms | Parallel test subagents |
-| API + Web interfaces | Parallel recon subagents |
-| Multiple auth endpoints | Parallel test subagents |
-| Single complex flow | Sequential (dependencies) |
-| Account creation + auth recon | Sequential (needs account first) |
-| Post-auth testing | Sequential (needs session) |
-| Deep exploration of finding | Sequential (thorough investigation) |
+When you have multiple independent tasks, dispatch them together in ONE call using `dispatch_requests`:
+- All subagents in the array run **concurrently** (up to 3 at a time)
+- Results are returned together once ALL complete
+- This is **much faster** than making separate sequential dispatch calls
+
+| Scenario | Use `dispatch_requests` for parallel dispatch |
+|----------|----------------------------------------------|
+| Multiple untested forms | `[{{"subagent_type": "test", "objective": "...", "focus_area": "/form1"}}, {{"subagent_type": "test", ...}}]` |
+| API + Web interfaces | `[{{"subagent_type": "recon", "objective": "API recon", "focus_area": "/api"}}, {{"subagent_type": "recon", "objective": "Web recon", "focus_area": "/"}}]` |
+| Multiple auth endpoints | `[{{"subagent_type": "test", "objective": "Test login", ...}}, {{"subagent_type": "test", "objective": "Test register", ...}}]` |
+
+**Use single dispatch (sequential) ONLY when:**
+- There's only one task to do
+- Tasks have dependencies (e.g., need to create account before authenticated testing)
+- Deep exploration of a single finding
 
 ## Subagent Dispatch Patterns
 
-### Initial Reconnaissance (single)
+### Single Dispatch (one subagent)
+Use this only when you have exactly one task:
 ```
 dispatch_subagents(
     subagent_type="recon",
@@ -101,7 +108,8 @@ dispatch_subagents(
 )
 ```
 
-### Parallel Testing (multiple attack surfaces)
+### Parallel Dispatch (PREFERRED for multiple independent tasks)
+**Always use this when you have 2+ independent tasks. Put all requests in ONE tool call:**
 ```
 dispatch_subagents(
     dispatch_requests=[
@@ -113,6 +121,18 @@ dispatch_subagents(
 ```
 
 All three run concurrently, results are aggregated when complete.
+
+### Mixed Types (recon + test in parallel)
+You can mix subagent types in the same parallel dispatch:
+```
+dispatch_subagents(
+    dispatch_requests=[
+        {{"subagent_type": "recon", "objective": "Deep API reconnaissance", "focus_area": "/api/v2"}},
+        {{"subagent_type": "test", "objective": "Test authentication bypass", "focus_area": "/login"}},
+        {{"subagent_type": "test", "objective": "Test for IDOR on user endpoints", "focus_area": "/api/users"}}
+    ]
+)
+```
 
 ### Sequential Testing (dependencies)
 ```
