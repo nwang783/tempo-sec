@@ -23,6 +23,7 @@ class CompleteSubtaskTool(Tool):
     - surfaces_added: Number of attack surfaces you added (for recon subagents)
     - findings_added: Number of security findings you added (for test subagents)
     - notes: Any additional observations or recommendations
+    - limitations: Any blockers, incomplete work, or areas needing follow-up
 
     Your results will be returned to the orchestrator for integration."""
     category = ToolCategory.META
@@ -33,6 +34,7 @@ class CompleteSubtaskTool(Tool):
         surfaces_added: int | str = 0,
         findings_added: int | str = 0,
         notes: str = "",
+        limitations: str = "",
         purpose: str = "",
     ) -> ToolResult:
         """
@@ -43,6 +45,7 @@ class CompleteSubtaskTool(Tool):
             surfaces_added: Number of attack surfaces added (recon subagents)
             findings_added: Number of security findings added (test subagents)
             notes: Additional observations or recommendations
+            limitations: Blockers, incomplete work, or areas needing follow-up
             purpose: Why this tool is being called
 
         Returns:
@@ -63,6 +66,9 @@ class CompleteSubtaskTool(Tool):
         if notes:
             output_parts.append(f"\nNotes: {notes}")
 
+        if limitations:
+            output_parts.append(f"\nLimitations: {limitations}")
+
         return ToolResult(
             success=True,
             output="\n".join(output_parts),
@@ -72,6 +78,7 @@ class CompleteSubtaskTool(Tool):
                 "surfaces_added": surfaces_added,
                 "findings_added": findings_added,
                 "notes": notes,
+                "limitations": limitations,
             },
         )
 
@@ -99,6 +106,15 @@ class CompleteSubtaskTool(Tool):
                     "notes": {
                         "type": "string",
                         "description": "Additional observations or recommendations (optional)",
+                        "default": "",
+                    },
+                    "limitations": {
+                        "type": "string",
+                        "description": (
+                            "Any limitations, blockers, or incomplete work encountered. "
+                            "Examples: pages that couldn't be accessed, features requiring auth, "
+                            "areas needing deeper investigation, tools that failed."
+                        ),
                         "default": "",
                     },
                 },

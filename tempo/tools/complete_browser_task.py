@@ -24,6 +24,7 @@ class CompleteBrowserTaskTool(Tool):
         findings: str,
         success: bool = True,
         extracted_data: str = "",
+        limitations: str = "",
         purpose: str = "",
         **kwargs,
     ) -> ToolResult:
@@ -34,6 +35,7 @@ class CompleteBrowserTaskTool(Tool):
             findings: Summary of what was found/accomplished during browsing
             success: Whether the task was completed successfully
             extracted_data: Any specific data extracted (URLs, text, form values, etc.)
+            limitations: Any blockers or incomplete work encountered
             
         Returns:
             ToolResult with completion metadata
@@ -46,6 +48,9 @@ class CompleteBrowserTaskTool(Tool):
         if not success:
             output_parts.append("\n[Task marked as unsuccessful]")
         
+        if limitations:
+            output_parts.append(f"\nLimitations: {limitations}")
+        
         return ToolResult(
             success=True,  # Tool execution succeeded even if task didn't
             output="\n".join(output_parts),
@@ -54,6 +59,7 @@ class CompleteBrowserTaskTool(Tool):
                 "findings": findings,
                 "task_success": success,
                 "extracted_data": extracted_data,
+                "limitations": limitations,
             },
         )
     
@@ -76,6 +82,15 @@ class CompleteBrowserTaskTool(Tool):
                     "extracted_data": {
                         "type": "string", 
                         "description": "Any specific data extracted during browsing (URLs, text, form data, etc.)",
+                        "default": "",
+                    },
+                    "limitations": {
+                        "type": "string",
+                        "description": (
+                            "Any limitations encountered during browsing. "
+                            "Examples: pages blocked by auth, JavaScript errors, "
+                            "elements not found, timeouts, areas needing manual testing."
+                        ),
                         "default": "",
                     },
                 },

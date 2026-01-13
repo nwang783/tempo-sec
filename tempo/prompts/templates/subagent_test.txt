@@ -148,6 +148,15 @@ When finished, call:
 complete_subtask(
     summary="Tested 3 API endpoints, found 1 SQL injection and 1 XSS vulnerability",
     findings_added=2,
-    notes="Login endpoint is most critical - recommend immediate patching"
+    notes="Login endpoint is most critical - recommend immediate patching",
+    limitations="Could not test admin panel (lacks admin credentials). CSRF token rotation prevented automated form testing. File upload endpoint returned 500 errors consistently."
 )
 ```
+
+**When to Report Limitations**:
+- Surfaces you couldn't fully test (missing credentials, broken functionality)
+- Attacks blocked by rate limiting or WAF
+- Tests that require manual verification (visual bugs, complex workflows)
+- Tools that failed or returned inconclusive results
+- Time constraints that prevented exhaustive testing
+

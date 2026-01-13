@@ -8,7 +8,11 @@ Supports both single dispatch and parallel dispatch with concurrency control.
 """
 
 import asyncio
+import logging
+import re
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
@@ -69,6 +73,75 @@ The subagent(s) will:
         self._visualization = visualization
         self._max_concurrent = max_concurrent
         self._config = config
+
+    def _save_limitations_file(
+        self,
+        subagent_id: str,
+        subagent_type: str,
+        objective: str,
+        limitations: str,
+    ) -> str | None:
+        """
+        Save limitations to a file in the findings directory.
+        
+        Args:
+            subagent_id: Unique ID of the subagent
+            subagent_type: Type of subagent (recon/test)
+            objective: What the subagent was trying to accomplish
+            limitations: The limitations text to save
+            
+        Returns:
+            Path to the limitations file, or None if not saved
+        """
+        if not limitations:
+            return None
+        
+        # Get target from findings for directory structure
+        target = "unknown_target"
+        if hasattr(self._findings, "target"):
+            target = self._findings.target
+        elif hasattr(self._findings, "get_summary"):
+            try:
+                summary = self._findings.get_summary()
+                target = summary.get("target", target)
+            except Exception:
+                pass
+        
+        # Sanitize target for filename
+        safe_target = re.sub(r'^https?://', '', target)
+        safe_target = re.sub(r'[^\w\-.]', '_', safe_target)
+        safe_target = safe_target.strip('_.')[:50] or "unknown_target"
+        
+        # Create directory and file
+        limitations_dir = Path("findings") / safe_target
+        limitations_dir.mkdir(parents=True, exist_ok=True)
+        
+        limitations_path = limitations_dir / "limitations.md"
+        
+        # Append to limitations file (multiple subagents may contribute)
+        timestamp = datetime.now(timezone.utc).isoformat()
+        entry = f"\n## {subagent_type.title()} Subagent ({subagent_id})\n"
+        entry += f"**Objective:** {objective}\n"
+        entry += f"**Timestamp:** {timestamp}\n\n"
+        entry += f"{limitations}\n"
+        entry += "\n---\n"
+        
+        try:
+            # Create header if file doesn't exist
+            if not limitations_path.exists():
+                header = "# Limitations & Incomplete Work\n\n"
+                header += "This file documents limitations, blockers, and incomplete work "
+                header += "encountered by subagents during the security assessment.\n"
+                with open(limitations_path, "w") as f:
+                    f.write(header)
+            
+            with open(limitations_path, "a") as f:
+                f.write(entry)
+            
+            return str(limitations_path)
+        except Exception as e:
+            logging.debug(f"Failed to save limitations file: {e}")
+            return None
 
     async def _run_subagent(
         self,
@@ -225,6 +298,17 @@ The subagent(s) will:
                         surfaces_added = finding.get("surfaces_added", 0)
                         findings_added = finding.get("findings_added", 0)
                         notes = finding.get("notes", "")
+                        limitations = finding.get("limitations", "")
+
+                        # Save limitations to file if present
+                        limitations_path = None
+                        if limitations:
+                            limitations_path = self._save_limitations_file(
+                                subagent_id=subagent_id,
+                                subagent_type=subagent_type,
+                                objective=objective,
+                                limitations=limitations,
+                            )
 
                         output_parts = [
                             f"Subagent ({subagent_type}) completed in {result.steps_taken} steps.",
@@ -239,6 +323,11 @@ The subagent(s) will:
 
                         if notes:
                             output_parts.append(f"\nNotes: {notes}")
+
+                        if limitations:
+                            output_parts.append(f"\nLimitations: {limitations}")
+                            if limitations_path:
+                                output_parts.append(f"\n(Saved to {limitations_path})")
 
                         # Emit subagent finish event
                         if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
@@ -261,6 +350,8 @@ The subagent(s) will:
                                 "surfaces_added": surfaces_added,
                                 "findings_added": findings_added,
                                 "notes": notes,
+                                "limitations": limitations,
+                                "limitations_path": limitations_path,
                             },
                         )
 
@@ -445,6 +536,21 @@ The subagent(s) will:
                 output_parts.append(f"{i}. **{subagent_type}** - Error: {error}")
             output_parts.append("")
 
+        # Collect all limitations
+        all_limitations = [
+            r.metadata.get("limitations", "") 
+            for r in successful 
+            if r.metadata.get("limitations")
+        ]
+
+        if all_limitations:
+            output_parts.append("### Limitations Reported")
+            for lim in all_limitations:
+                # Truncate for summary view
+                truncated = lim[:200] + "..." if len(lim) > 200 else lim
+                output_parts.append(f"- {truncated}")
+            output_parts.append("")
+
         return ToolResult(
             success=len(failed) == 0,  # Only fully successful if no failures
             output="\n".join(output_parts),
@@ -456,6 +562,7 @@ The subagent(s) will:
                 "total_steps": total_steps,
                 "total_surfaces_added": total_surfaces,
                 "total_findings_added": total_findings,
+                "all_limitations": all_limitations,
                 "subagent_results": [
                     {
                         "subagent_id": r.metadata.get("subagent_id"),
@@ -465,6 +572,7 @@ The subagent(s) will:
                         "surfaces_added": r.metadata.get("surfaces_added", 0),
                         "findings_added": r.metadata.get("findings_added", 0),
                         "steps_taken": r.metadata.get("steps_taken", 0),
+                        "limitations": r.metadata.get("limitations", ""),
                         "error": r.error,
                     }
                     for r in results

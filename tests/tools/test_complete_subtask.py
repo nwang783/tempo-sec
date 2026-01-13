@@ -119,3 +119,32 @@ class TestCompleteSubtaskTool:
         assert props["surfaces_added"].get("default") == 0
         assert props["findings_added"].get("default") == 0
         assert props["notes"].get("default") == ""
+
+    @pytest.mark.asyncio
+    async def test_execute_with_limitations(self):
+        """Test execution with limitations field."""
+        tool = CompleteSubtaskTool()
+
+        result = await tool.execute(
+            summary="Reconnaissance complete",
+            surfaces_added=5,
+            limitations="Could not access /admin (403). Rate limited after 100 requests.",
+        )
+
+        assert result.success is True
+        assert "Limitations:" in result.output
+        assert "/admin" in result.output
+        assert result.metadata.get("limitations") == (
+            "Could not access /admin (403). Rate limited after 100 requests."
+        )
+
+    def test_schema_includes_limitations(self):
+        """Test schema has limitations field."""
+        tool = CompleteSubtaskTool()
+        schema = tool.get_schema()
+
+        props = schema.parameters["properties"]
+        assert "limitations" in props
+        assert props["limitations"].get("default") == ""
+        assert "blockers" in props["limitations"].get("description", "").lower()
+

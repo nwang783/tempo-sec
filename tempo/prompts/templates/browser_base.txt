@@ -98,6 +98,29 @@ browser_snapshot()
 - Wait after navigation for page to fully load with `browser_wait`
 - Check console messages with `browser_console_messages` for JavaScript errors
 
+<<<<<<< HEAD
+## Reporting Limitations
+
+When completing your task, report any limitations you encountered:
+
+```
+complete_browser_task(
+    findings="Successfully logged in and captured admin panel screenshot",
+    success=true,
+    extracted_data="Admin users: alice, bob, charlie",
+    limitations="Session expired after 5 minutes, preventing full panel exploration. Some pages used CAPTCHA that couldn't be bypassed. Download links required click confirmation not supported."
+)
+```
+
+**Common limitations to report**:
+- Pages that didn't load or timed out
+- Elements that couldn't be interacted with (hidden, disabled, iframe blocked)
+- Auth flows that failed or sessions that expired
+- JavaScript errors that blocked functionality
+- CAPTCHA, rate limiting, or bot detection
+- Areas that need manual browser testing
+
+=======
 ## System Tools
 
 You also have access to system-level tools for operations outside the browser:
@@ -106,3 +129,4 @@ You also have access to system-level tools for operations outside the browser:
 - `file_write` - Save extracted data or test results to files
 
 Use these when browser interaction alone isn't sufficient for your task.
+>>>>>>> 8003c902b562694107f25e6b763697e8fb8c54ca
