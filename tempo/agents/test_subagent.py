@@ -124,7 +124,7 @@ class TestSubagent(BaseAgentDefinition):
 
         # Meta tools
         tools.register(SummarizeOutputTool(context_store=context))
-        tools.register(CompleteSubtaskTool())
+        tools.register(CompleteSubtaskTool(findings=self.findings))
 
         return tools
 
