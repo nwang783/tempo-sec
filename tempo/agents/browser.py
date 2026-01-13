@@ -95,12 +95,15 @@ class BrowserAgent(BaseAgentDefinition):
         Create browser-only tools.
         
         The browser agent has:
+        - Shell and filesystem tools for system operations
         - Browser navigation and interaction tools
         - State management tools (save/load sessions)
         - Visual tools (screenshot, coordinate click/type, scroll, wait)
         - Task completion tool (no other meta tools)
         """
         from tempo.tools.registry import ToolRegistry
+        from tempo.tools.shell import ShellTool
+        from tempo.tools.filesystem import FileReadTool, FileWriteTool
         from tempo.tools.browser_tools import (
             BrowserSession,
             BrowserNavigateTool,
@@ -133,6 +136,11 @@ class BrowserAgent(BaseAgentDefinition):
         from tempo.infra.browser_state import BrowserStateManager
         
         tools = ToolRegistry()
+        
+        # Execution tools - browser agent can perform system operations
+        tools.register(ShellTool(container_manager=container))
+        tools.register(FileReadTool(container_manager=container))
+        tools.register(FileWriteTool(container_manager=container))
         
         # Create state manager if not provided
         if state_manager is None:

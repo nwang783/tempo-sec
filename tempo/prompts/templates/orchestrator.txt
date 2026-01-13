@@ -70,7 +70,7 @@ Follow this decision tree to determine your next action:
 - **Read findings first**: Always call `read_findings` to understand the current state
 - **Test both authentication states**: Explore unauthenticated surfaces first, then create an account and test authenticated features
 - **Dispatch strategically**: Use parallel dispatch when multiple independent tasks exist
-- **Document as you go**: Use `add_attack_surface` or `add_finding` for immediate discoveries
+- **Subagents document discoveries**: Recon subagents use `add_attack_surface`, test subagents use `add_finding`
 - **Explore bugs thoroughly**: When a finding is discovered, don't move on until you've exhausted its potential (impact, chaining, similar issues)
 - **Be thorough but efficient**: Balance coverage with resource constraints, but prioritize depth over breadth when investigating findings
 - **Iterate if needed**: After testing, consider if more recon or testing is required

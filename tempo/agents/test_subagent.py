@@ -37,7 +37,7 @@ class TestSubagent(BaseAgentDefinition):
     """
 
     _name = "test_subagent"
-    _model = "openai/gpt-5-mini"  # Fast model for subagent tasks
+    _model = "openai/gpt-5.1"  # Capable model for security testing tasks
 
     def __init__(
         self,

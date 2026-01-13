@@ -162,20 +162,16 @@ class OrchestratorAgent(BaseAgentDefinition):
         Create the tool registry for the orchestrator.
 
         Includes:
-        - Core tools: shell, filesystem (for direct analysis if needed)
         - Subagent dispatch: dispatch_subagents
-        - Findings management: read_findings, add_finding, add_attack_surface
+        - Findings management: read_findings
         - Meta tools: summarize_previous_tool_output, finalize_analysis
+
+        Note: The orchestrator delegates execution tasks (shell, file, testing)
+        to subagents via dispatch_subagents. It does not have direct execution tools.
         """
         from tempo.tools.registry import ToolRegistry
-        from tempo.tools.shell import ShellTool
-        from tempo.tools.filesystem import FileReadTool, FileWriteTool
         from tempo.tools.dispatch_subagents import DispatchSubagentsTool
-        from tempo.tools.findings_tools import (
-            ReadFindingsTool,
-            AddFindingTool,
-            AddAttackSurfaceTool,
-        )
+        from tempo.tools.findings_tools import ReadFindingsTool
         from tempo.tools.meta import (
             SummarizeOutputTool,
             FinalizeAnalysisTool,
@@ -188,11 +184,6 @@ class OrchestratorAgent(BaseAgentDefinition):
         config = kwargs.get("config")
         max_concurrent = getattr(config, "max_concurrent_subagents", 3) if config else 3
 
-        # Core tools - orchestrator can do lightweight analysis directly
-        tools.register(ShellTool(container_manager=container))
-        tools.register(FileReadTool(container_manager=container))
-        tools.register(FileWriteTool(container_manager=container))
-
         # Subagent dispatch - combined single/parallel dispatch tool
         tools.register(DispatchSubagentsTool(
             findings=self.findings,
@@ -202,10 +193,8 @@ class OrchestratorAgent(BaseAgentDefinition):
             config=config,
         ))
 
-        # Findings management tools
+        # Findings management tools (read-only - subagents handle writes)
         tools.register(ReadFindingsTool(findings_updater=self.findings))
-        tools.register(AddFindingTool(findings_updater=self.findings))
-        tools.register(AddAttackSurfaceTool(findings_updater=self.findings))
 
         # Meta tools
         tools.register(SummarizeOutputTool(context_store=context))

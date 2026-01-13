@@ -66,10 +66,12 @@ class TestBrowserAgent:
         # Should have summarization tool (for large outputs)
         assert "summarize_previous_tool_output" in tool_names
         
-        # Should NOT have shell, file, or phase transition tools
-        assert "shell" not in tool_names
-        assert "file_read" not in tool_names
-        assert "file_write" not in tool_names
+        # Should have shell and file tools for system operations
+        assert "shell" in tool_names
+        assert "file_read" in tool_names
+        assert "file_write" in tool_names
+        
+        # Should NOT have phase transition tools
         assert "transition_phase" not in tool_names
     
     def test_build_objective_includes_task(self):

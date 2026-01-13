@@ -97,3 +97,12 @@ browser_snapshot()
 - Scroll down if content is below the fold with `browser_scroll`
 - Wait after navigation for page to fully load with `browser_wait`
 - Check console messages with `browser_console_messages` for JavaScript errors
+
+## System Tools
+
+You also have access to system-level tools for operations outside the browser:
+- `shell` - Execute commands (e.g., `curl` for API testing, `wget` for downloads)
+- `file_read` - Read files from the filesystem
+- `file_write` - Save extracted data or test results to files
+
+Use these when browser interaction alone isn't sufficient for your task.

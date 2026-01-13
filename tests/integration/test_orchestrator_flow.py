@@ -80,8 +80,9 @@ class TestOrchestratorFlowIntegration:
         assert "dispatch_subagents" in tool_names
         assert "finalize_analysis" in tool_names
         assert "read_findings" in tool_names
-        assert "add_finding" in tool_names
-        assert "add_attack_surface" in tool_names
+        # Orchestrator delegates finding writes to subagents
+        assert "add_finding" not in tool_names
+        assert "add_attack_surface" not in tool_names
 
     def test_orchestrator_creates_findings_on_first_access(self, temp_findings_path):
         """Test that orchestrator creates findings document on first access."""
