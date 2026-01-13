@@ -186,7 +186,7 @@ class BrowserAgent(BaseAgentDefinition):
         tools.register(SummarizePreviousOutputTool(context))
         
         # Completion tool
-        tools.register(CompleteBrowserTaskTool())
+        tools.register(CompleteBrowserTaskTool(findings=self.findings))
         
         return tools
     

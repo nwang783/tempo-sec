@@ -50,14 +50,30 @@ class VisualizationCollector:
     following the project's dependency rules.
     """
     
-    def __init__(self, server: "VisualizationServer", subagent_id: str | None = None):
+    def __init__(
+        self, 
+        server: "VisualizationServer", 
+        subagent_id: str | None = None,
+        parent_collector: "VisualizationCollector | None" = None,
+    ):
         self.server = server
         self._subagent_id = subagent_id
-        # Cost tracking state
-        self._total_cost: float = 0.0
-        self._total_prompt_tokens: int = 0
-        self._total_completion_tokens: int = 0
-        self._total_cached_tokens: int = 0
+        self._parent_collector = parent_collector
+        
+        # Cost tracking state - share with parent if available
+        # This ensures all agents (orchestrator, subagents, browser agents) 
+        # contribute to the same cumulative totals
+        if parent_collector is not None:
+            # Child collectors share parent's cost state
+            self._cost_state = parent_collector._cost_state
+        else:
+            # Root collector owns the cost state
+            self._cost_state = {
+                "total_cost": 0.0,
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_cached_tokens": 0,
+            }
     
     def for_subagent(self, subagent_id: str) -> "VisualizationCollector":
         """
@@ -66,13 +82,20 @@ class VisualizationCollector:
         Events emitted by the child collector will include the subagent_id,
         allowing the UI to route them to the correct agent context.
         
+        Cost tracking is shared with the parent, so all costs accumulate
+        properly in a single total.
+        
         Args:
             subagent_id: Unique identifier for the subagent
             
         Returns:
             A new VisualizationCollector with the subagent_id set
         """
-        return VisualizationCollector(self.server, subagent_id=subagent_id)
+        return VisualizationCollector(
+            self.server, 
+            subagent_id=subagent_id,
+            parent_collector=self,  # Share cost state with parent
+        )
     
     def on_step(self, step_data: dict | Any, frame_id: str) -> None:
         """
@@ -112,16 +135,16 @@ class VisualizationCollector:
         # Update cumulative cost tracking and emit cost update
         usage = data.get("usage", {})
         
-        self._total_cost += usage.get("cost", 0.0)
-        self._total_prompt_tokens += usage.get("prompt_tokens", 0)
-        self._total_completion_tokens += usage.get("completion_tokens", 0)
-        self._total_cached_tokens += usage.get("cached_tokens", 0)
+        self._cost_state["total_cost"] += usage.get("cost", 0.0)
+        self._cost_state["total_prompt_tokens"] += usage.get("prompt_tokens", 0)
+        self._cost_state["total_completion_tokens"] += usage.get("completion_tokens", 0)
+        self._cost_state["total_cached_tokens"] += usage.get("cached_tokens", 0)
         
         self.emit("cost_update", {
-            "total_cost": self._total_cost,
-            "total_prompt_tokens": self._total_prompt_tokens,
-            "total_completion_tokens": self._total_completion_tokens,
-            "total_cached_tokens": self._total_cached_tokens,
+            "total_cost": self._cost_state["total_cost"],
+            "total_prompt_tokens": self._cost_state["total_prompt_tokens"],
+            "total_completion_tokens": self._cost_state["total_completion_tokens"],
+            "total_cached_tokens": self._cost_state["total_cached_tokens"],
             "step_cost": usage.get("cost", 0.0),
         })
         

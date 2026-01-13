@@ -4,7 +4,15 @@ Complete Subtask Tool.
 Tool for subagents to signal subtask completion and report results back to the orchestrator.
 """
 
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
+
+if TYPE_CHECKING:
+    from tempo.infra.protocols import FindingsUpdater
 
 
 class CompleteSubtaskTool(Tool):
@@ -27,6 +35,74 @@ class CompleteSubtaskTool(Tool):
 
     Your results will be returned to the orchestrator for integration."""
     category = ToolCategory.META
+
+    def __init__(self, findings: "FindingsUpdater | None" = None):
+        """
+        Initialize the complete subtask tool.
+        
+        Args:
+            findings: Optional FindingsDocument for getting target path
+        """
+        self._findings = findings
+
+    def _save_limitations_file(self, limitations: str, summary: str) -> str | None:
+        """
+        Append limitations to the shared limitations file.
+        
+        Args:
+            limitations: The limitations text to save
+            summary: Summary of what was accomplished (for context)
+            
+        Returns:
+            Path to the limitations file, or None if not saved
+        """
+        if not limitations:
+            return None
+        
+        # Get target from findings for directory structure
+        target = "unknown_target"
+        if self._findings and hasattr(self._findings, "target"):
+            target = self._findings.target
+        elif self._findings and hasattr(self._findings, "get_summary"):
+            try:
+                summary_dict = self._findings.get_summary()
+                target = summary_dict.get("target", target)
+            except Exception:
+                pass
+        
+        # Sanitize target for filename
+        safe_target = re.sub(r'^https?://', '', target)
+        safe_target = re.sub(r'[^\w\-.]', '_', safe_target)
+        safe_target = safe_target.strip('_.')[:50] or "unknown_target"
+        
+        # Create directory and file
+        limitations_dir = Path("findings") / safe_target
+        limitations_dir.mkdir(parents=True, exist_ok=True)
+        limitations_path = limitations_dir / "limitations.md"
+        
+        # Build entry
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        summary_preview = summary[:100] + "..." if len(summary) > 100 else summary
+        entry = f"\n## Subtask: {summary_preview}\n"
+        entry += f"**Timestamp:** {timestamp}\n\n"
+        entry += f"{limitations}\n"
+        entry += "\n---\n"
+        
+        try:
+            # Create header if file doesn't exist
+            if not limitations_path.exists():
+                header = "# Limitations & Incomplete Work\n\n"
+                header += "This file documents limitations, blockers, and incomplete work "
+                header += "encountered by agents during the security assessment.\n"
+                with open(limitations_path, "w") as f:
+                    f.write(header)
+            
+            with open(limitations_path, "a") as f:
+                f.write(entry)
+            
+            return str(limitations_path)
+        except Exception:
+            return None
 
     async def execute(
         self,
@@ -68,6 +144,13 @@ class CompleteSubtaskTool(Tool):
 
         if limitations:
             output_parts.append(f"\nLimitations: {limitations}")
+            
+        # Save limitations to file if present
+        limitations_path = None
+        if limitations:
+            limitations_path = self._save_limitations_file(limitations, summary)
+            if limitations_path:
+                output_parts.append(f"\n(Limitations saved to {limitations_path})")
 
         return ToolResult(
             success=True,
@@ -79,6 +162,7 @@ class CompleteSubtaskTool(Tool):
                 "findings_added": findings_added,
                 "notes": notes,
                 "limitations": limitations,
+                "limitations_path": limitations_path,
             },
         )
 
@@ -121,3 +205,4 @@ class CompleteSubtaskTool(Tool):
                 "required": ["summary"],
             },
         )
+
