@@ -111,7 +111,7 @@ subagent_model = "openai/gpt-5-mini"
 
 ## Browser Agent
 
-The **BrowserAgent** is a specialized subagent for web browsing tasks. It uses Playwright for browser automation and supports persistent state management.
+The **BrowserAgent** is a specialized subagent for web browsing tasks. It uses Playwright for browser automation.
 
 ### Capabilities
 
@@ -120,40 +120,13 @@ The **BrowserAgent** is a specialized subagent for web browsing tasks. It uses P
 | **Page Navigation** | Navigate to URLs, get page summaries |
 | **Element Interaction** | Click, type, fill forms using element refs |
 | **Visual Capture** | Screenshots, coordinate-based clicking |
-| **State Persistence** | Save/load cookies, localStorage, sessionStorage |
 | **Scope Constraints** | Respect domain/action restrictions |
-
-### State Management
-
-Browser states can be saved and reused across agent invocations:
-
-```python
-# From a parent agent (Recon or Test):
-
-# Step 1: Login and save session
-browser_task(
-    task="Log in with admin/password123",
-    url="https://example.com/login",
-    save_state_as="admin_session"
-)
-
-# Step 2: Reuse saved session in later tasks
-browser_task(
-    task="Access admin panel and list users",
-    url="https://example.com/admin",
-    state_name="admin_session"
-)
-```
-
-States are stored in `~/.tempo-sec/browser_states/` and expire after 7 days by default.
 
 ### Configuration
 
 ```toml
 [browser]
 headless = true          # Set to false to show browser window
-state_dir = "~/.tempo-sec/browser_states"
-state_ttl_days = 7       # Default expiration for saved states
 default_timeout = 30000  # Navigation timeout (ms)
 viewport_width = 1280
 viewport_height = 720

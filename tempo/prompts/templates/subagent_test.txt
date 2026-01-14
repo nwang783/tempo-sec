@@ -76,32 +76,6 @@ Use `browser_task` for testing that requires:
 - **Authentication Testing**: Login bypass, session management flaws
 - **Multi-Step Exploitation**: Attacks requiring multiple page interactions
 - **Automated Attack Chains**: Login → Navigate → Exploit → Extract data
-- **Session State**: Reusing authenticated sessions across multiple tests
-
-**State Management for Testing:**
-
-```
-# Step 1: Create authenticated session for testing
-browser_task(
-    task="Log in as regular user with user/pass123",
-    url="https://example.com/login",
-    save_state_as="user_session"
-)
-
-# Step 2: Test privilege escalation with saved state
-browser_task(
-    task="Try to access /admin endpoint and check response",
-    state_name="user_session",
-    url="https://example.com/admin"
-)
-
-# Step 3: Test for stored XSS with saved state
-browser_task(
-    task="Submit XSS payload <script>alert(1)</script> in profile bio field",
-    state_name="user_session",
-    url="https://example.com/profile/edit"
-)
-```
 
 **Testing XSS Example:**
 
@@ -112,19 +86,12 @@ browser_task(
     url="https://example.com/search"
 )
 
-# Test stored XSS (create account first)
+# Test stored XSS
 browser_task(
     task="Create account with XSS payload in username, then view profile",
-    url="https://example.com/register",
-    save_state_as="xss_test_account"
+    url="https://example.com/register"
 )
 ```
-
-**Testing Workflow:**
-1. Use `browser_task` with `save_state_as` to establish authenticated sessions
-2. Reuse states with `state_name` to test from different privilege levels
-3. Use `browser_list_states` to see available sessions before testing
-4. Multiple test cases can share the same saved session state
 
 **Don't use `browser_task` for:**
 - SQL injection testing (use `shell` with sqlmap)

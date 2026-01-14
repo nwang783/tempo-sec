@@ -50,17 +50,6 @@ browser_select(element="Country dropdown", ref="ref_5", option="Canada")
 
 {tools}
 {scope_section}{findings_section}{email_section}
-## State Management
-
-For authenticated sessions:
-- `browser_save_state` - Save cookies/storage after login
-- `browser_load_state` - Restore a previously saved session
-- `browser_list_states` - See available saved sessions
-- `browser_delete_state` - Delete a saved state
-- `browser_cleanup_states` - Remove expired states
-
-States expire after {ttl_days} days by default.
-{state_instructions}
 ## Common Pitfalls to Avoid
 
 1. **Don't click without refs first**: Always `browser_snapshot` before `browser_click`
@@ -98,7 +87,6 @@ browser_snapshot()
 - Wait after navigation for page to fully load with `browser_wait`
 - Check console messages with `browser_console_messages` for JavaScript errors
 
-<<<<<<< HEAD
 ## Reporting Limitations
 
 When completing your task, report any limitations you encountered:
@@ -120,7 +108,6 @@ complete_browser_task(
 - CAPTCHA, rate limiting, or bot detection
 - Areas that need manual browser testing
 
-=======
 ## System Tools
 
 You also have access to system-level tools for operations outside the browser:
@@ -129,4 +116,3 @@ You also have access to system-level tools for operations outside the browser:
 - `file_write` - Save extracted data or test results to files
 
 Use these when browser interaction alone isn't sufficient for your task.
->>>>>>> 8003c902b562694107f25e6b763697e8fb8c54ca

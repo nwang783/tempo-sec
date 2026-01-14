@@ -205,9 +205,6 @@ class PromptBuilder:
         tool_schemas: list[dict],
         scope_content: str | None = None,
         findings_context: str | None = None,
-        state_name: str | None = None,
-        save_state_as: str | None = None,
-        ttl_days: int = 7,
         agent_email: str | None = None,
     ) -> str:
         """
@@ -220,9 +217,6 @@ class PromptBuilder:
             tool_schemas: List of tool schemas
             scope_content: Optional scope constraints for the browser agent
             findings_context: Optional prior findings to avoid duplicate work
-            state_name: Optional name of saved state to load at start
-            save_state_as: Optional name to save state as after completion
-            ttl_days: Default TTL for saved states in days
             agent_email: Optional email address for signups
 
         Returns:
@@ -246,22 +240,6 @@ class PromptBuilder:
         if findings_context and findings_context != "No prior findings available.":
             findings_section = f"\n## Prior Work\n\n{findings_context}\n\nAvoid duplicating this prior work.\n"
 
-        # Build state instructions
-        state_instructions = ""
-        if state_name:
-            state_instructions += (
-                f"\n**Initial State**: Load saved state '{state_name}' at the start.\n"
-            )
-        if save_state_as:
-            state_instructions += (
-                f"\n**Save State**: Save browser state as '{save_state_as}' "
-                "before completing.\n"
-            )
-        if not state_name and not save_state_as:
-            state_instructions = (
-                "\nNo specific state loading or saving required for this task.\n"
-            )
-
         # Build email section if agent email is configured
         email_section = ""
         if agent_email:
@@ -276,8 +254,6 @@ class PromptBuilder:
             tools=tool_descriptions,
             scope_section=scope_section,
             findings_section=findings_section,
-            state_instructions=state_instructions,
-            ttl_days=ttl_days,
             email_section=email_section,
         )
     
