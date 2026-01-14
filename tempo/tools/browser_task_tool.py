@@ -129,6 +129,121 @@ class BrowserTaskTool(Tool):
             state_manager=state_manager,
         )
 
+        # --- Visualization bridge for browser-use actions ---
+        # browser-use executes browser interactions via combined_tools.registry.execute_action(...)
+        # The Tempo visualization UI expects events via VisualizationCollector.on_step/on_tool_call_start/on_tool_call.
+        # We wrap execute_action so each browser-use action shows up as a "tool call" under the browser subagent.
+        browser_step_counter = 0
+        # Pre-generate browser_id so the closure can capture it
+        browser_id = f"browser_{uuid.uuid4().hex[:8]}" if self._visualization_collector else None
+        if self._visualization_collector and hasattr(combined_tools, "registry"):
+            try:
+                import json
+                import time
+
+                original_execute_action = combined_tools.registry.execute_action
+
+                async def _execute_action_with_viz(*args, **kwargs):
+                    nonlocal browser_step_counter
+                    browser_step_counter += 1
+
+                    # Registry.execute_action signature uses (action_name, params, ...)
+                    action_name = kwargs.get("action_name") if "action_name" in kwargs else (args[0] if args else "")
+                    params = kwargs.get("params") if "params" in kwargs else (args[1] if len(args) > 1 else {})
+
+                    # Ensure we have a stable subagent id for routing in the UI
+                    subagent_id = browser_id or "browser"
+                    frame_id = subagent_id
+
+                    # Emit a step first so the UI has a step_number before the tool call arrives
+                    if hasattr(self._visualization_collector, "on_step"):
+                        self._visualization_collector.on_step(
+                            {
+                                "step_number": browser_step_counter,
+                                "phase": None,
+                                "error": None,
+                                "should_continue": True,
+                                "llm_content": None,
+                                "usage": {},
+                                "subagent_id": subagent_id,
+                            },
+                            frame_id,
+                        )
+
+                    # Emit tool_call_start for immediate UI feedback
+                    tool_call_id = f"{subagent_id}:{browser_step_counter}:{action_name}"
+                    if hasattr(self._visualization_collector, "on_tool_call_start"):
+                        self._visualization_collector.on_tool_call_start(
+                            {
+                                "id": tool_call_id,
+                                "tool_name": str(action_name),
+                                "input": params if isinstance(params, dict) else {},
+                                "subagent_id": subagent_id,
+                            },
+                            frame_id,
+                        )
+
+                    start = time.time()
+                    try:
+                        result = await original_execute_action(*args, **kwargs)
+                        duration_ms = int((time.time() - start) * 1000)
+
+                        # Normalize result for display
+                        raw_output_obj = result
+                        if hasattr(result, "model_dump"):
+                            raw_output_obj = result.model_dump()
+                        raw_output = (
+                            json.dumps(raw_output_obj, ensure_ascii=False, default=str)
+                            if not isinstance(raw_output_obj, str)
+                            else raw_output_obj
+                        )
+
+                        error = getattr(result, "error", None)
+                        success = not bool(error)
+
+                        if hasattr(self._visualization_collector, "on_tool_call"):
+                            self._visualization_collector.on_tool_call(
+                                {
+                                    "id": tool_call_id,
+                                    "tool_name": str(action_name),
+                                    "input": params if isinstance(params, dict) else {},
+                                    "raw_output": raw_output,
+                                    "summary": None,
+                                    "success": success,
+                                    "error": str(error) if error else None,
+                                    "duration_ms": duration_ms,
+                                    "metadata": {"browser_use": True},
+                                    "subagent_id": subagent_id,
+                                },
+                                frame_id,
+                            )
+
+                        return result
+                    except Exception as e:
+                        duration_ms = int((time.time() - start) * 1000)
+                        if hasattr(self._visualization_collector, "on_tool_call"):
+                            self._visualization_collector.on_tool_call(
+                                {
+                                    "id": tool_call_id,
+                                    "tool_name": str(action_name),
+                                    "input": params if isinstance(params, dict) else {},
+                                    "raw_output": "",
+                                    "summary": None,
+                                    "success": False,
+                                    "error": str(e),
+                                    "duration_ms": duration_ms,
+                                    "metadata": {"browser_use": True},
+                                    "subagent_id": subagent_id,
+                                },
+                                frame_id,
+                            )
+                        raise
+
+                combined_tools.registry.execute_action = _execute_action_with_viz  # type: ignore[assignment]
+            except Exception:
+                # If instrumentation fails, do not break the browser task.
+                pass
+
         # Handle state loading if specified
         if state_name:
             try:
@@ -144,10 +259,7 @@ class BrowserTaskTool(Tool):
                 )
 
         # Emit visualization events if collector available
-        browser_id = None
         if self._visualization_collector:
-            browser_id = f"browser_{uuid.uuid4().hex[:8]}"
-
             # Get parent subagent ID from the collector (if it's a child collector)
             parent_id = getattr(self._visualization_collector, "_subagent_id", None) or "orchestrator"
 

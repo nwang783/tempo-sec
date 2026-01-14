@@ -6,10 +6,32 @@ Tools API using the @tools.action decorator pattern.
 """
 
 import asyncio
-import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Coroutine, TypeVar
 
 from browser_use.tools.service import Tools
+
+T = TypeVar("T")
+
+
+def _run_async(coro: Coroutine[None, None, T]) -> T:
+    """
+    Run an async coroutine from sync context, handling nested event loops.
+
+    If already inside an event loop (common with browser-use), schedules the
+    coroutine on the running loop. Otherwise, uses asyncio.run().
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop - safe to use asyncio.run()
+        return asyncio.run(coro)
+
+    # Already in an event loop - run in a thread with its own loop
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(asyncio.run, coro)
+        return future.result()
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
@@ -83,7 +105,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 Findings summary as formatted string
             """
-            result = asyncio.run(
+            result = _run_async(
                 read_findings_tool.execute(
                     include_findings=include_findings,
                     include_surfaces=include_surfaces,
@@ -123,7 +145,7 @@ class BrowserUseToolsAdapter:
             # Convert empty string to None for optional params
             surface_id = attack_surface_id if attack_surface_id else None
 
-            result = asyncio.run(
+            result = _run_async(
                 add_finding_tool.execute(
                     title=title,
                     severity=severity,
@@ -160,7 +182,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 Success message with surface ID
             """
-            result = asyncio.run(
+            result = _run_async(
                 add_surface_tool.execute(
                     surface_type=surface_type,
                     url=url,
@@ -184,7 +206,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 Success confirmation
             """
-            result = asyncio.run(mark_tested_tool.execute(surface_id=surface_id))
+            result = _run_async(mark_tested_tool.execute(surface_id=surface_id))
             if not result.success:
                 return f"Error: {result.error}"
             return result.output
@@ -212,7 +234,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 Command output
             """
-            result = asyncio.run(
+            result = _run_async(
                 shell_tool.execute(
                     command=command,
                     timeout=timeout,
@@ -248,7 +270,7 @@ class BrowserUseToolsAdapter:
                 File contents
             """
             max_bytes_param = max_bytes if max_bytes > 0 else None
-            result = asyncio.run(
+            result = _run_async(
                 file_read_tool.execute(
                     path=path,
                     encoding=encoding,
@@ -278,7 +300,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 Success confirmation
             """
-            result = asyncio.run(
+            result = _run_async(
                 file_write_tool.execute(
                     path=path,
                     content=content,
@@ -328,7 +350,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 List of matching emails with IDs
             """
-            result = asyncio.run(
+            result = _run_async(
                 check_inbox_tool.execute(
                     subject_pattern=subject_pattern,
                     from_address=from_address,
@@ -350,7 +372,7 @@ class BrowserUseToolsAdapter:
             Returns:
                 Email content with extracted verification links/codes
             """
-            result = asyncio.run(get_email_tool.execute(message_id=message_id))
+            result = _run_async(get_email_tool.execute(message_id=message_id))
             if not result.success:
                 return f"Error: {result.error}"
             return result.output
