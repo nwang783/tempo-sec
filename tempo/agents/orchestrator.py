@@ -52,6 +52,7 @@ class OrchestratorAgent(BaseAgentDefinition):
         findings_path: str | None = None,
         max_iterations: int = 10,
         scope_content: str | None = None,
+        scope_name: str | None = None,
         **kwargs: Any,
     ):
         """
@@ -62,16 +63,19 @@ class OrchestratorAgent(BaseAgentDefinition):
             findings_path: Optional path to findings document.
                           If provided and exists: loads existing document.
                           If provided but doesn't exist: creates new at that path.
-                          If None: auto-generates path based on timestamp.
+                          If None: auto-generates path based on scope_name or target.
             max_iterations: Maximum orchestrator iterations (default: 10)
             scope_content: Scope file content containing target(s) and constraints.
                           This is injected directly into the system prompt.
+            scope_name: Name of the scope file (without extension). Used for 
+                       auto-generating findings path when findings_path is not provided.
             **kwargs: Ignored additional args (for compatibility)
         """
         self.target = target
         self._findings_path = findings_path
         self._max_iterations = max_iterations
         self._scope_content = scope_content
+        self._scope_name = scope_name
         self._findings: "FindingsDocument | None" = None
         self._session_id = kwargs.get("session_id", "")
 
@@ -127,11 +131,12 @@ class OrchestratorAgent(BaseAgentDefinition):
                         file_path=str(path),
                     )
             else:
-                # Auto-generate path from target
-                safe_target = self._make_safe_filename(self.target)
+                # Auto-generate path from scope_name if available, otherwise target
+                name_source = self._scope_name if self._scope_name else self.target
+                safe_name = self._make_safe_filename(name_source)
                 findings_dir = Path("./findings")
                 findings_dir.mkdir(parents=True, exist_ok=True)
-                auto_path = findings_dir / f"{safe_target}.yaml"
+                auto_path = findings_dir / f"{safe_name}.yaml"
                 self._findings = FindingsDocument(
                     target=self.target,
                     file_path=str(auto_path),
