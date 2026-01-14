@@ -176,6 +176,7 @@ async def main() -> None:
                 print(f"Error: Scope file not found: {args.scope_file}")
                 sys.exit(1)
             agent_kwargs["scope_content"] = scope_path.read_text().strip()
+            agent_kwargs["scope_name"] = scope_path.stem  # Use scope file name for findings dir
 
         agent_def = get_agent(args.agent, **agent_kwargs)
     except KeyError as e:

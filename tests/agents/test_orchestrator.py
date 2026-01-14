@@ -54,6 +54,29 @@ class TestOrchestratorAgent:
             assert findings is not None
             assert findings._data.target == "https://example.com"
 
+    def test_findings_auto_path_uses_scope_name(self):
+        """Test that auto-generated findings path uses scope_name when provided."""
+        import os
+        original_cwd = os.getcwd()
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.chdir(tmpdir)
+            try:
+                # Create agent with scope_name but no explicit findings_path
+                agent = OrchestratorAgent(
+                    target="See scope file",  # Default target
+                    scope_name="my_scope_file",  # Provided from CLI
+                )
+                
+                # First access should create the document with path based on scope_name
+                findings = agent.findings
+                
+                assert findings is not None
+                assert "my_scope_file" in findings.file_path
+                assert "See_scope_file" not in findings.file_path
+            finally:
+                os.chdir(original_cwd)
+
     def test_findings_lazy_loading_existing_file(self):
         """Test findings document lazy loading from existing file."""
         with tempfile.TemporaryDirectory() as tmpdir:
