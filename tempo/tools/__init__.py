@@ -8,7 +8,7 @@ Exports:
     - ToolSchema: Schema for tool parameters
     - ToolRegistry: Registry for managing tools
     - Built-in tools: ShellTool, FileReadTool, FileWriteTool
-    - Playwright-style browser tools: BrowserSession, BrowserNavigateTool, etc.
+    - Browser-use integration: BrowserUseToolsAdapter, BrowserUseStateTools
     - Meta tools: SummarizeOutputTool, BranchToSubtasksTool, FinishSubtaskTool, FinalizeAnalysisTool
 """
 
@@ -21,14 +21,8 @@ from tempo.tools.base import (
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.shell import ShellTool
 from tempo.tools.filesystem import FileReadTool, FileWriteTool
-from tempo.tools.browser_tools import (
-    BrowserSession,
-    BrowserNavigateTool,
-    BrowserSnapshotTool,
-    BrowserClickTool,
-    BrowserTypeTool,
-    BrowserFillFormTool,
-)
+from tempo.tools.browser_use_adapter import BrowserUseToolsAdapter
+from tempo.tools.browser_use_state import BrowserUseStateTools
 from tempo.tools.meta import (
     SummarizeOutputTool,
     BranchToSubtasksTool,
@@ -53,13 +47,9 @@ __all__ = [
     "ShellTool",
     "FileReadTool",
     "FileWriteTool",
-    # Playwright-style browser tools
-    "BrowserSession",
-    "BrowserNavigateTool",
-    "BrowserSnapshotTool",
-    "BrowserClickTool",
-    "BrowserTypeTool",
-    "BrowserFillFormTool",
+    # Browser-use integration
+    "BrowserUseToolsAdapter",
+    "BrowserUseStateTools",
     # Meta tools
     "SummarizeOutputTool",
     "BranchToSubtasksTool",

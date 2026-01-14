@@ -35,12 +35,8 @@ from tempo.tools import (
     ShellTool,
     FileReadTool,
     FileWriteTool,
-    BrowserSession,
-    BrowserNavigateTool,
-    BrowserSnapshotTool,
-    BrowserClickTool,
-    BrowserTypeTool,
-    BrowserFillFormTool,
+    BrowserUseToolsAdapter,
+    BrowserUseStateTools,
 )
 
 __version__ = "0.1.0"
@@ -73,11 +69,7 @@ __all__ = [
     "ShellTool",
     "FileReadTool",
     "FileWriteTool",
-    # Playwright-style browser tools
-    "BrowserSession",
-    "BrowserNavigateTool",
-    "BrowserSnapshotTool",
-    "BrowserClickTool",
-    "BrowserTypeTool",
-    "BrowserFillFormTool",
+    # Browser-use integration
+    "BrowserUseToolsAdapter",
+    "BrowserUseStateTools",
 ]

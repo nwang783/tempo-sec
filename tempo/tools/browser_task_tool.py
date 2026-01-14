@@ -68,36 +68,36 @@ class BrowserTaskTool(Tool):
         state_name: str = "",
         save_state_as: str = "",
         scope: str = "",
+        use_browser_use_llm: bool = False,
         purpose: str = "",
         **kwargs,
     ) -> ToolResult:
         """
-        Execute a browser task via the browser agent.
-        
+        Execute a browser task via the browser-use agent.
+
         Args:
             task: Description of what the browser agent should accomplish
             url: Optional starting URL (if provided, agent navigates there first)
             state_name: Optional name of saved state to load (e.g., 'admin_session')
             save_state_as: Optional name to save state as after task completion
-            scope: Optional scope constraints for the browser agent
+            scope: Optional scope constraints for the browser agent (not yet supported by browser-use)
+            use_browser_use_llm: Use browser-use's ChatBrowserUse model (if True) or OpenRouter gpt-5.1 (if False)
             purpose: Why this browser task is being executed
             **kwargs: Additional arguments (ignored)
-            
+
         Returns:
             ToolResult with the browser agent's findings
         """
         import uuid
+        import os
         from tempo.agents.browser import BrowserAgent
-        from tempo.agent.config import AgentConfig
-        from tempo.agent.runner import Agent
-        from tempo.context.store import ContextStore
-        from tempo.prompts.builder import PromptBuilder
-        
+        from tempo.infra.browser_state import BrowserStateManager
+        from tempo.tools.browser_use_state import BrowserUseStateTools
+
         # Fixed step limit for browser agent
         max_steps = 50
-        
+
         # Get email config from environment
-        import os
         agent_email = os.getenv("TEMPO_AGENT_EMAIL")
         imap_password = os.getenv("TEMPO_IMAP_PASSWORD")
         imap_config = None
@@ -107,8 +107,8 @@ class BrowserTaskTool(Tool):
                 "port": 993,
                 "password": imap_password,
             }
-        
-        # Create browser agent definition with new parameters
+
+        # Create browser agent definition
         browser_agent_def = BrowserAgent(
             task=task,
             url=url if url else None,
@@ -119,54 +119,150 @@ class BrowserTaskTool(Tool):
             findings=self._findings_updater,
             agent_email=agent_email,
             imap_config=imap_config,
+            use_browser_use_llm=use_browser_use_llm,
         )
-        
-        # Create isolated context for browser agent
-        browser_context = ContextStore()
-        
-        # Create tools for browser agent
-        browser_tools = browser_agent_def.create_tools(
-            context=browser_context,
+
+        # Create browser-use agent with custom tools
+        state_manager = BrowserStateManager(ttl_days=7)
+        browser_use_agent, browser, combined_tools = browser_agent_def.create_browser_use_agent(
             container=self._container_manager,
+            state_manager=state_manager,
         )
-        
-        # Always create LLM client with browser agent's model for consistency
-        from tempo.infra.llm import LiteLLMClient
-        llm = LiteLLMClient(model=browser_agent_def.model)
-        
-        # Create browser agent config
-        config = AgentConfig(
-            model=browser_agent_def.model,
-            max_total_steps=50,
-            browser_headless=self._headless,
-            browser_tool_call_delay=1.0,  # 1 second between tool calls (rate limiting)
-        )
-        
-        # Build prompts
-        prompts = PromptBuilder()
-        tool_schemas = browser_tools.get_schemas()
-        system_prompt = browser_agent_def.build_system_prompt(
-            prompts=prompts,
-            tool_schemas=tool_schemas,
-            scope_description=scope if scope else "Browser automation task",
-        )
-        
-        # Add system prompt to context
-        from tempo.context.frame import MessageRole
-        browser_context.add_message(MessageRole.SYSTEM, system_prompt)
-        
-        # Create child visualization collector for browser agent if available
-        browser_collector = None
-        browser_id = None
+
+        # --- Visualization bridge for browser-use actions ---
+        # browser-use executes browser interactions via combined_tools.registry.execute_action(...)
+        # The Tempo visualization UI expects events via VisualizationCollector.on_step/on_tool_call_start/on_tool_call.
+        # We wrap execute_action so each browser-use action shows up as a "tool call" under the browser subagent.
+        browser_step_counter = 0
+        # Pre-generate browser_id so the closure can capture it
+        browser_id = f"browser_{uuid.uuid4().hex[:8]}" if self._visualization_collector else None
+        if self._visualization_collector and hasattr(combined_tools, "registry"):
+            try:
+                import json
+                import time
+
+                original_execute_action = combined_tools.registry.execute_action
+
+                async def _execute_action_with_viz(*args, **kwargs):
+                    nonlocal browser_step_counter
+                    browser_step_counter += 1
+
+                    # Registry.execute_action signature uses (action_name, params, ...)
+                    action_name = kwargs.get("action_name") if "action_name" in kwargs else (args[0] if args else "")
+                    params = kwargs.get("params") if "params" in kwargs else (args[1] if len(args) > 1 else {})
+
+                    # Ensure we have a stable subagent id for routing in the UI
+                    subagent_id = browser_id or "browser"
+                    frame_id = subagent_id
+
+                    # Emit a step first so the UI has a step_number before the tool call arrives
+                    if hasattr(self._visualization_collector, "on_step"):
+                        self._visualization_collector.on_step(
+                            {
+                                "step_number": browser_step_counter,
+                                "phase": None,
+                                "error": None,
+                                "should_continue": True,
+                                "llm_content": None,
+                                "usage": {},
+                                "subagent_id": subagent_id,
+                            },
+                            frame_id,
+                        )
+
+                    # Emit tool_call_start for immediate UI feedback
+                    tool_call_id = f"{subagent_id}:{browser_step_counter}:{action_name}"
+                    if hasattr(self._visualization_collector, "on_tool_call_start"):
+                        self._visualization_collector.on_tool_call_start(
+                            {
+                                "id": tool_call_id,
+                                "tool_name": str(action_name),
+                                "input": params if isinstance(params, dict) else {},
+                                "subagent_id": subagent_id,
+                            },
+                            frame_id,
+                        )
+
+                    start = time.time()
+                    try:
+                        result = await original_execute_action(*args, **kwargs)
+                        duration_ms = int((time.time() - start) * 1000)
+
+                        # Normalize result for display
+                        raw_output_obj = result
+                        if hasattr(result, "model_dump"):
+                            raw_output_obj = result.model_dump()
+                        raw_output = (
+                            json.dumps(raw_output_obj, ensure_ascii=False, default=str)
+                            if not isinstance(raw_output_obj, str)
+                            else raw_output_obj
+                        )
+
+                        error = getattr(result, "error", None)
+                        success = not bool(error)
+
+                        if hasattr(self._visualization_collector, "on_tool_call"):
+                            self._visualization_collector.on_tool_call(
+                                {
+                                    "id": tool_call_id,
+                                    "tool_name": str(action_name),
+                                    "input": params if isinstance(params, dict) else {},
+                                    "raw_output": raw_output,
+                                    "summary": None,
+                                    "success": success,
+                                    "error": str(error) if error else None,
+                                    "duration_ms": duration_ms,
+                                    "metadata": {"browser_use": True},
+                                    "subagent_id": subagent_id,
+                                },
+                                frame_id,
+                            )
+
+                        return result
+                    except Exception as e:
+                        duration_ms = int((time.time() - start) * 1000)
+                        if hasattr(self._visualization_collector, "on_tool_call"):
+                            self._visualization_collector.on_tool_call(
+                                {
+                                    "id": tool_call_id,
+                                    "tool_name": str(action_name),
+                                    "input": params if isinstance(params, dict) else {},
+                                    "raw_output": "",
+                                    "summary": None,
+                                    "success": False,
+                                    "error": str(e),
+                                    "duration_ms": duration_ms,
+                                    "metadata": {"browser_use": True},
+                                    "subagent_id": subagent_id,
+                                },
+                                frame_id,
+                            )
+                        raise
+
+                combined_tools.registry.execute_action = _execute_action_with_viz  # type: ignore[assignment]
+            except Exception:
+                # If instrumentation fails, do not break the browser task.
+                pass
+
+        # Handle state loading if specified
+        if state_name:
+            try:
+                state = await state_manager.load(state_name)
+                if state:
+                    state_tools = BrowserUseStateTools(browser, state_manager)
+                    await state_tools.restore_state(state)
+            except Exception as e:
+                return ToolResult(
+                    success=False,
+                    output=f"Failed to load state '{state_name}': {str(e)}",
+                    error=str(e),
+                )
+
+        # Emit visualization events if collector available
         if self._visualization_collector:
-            browser_id = f"browser_{uuid.uuid4().hex[:8]}"
-            # Use for_subagent if available (VisualizationCollector)
-            if hasattr(self._visualization_collector, "for_subagent"):
-                browser_collector = self._visualization_collector.for_subagent(browser_id)
-            
             # Get parent subagent ID from the collector (if it's a child collector)
             parent_id = getattr(self._visualization_collector, "_subagent_id", None) or "orchestrator"
-            
+
             # Emit browser agent start event
             if hasattr(self._visualization_collector, "on_subagent_start"):
                 self._visualization_collector.on_subagent_start(
@@ -175,99 +271,102 @@ class BrowserTaskTool(Tool):
                     objective=task,
                     parent_id=parent_id,
                 )
-            
-            # Register browser context with server for viewing in UI
-            if hasattr(self._visualization_collector, "server"):
-                self._visualization_collector.server.register_subagent(
-                    subagent_id=browser_id,
-                    context=browser_context,
-                    metadata={
-                        "type": "browser",
-                        "objective": task,
-                    },
-                )
-        
-        # Create and run browser agent with visualization
-        browser_agent = Agent(
-            config=config,
-            llm=llm,
-            tools=browser_tools,
-            context=browser_context,
-            visualization_collector=browser_collector,
-        )
-        
-        # Build objective
-        objective = browser_agent_def.build_objective()
-        
+
         try:
-            # Run browser agent
-            result = await browser_agent.run(
-                objective=objective,
-                max_steps=50,
-            )
-            
-            # Extract findings from result
-            if result.success:
-                findings = result.findings
-                if findings:
-                    findings_str = findings[0].get("findings", str(findings))
-                    extracted_data = findings[0].get("extracted_data", "")
-                    task_success = findings[0].get("success", True)
-                else:
-                    findings_str = "Browser task completed (no specific findings)"
-                    extracted_data = ""
-                    task_success = True
-                
-                output_parts = [f"Browser task completed in {result.steps_taken} steps."]
-                output_parts.append(f"\nFindings: {findings_str}")
-                if extracted_data:
-                    output_parts.append(f"\nExtracted data: {extracted_data}")
-                
-                # Emit subagent finish event
-                if self._visualization_collector and hasattr(self._visualization_collector, "on_subagent_finish"):
-                    self._visualization_collector.on_subagent_finish(
-                        subagent_id=browser_id or "browser",
-                        success=task_success,
-                        summary=findings_str[:200],
-                        findings_count=1 if findings else 0,
-                        surfaces_count=0,
+            # Run browser-use agent
+            history = await browser_use_agent.run(max_steps=max_steps)
+
+            # Handle state saving if specified
+            if save_state_as:
+                try:
+                    state_tools = BrowserUseStateTools(browser, state_manager)
+                    captured_state = await state_tools.capture_state(
+                        name=save_state_as,
+                        description=f"State saved after browser task: {task[:100]}"
                     )
-                
-                return ToolResult(
-                    success=task_success,
-                    output="\n".join(output_parts),
-                    metadata={
-                        "steps_taken": result.steps_taken,
-                        "findings": findings_str,
-                        "extracted_data": extracted_data,
-                        "state_loaded": state_name if state_name else None,
-                        "state_saved": save_state_as if save_state_as else None,
-                    },
-                )
+                    await state_manager.save(captured_state)
+                except Exception as e:
+                    # Log error but don't fail the task
+                    pass
+
+            # Extract results from history
+            steps_taken = len(history.history) if hasattr(history, "history") else 0
+
+            # browser-use histories expose helpers as methods; call them if callable
+            final_result = None
+            if hasattr(history, "final_result") and callable(getattr(history, "final_result")):
+                final_result = history.final_result()
+
+            extracted_content = None
+            if hasattr(history, "extracted_content"):
+                maybe = getattr(history, "extracted_content")
+                extracted_content = maybe() if callable(maybe) else maybe
+
+            # Determine success: prefer explicit final-result semantics, otherwise look for errors
+            success = False
+            if final_result:
+                success = True
             else:
-                # Emit subagent finish event for failure
-                if self._visualization_collector and hasattr(self._visualization_collector, "on_subagent_finish"):
-                    self._visualization_collector.on_subagent_finish(
-                        subagent_id=browser_id or "browser",
-                        success=False,
-                        summary=result.error or "Unknown error",
-                        findings_count=0,
-                        surfaces_count=0,
-                    )
-                
-                return ToolResult(
-                    success=False,
-                    output=f"Browser task failed: {result.error or 'Unknown error'}",
-                    error=result.error,
-                    metadata={"steps_taken": result.steps_taken},
+                # Best-effort: if any action result reports an error, treat as failure
+                try:
+                    all_results = getattr(history, "all_results", None) or getattr(history, "history", None)
+                    if all_results:
+                        has_error = any(getattr(r, "error", None) for r in all_results)
+                        success = not has_error
+                except Exception:
+                    success = False
+
+            output = f"Browser task {'completed' if success else 'failed'} in {steps_taken} steps."
+
+            if final_result:
+                output += f"\n\nResult: {final_result}"
+            if extracted_content:
+                output += f"\n\nExtracted content: {extracted_content}"
+
+            # Emit subagent finish event
+            if self._visualization_collector and hasattr(self._visualization_collector, "on_subagent_finish"):
+                self._visualization_collector.on_subagent_finish(
+                    subagent_id=browser_id or "browser",
+                    success=success,
+                    summary=output[:200],
+                    findings_count=0,
+                    surfaces_count=0,
                 )
-                
+
+            return ToolResult(
+                success=success,
+                output=output,
+                metadata={
+                    "steps_taken": steps_taken,
+                    "state_loaded": state_name if state_name else None,
+                    "state_saved": save_state_as if save_state_as else None,
+                },
+            )
+
         except Exception as e:
+            # Emit subagent finish event for failure
+            if self._visualization_collector and hasattr(self._visualization_collector, "on_subagent_finish"):
+                self._visualization_collector.on_subagent_finish(
+                    subagent_id=browser_id or "browser",
+                    success=False,
+                    summary=str(e)[:200],
+                    findings_count=0,
+                    surfaces_count=0,
+                )
+
             return ToolResult(
                 success=False,
-                output=f"Error running browser agent: {str(e)}",
+                output=f"Browser task failed: {str(e)}",
                 error=str(e),
             )
+        
+        finally:
+            # Clean up browser resources
+            try:
+                await browser.close()
+            except Exception:
+                # Ignore cleanup errors
+                pass
     
     def get_schema(self) -> ToolSchema:
         return ToolSchema(
@@ -312,6 +411,14 @@ class BrowserTaskTool(Tool):
                             "Describe allowed/disallowed domains or actions."
                         ),
                         "default": "",
+                    },
+                    "use_browser_use_llm": {
+                        "type": "boolean",
+                        "description": (
+                            "Use browser-use's ChatBrowserUse model (true) or OpenRouter gpt-5.1 (false). "
+                            "Default: false (use OpenRouter)."
+                        ),
+                        "default": False,
                     },
                 },
                 "required": ["task"],

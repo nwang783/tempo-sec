@@ -5,6 +5,7 @@ A specialized agent for browser automation tasks that can be invoked
 by parent agents to handle web interaction subtasks.
 """
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from tempo.agents.base import BaseAgentDefinition
@@ -53,6 +54,7 @@ class BrowserAgent(BaseAgentDefinition):
         findings: "FindingsUpdater | None" = None,
         agent_email: str | None = None,
         imap_config: dict | None = None,
+        use_browser_use_llm: bool = False,
         **kwargs: Any,
     ):
         """
@@ -69,6 +71,7 @@ class BrowserAgent(BaseAgentDefinition):
             findings: Optional FindingsDocument for accessing prior work
             agent_email: Optional email address for signups
             imap_config: Optional IMAP config dict {host, port, password}
+            use_browser_use_llm: Use browser-use's ChatBrowserUse model (if True) or gpt-5.1 via OpenRouter (if False)
             **kwargs: Ignored additional args
         """
         self.task = task
@@ -81,6 +84,7 @@ class BrowserAgent(BaseAgentDefinition):
         self.findings = findings
         self.agent_email = agent_email
         self.imap_config = imap_config
+        self.use_browser_use_llm = use_browser_use_llm
     
     @property
     def name(self) -> str:
@@ -89,128 +93,133 @@ class BrowserAgent(BaseAgentDefinition):
     @property
     def description(self) -> str:
         return "Browser automation agent for web interaction tasks"
-    
+
     def create_tools(
         self,
         context: "ContextStore",
         container: "ContainerManager | None" = None,
-        state_manager: "BrowserStateManager | None" = None,
         **kwargs: Any,
     ) -> "ToolRegistry":
         """
-        Create browser-only tools.
-        
-        The browser agent has:
-        - Shell and filesystem tools for system operations
-        - Browser navigation and interaction tools
-        - State management tools (save/load sessions)
-        - Visual tools (screenshot, coordinate click/type, scroll, wait)
-        - Task completion tool (no other meta tools)
+        BrowserAgent should not be instantiated via create_tools().
+
+        Use BrowserTaskTool instead, which calls create_browser_use_agent().
+        This agent uses browser-use integration and doesn't follow the standard
+        agent pattern.
+
+        Raises:
+            NotImplementedError: Always - this method should never be called
         """
-        from tempo.tools.registry import ToolRegistry
-        from tempo.tools.shell import ShellTool
-        from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.browser_tools import (
-            BrowserSession,
-            BrowserNavigateTool,
-            BrowserSnapshotTool,
-            BrowserScreenshotTool,
-            # DOM-based tools (PRIMARY - more reliable)
-            BrowserClickTool,
-            BrowserTypeTool,
-            BrowserSelectTool,
-            BrowserFillFormTool,
-            # Coordinate-based tools (FALLBACK)
-            BrowserClickCoordsTool,
-            BrowserTypeCoordsTool,
-            BrowserScrollTool,
-            BrowserWaitTool,
-            # Debugging tools
-            BrowserConsoleTool,
-            BrowserNetworkTool,
-            BrowserEvaluateTool,
+        raise NotImplementedError(
+            "BrowserAgent should not be used directly. "
+            "Use BrowserTaskTool instead, which handles browser-use integration. "
+            "Example: tools.register(BrowserTaskTool(container_manager=container))"
         )
-        from tempo.tools.browser_state_tools import (
-            BrowserListStatesTool,
-            BrowserSaveStateTool,
-            BrowserLoadStateTool,
-            BrowserDeleteStateTool,
-            BrowserCleanupStatesTool,
-        )
-        from tempo.tools.complete_browser_task import CompleteBrowserTaskTool
-        from tempo.tools.meta import SummarizePreviousOutputTool
+
+    def create_browser_use_agent(
+        self,
+        container: "ContainerManager | None" = None,
+        state_manager: "BrowserStateManager | None" = None,
+    ):
+        """
+        Create a browser-use Agent with custom tempo-sec tools.
+
+        This replaces the old create_tools() method and directly creates
+        a browser-use Agent instance configured with custom tools.
+
+        Args:
+            container: Container manager for shell/file operations
+            state_manager: Browser state manager for session persistence
+
+        Returns:
+            Tuple of (browser-use Agent instance, Browser instance, Tools instance)
+        """
+        from browser_use import Agent, Browser
+        from browser_use.tools.service import Tools
         from tempo.infra.browser_state import BrowserStateManager
-        
-        tools = ToolRegistry()
-        
-        # Execution tools - browser agent can perform system operations
-        tools.register(ShellTool(container_manager=container))
-        tools.register(FileReadTool(container_manager=container))
-        tools.register(FileWriteTool(container_manager=container))
-        
+        from tempo.infra.browser_use_llm import create_browser_use_llm
+        from tempo.tools.browser_use_adapter import BrowserUseToolsAdapter
+        from tempo.tools.browser_use_state import BrowserUseStateTools
+
         # Create state manager if not provided
         if state_manager is None:
             state_manager = BrowserStateManager(ttl_days=self.state_ttl_days)
-        
-        # Browser tools with shared session
-        browser_session = BrowserSession(
-            container_manager=container,
+
+        # Derive allowed domains (best-effort) from url/scope to constrain browsing.
+        allowed_domains: list[str] | None = None
+        try:
+            from urllib.parse import urlparse
+
+            candidate_urls: list[str] = []
+            if self.url:
+                candidate_urls.append(self.url)
+            if self.scope:
+                # Very lightweight extraction: grab any tokens that look like URLs
+                for token in self.scope.replace("(", " ").replace(")", " ").split():
+                    if token.startswith("http://") or token.startswith("https://"):
+                        candidate_urls.append(token)
+            domains = []
+            for u in candidate_urls:
+                netloc = urlparse(u).netloc
+                if netloc:
+                    domains.append(netloc)
+            allowed_domains = sorted(set(domains)) or None
+        except Exception:
+            allowed_domains = None
+
+        # Create browser-use Browser (BrowserSession) instance
+        browser = Browser(
             headless=self.headless,
-            state_manager=state_manager,
+            use_cloud=False,  # Use local browser
+            allowed_domains=allowed_domains,
+            # Reduce flakiness on JS-heavy pages (souschefhub is slow to become "ready")
+            minimum_wait_page_load_time=1.0,
+            wait_for_network_idle_page_load_time=3.0,
         )
-        
-        # Page inspection tools
-        tools.register(BrowserNavigateTool(browser_session))
-        tools.register(BrowserSnapshotTool(browser_session))
-        tools.register(BrowserScreenshotTool(browser_session))
-        
-        # DOM-based interaction tools (PRIMARY - most reliable)
-        tools.register(BrowserClickTool(browser_session))
-        tools.register(BrowserTypeTool(browser_session))
-        tools.register(BrowserSelectTool(browser_session))
-        tools.register(BrowserFillFormTool(browser_session))
-        
-        # Coordinate-based tools (FALLBACK for complex UIs)
-        tools.register(BrowserClickCoordsTool(browser_session))
-        tools.register(BrowserTypeCoordsTool(browser_session))
-        tools.register(BrowserScrollTool(browser_session))
-        tools.register(BrowserWaitTool(browser_session))
-        
-        # Debugging tools
-        tools.register(BrowserConsoleTool(browser_session))
-        tools.register(BrowserNetworkTool(browser_session))
-        tools.register(BrowserEvaluateTool(browser_session))
-        
-        # State management tools
-        tools.register(BrowserListStatesTool(state_manager))
-        tools.register(BrowserSaveStateTool(browser_session, state_manager))
-        tools.register(BrowserLoadStateTool(browser_session, state_manager))
-        tools.register(BrowserDeleteStateTool(state_manager))
-        tools.register(BrowserCleanupStatesTool(state_manager))
-        
-        # Summarization tool (required for large outputs)
-        tools.register(SummarizePreviousOutputTool(context))
-        
-        # Email tools (if configured)
-        if self.imap_config and self.imap_config.get("password"):
-            from tempo.tools.email_tools import CheckInboxTool, GetEmailContentTool
-            tools.register(CheckInboxTool(
-                imap_host=self.imap_config.get("host", "imap.gmail.com"),
-                imap_port=self.imap_config.get("port", 993),
-                imap_password=self.imap_config["password"],
-                agent_email=self.agent_email,
-            ))
-            tools.register(GetEmailContentTool(
-                imap_host=self.imap_config.get("host", "imap.gmail.com"),
-                imap_port=self.imap_config.get("port", 993),
-                imap_password=self.imap_config["password"],
-                agent_email=self.agent_email,
-            ))
-        
-        # Completion tool
-        tools.register(CompleteBrowserTaskTool(findings=self.findings))
-        
-        return tools
+
+        # Create a single shared Tools instance
+        shared_tools = Tools()
+
+        # Create custom tools adapter with shared Tools instance
+        tools_adapter = BrowserUseToolsAdapter(
+            container_manager=container,
+            findings_updater=self.findings,
+            imap_config=self.imap_config,
+            agent_email=self.agent_email,
+            tools_instance=shared_tools,  # Pass shared instance
+        )
+
+        # Create state management tools with shared Tools instance
+        state_tools = BrowserUseStateTools(
+            browser=browser,
+            state_manager=state_manager,
+            tools_instance=shared_tools,  # Pass shared instance
+        )
+
+        # No need to merge - both adapters registered on shared_tools
+        # tools_adapter and state_tools have already registered their actions
+
+        # Select LLM based on configuration
+        llm = create_browser_use_llm(
+            use_browser_use_llm=self.use_browser_use_llm,
+            litellm_client=None,  # Not needed for OpenRouter approach
+            model=os.getenv("TEMPO_BROWSER_MODEL") or "gpt-5-mini",
+        )
+
+        # Build task description with URL if provided
+        task_description = self.task
+        if self.url:
+            task_description = f"{self.task}\n\nStarting URL: {self.url}"
+
+        # Create browser-use Agent
+        agent = Agent(
+            task=task_description,
+            llm=llm,
+            browser=browser,
+            tools=shared_tools,  # Use the shared Tools instance
+        )
+
+        return agent, browser, shared_tools
     
     def build_system_prompt(
         self,

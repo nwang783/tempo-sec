@@ -10,14 +10,6 @@ from typing import TYPE_CHECKING
 from tempo.tools.registry import ToolRegistry
 from tempo.tools.shell import ShellTool
 from tempo.tools.filesystem import FileReadTool, FileWriteTool
-from tempo.tools.browser_tools import (
-    BrowserSession,
-    BrowserNavigateTool,
-    BrowserSnapshotTool,
-    BrowserClickTool,
-    BrowserTypeTool,
-    BrowserFillFormTool,
-)
 from tempo.tools.meta import (
     SummarizeOutputTool,
     BranchToSubtasksTool,
@@ -38,41 +30,37 @@ def create_sandboxed_tools(
 ) -> ToolRegistry:
     """
     Create a tool registry with all tools properly configured for sandboxed execution.
-    
-    All network-interacting tools (shell, browser, filesystem) are injected with
+
+    All network-interacting tools (shell, filesystem) are injected with
     the container manager to ensure they run in a secure, isolated environment.
-    
+
+    Note: Browser tools are now provided via BrowserTaskTool which uses
+    the browser-use integration. Agents should register BrowserTaskTool
+    separately if browser automation is needed.
+
     Args:
         container: Container manager for sandboxed execution (required)
         context_store: Context store for summarization tool
         branch_coordinator: Optional branch coordinator for subtasks
-        
+
     Returns:
         ToolRegistry with all tools configured
     """
     tools = ToolRegistry()
-    
+
     # Sandboxed tools - these interact with network/filesystem
     tools.register(ShellTool(container_manager=container))
     tools.register(FileReadTool(container_manager=container))
     tools.register(FileWriteTool(container_manager=container))
-    
-    # Playwright-style browser tools with shared session
-    browser_session = BrowserSession(container_manager=container)
-    tools.register(BrowserNavigateTool(browser_session))
-    tools.register(BrowserSnapshotTool(browser_session))
-    tools.register(BrowserClickTool(browser_session))
-    tools.register(BrowserTypeTool(browser_session))
-    tools.register(BrowserFillFormTool(browser_session))
-    
+
     # Meta tools
     tools.register(SummarizeOutputTool(context_store=context_store))
     tools.register(ViewToolOutputTool(context_store=context_store))
-    
+
     if branch_coordinator:
         tools.register(BranchToSubtasksTool(branch_coordinator=branch_coordinator))
         tools.register(FinishSubtaskTool())
-    
+
     return tools
 
 
@@ -81,13 +69,17 @@ def create_local_tools(
 ) -> ToolRegistry:
     """
     Create a tool registry for local (non-containerized) execution.
-    
+
     WARNING: This runs tools directly on the host system. Use only for
     development/testing, never in production.
-    
+
+    Note: Browser tools are now provided via BrowserTaskTool which uses
+    the browser-use integration. Agents should register BrowserTaskTool
+    separately if browser automation is needed.
+
     Args:
         context_store: Context store for summarization tool
-        
+
     Returns:
         ToolRegistry with tools configured for local execution
     """
@@ -96,25 +88,17 @@ def create_local_tools(
         "Creating local tools without container. Commands will execute on host system.",
         RuntimeWarning,
     )
-    
+
     tools = ToolRegistry()
-    
+
     # Local tools (no container injection)
     tools.register(ShellTool())
     tools.register(FileReadTool())
     tools.register(FileWriteTool())
-    
-    # Playwright-style browser tools with shared session (local)
-    browser_session = BrowserSession()
-    tools.register(BrowserNavigateTool(browser_session))
-    tools.register(BrowserSnapshotTool(browser_session))
-    tools.register(BrowserClickTool(browser_session))
-    tools.register(BrowserTypeTool(browser_session))
-    tools.register(BrowserFillFormTool(browser_session))
-    
+
     # Meta tools
     tools.register(SummarizeOutputTool(context_store=context_store))
     tools.register(ViewToolOutputTool(context_store=context_store))
-    
+
     return tools
 

@@ -111,44 +111,30 @@ class ToolRegistry:
     def default(cls, container_manager: "ContainerManager | None" = None) -> "ToolRegistry":
         """
         Create a registry with the default tool set.
-        
+
         Default tools:
             - shell: Execute shell commands
             - file_read: Read file contents
             - file_write: Write file contents
-            - browser_navigate, browser_snapshot, browser_click, 
-              browser_type, browser_fill_form: Web browsing tools
-            
+
+        Note: Browser tools are now provided via BrowserTaskTool which uses
+        the browser-use integration. Agents should register BrowserTaskTool
+        separately if browser automation is needed.
+
         Args:
             container_manager: Optional container manager for sandboxed execution
-            
+
         Returns:
             ToolRegistry with default tools registered
         """
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
-        from tempo.tools.browser_tools import (
-            BrowserSession,
-            BrowserNavigateTool,
-            BrowserSnapshotTool,
-            BrowserClickTool,
-            BrowserTypeTool,
-            BrowserFillFormTool,
-        )
-        
+
         registry = cls()
-        
+
         # Register built-in tools
         registry.register(ShellTool(container_manager))
         registry.register(FileReadTool(container_manager))
         registry.register(FileWriteTool(container_manager))
-        
-        # Playwright-style browser tools
-        browser_session = BrowserSession(container_manager=container_manager)
-        registry.register(BrowserNavigateTool(browser_session))
-        registry.register(BrowserSnapshotTool(browser_session))
-        registry.register(BrowserClickTool(browser_session))
-        registry.register(BrowserTypeTool(browser_session))
-        registry.register(BrowserFillFormTool(browser_session))
-        
+
         return registry
