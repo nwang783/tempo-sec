@@ -96,6 +96,18 @@ class BrowserTaskTool(Tool):
         # Fixed step limit for browser agent
         max_steps = 50
         
+        # Get email config from environment
+        import os
+        agent_email = os.getenv("TEMPO_AGENT_EMAIL")
+        imap_password = os.getenv("TEMPO_IMAP_PASSWORD")
+        imap_config = None
+        if imap_password:
+            imap_config = {
+                "host": os.getenv("TEMPO_IMAP_HOST", "imap.gmail.com"),
+                "port": 993,
+                "password": imap_password,
+            }
+        
         # Create browser agent definition with new parameters
         browser_agent_def = BrowserAgent(
             task=task,
@@ -105,6 +117,8 @@ class BrowserTaskTool(Tool):
             scope=scope if scope else None,
             headless=self._headless,
             findings=self._findings_updater,
+            agent_email=agent_email,
+            imap_config=imap_config,
         )
         
         # Create isolated context for browser agent

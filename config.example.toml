@@ -71,3 +71,24 @@ max_concurrent = 3
 # path = "./manifests/target_manifest.json"
 # Directory for saving manifests (for recon.py)
 output_dir = "./manifests"
+
+[email]
+# Agent email used for signups (required for email tools)
+# agent_email = "temposec.agent@gmail.com"
+# IMAP server configuration
+imap_host = "imap.gmail.com"
+imap_port = 993
+# Note: IMAP password should be set via TEMPO_IMAP_PASSWORD env var for security
+
+[browser]
+# Browser state persistence directory
+state_dir = "~/.tempo-sec/browser_states"
+# Default TTL for browser states (days)
+state_ttl_days = 7
+# Run browser in headless mode (no visible window)
+headless = false
+# Default timeout for browser operations (milliseconds)
+default_timeout = 300000
+# Viewport dimensions
+viewport_width = 1280
+viewport_height = 720

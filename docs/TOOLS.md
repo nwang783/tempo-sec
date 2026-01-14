@@ -123,6 +123,45 @@ file_read(path="/workspace/config.json")
 file_write(path="/workspace/output.txt", content="...")
 ```
 
+### Email Tools
+
+For automated account signup flows, the browser agent can check a configured inbox for verification emails:
+
+| Tool | Purpose |
+|------|---------|
+| `check_inbox` | Poll IMAP for new emails matching subject/sender |
+| `get_email_content` | Fetch email body and extract verification links/codes |
+
+**Configuration:**
+Set environment variables:
+```bash
+TEMPO_AGENT_EMAIL=your-agent@gmail.com
+TEMPO_IMAP_PASSWORD=<gmail-app-password>
+```
+
+**Example workflow:**
+```python
+# 1. Sign up with configured email (injected into prompt)
+browser_navigate(url="https://example.com/signup")
+browser_type(ref="ref_email", text="temposec.agent@gmail.com")
+browser_click(ref="ref_submit")
+
+# 2. Check for verification email
+check_inbox(
+    subject_pattern="verify|confirm",
+    timeout_seconds=60,
+    purpose="Wait for verification email"
+)
+# Returns: Found 1 email - ID: 123, Subject: "Verify your account"
+
+# 3. Get verification link/code
+get_email_content(
+    message_id="123",
+    purpose="Extract verification link"
+)
+# Returns: Links: [https://example.com/verify?token=abc123]
+```
+
 ---
 
 ## Meta Tools

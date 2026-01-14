@@ -51,6 +51,8 @@ class BrowserAgent(BaseAgentDefinition):
         headless: bool = True,
         state_ttl_days: int = 7,
         findings: "FindingsUpdater | None" = None,
+        agent_email: str | None = None,
+        imap_config: dict | None = None,
         **kwargs: Any,
     ):
         """
@@ -65,6 +67,8 @@ class BrowserAgent(BaseAgentDefinition):
             headless: Whether to run browser in headless mode
             state_ttl_days: Default TTL for saved states in days
             findings: Optional FindingsDocument for accessing prior work
+            agent_email: Optional email address for signups
+            imap_config: Optional IMAP config dict {host, port, password}
             **kwargs: Ignored additional args
         """
         self.task = task
@@ -75,6 +79,8 @@ class BrowserAgent(BaseAgentDefinition):
         self.headless = headless
         self.state_ttl_days = state_ttl_days
         self.findings = findings
+        self.agent_email = agent_email
+        self.imap_config = imap_config
     
     @property
     def name(self) -> str:
@@ -185,6 +191,22 @@ class BrowserAgent(BaseAgentDefinition):
         # Summarization tool (required for large outputs)
         tools.register(SummarizePreviousOutputTool(context))
         
+        # Email tools (if configured)
+        if self.imap_config and self.imap_config.get("password"):
+            from tempo.tools.email_tools import CheckInboxTool, GetEmailContentTool
+            tools.register(CheckInboxTool(
+                imap_host=self.imap_config.get("host", "imap.gmail.com"),
+                imap_port=self.imap_config.get("port", 993),
+                imap_password=self.imap_config["password"],
+                agent_email=self.agent_email,
+            ))
+            tools.register(GetEmailContentTool(
+                imap_host=self.imap_config.get("host", "imap.gmail.com"),
+                imap_port=self.imap_config.get("port", 993),
+                imap_password=self.imap_config["password"],
+                agent_email=self.agent_email,
+            ))
+        
         # Completion tool
         tools.register(CompleteBrowserTaskTool(findings=self.findings))
         
@@ -221,6 +243,7 @@ class BrowserAgent(BaseAgentDefinition):
             state_name=self.state_name,
             save_state_as=self.save_state_as,
             ttl_days=self.state_ttl_days,
+            agent_email=self.agent_email,
         )
     
     def build_objective(self, target: str | None = None, **kwargs: Any) -> str:
