@@ -65,8 +65,6 @@ class BrowserTaskTool(Tool):
         self,
         task: str,
         url: str = "",
-        state_name: str = "",
-        save_state_as: str = "",
         scope: str = "",
         use_browser_use_llm: bool = False,
         purpose: str = "",
@@ -78,8 +76,6 @@ class BrowserTaskTool(Tool):
         Args:
             task: Description of what the browser agent should accomplish
             url: Optional starting URL (if provided, agent navigates there first)
-            state_name: Optional name of saved state to load (e.g., 'admin_session')
-            save_state_as: Optional name to save state as after task completion
             scope: Optional scope constraints for the browser agent (not yet supported by browser-use)
             use_browser_use_llm: Use browser-use's ChatBrowserUse model (if True) or OpenRouter gpt-5.1 (if False)
             purpose: Why this browser task is being executed
@@ -91,8 +87,6 @@ class BrowserTaskTool(Tool):
         import uuid
         import os
         from tempo.agents.browser import BrowserAgent
-        from tempo.infra.browser_state import BrowserStateManager
-        from tempo.tools.browser_use_state import BrowserUseStateTools
 
         # Fixed step limit for browser agent
         max_steps = 50
@@ -112,8 +106,6 @@ class BrowserTaskTool(Tool):
         browser_agent_def = BrowserAgent(
             task=task,
             url=url if url else None,
-            state_name=state_name if state_name else None,
-            save_state_as=save_state_as if save_state_as else None,
             scope=scope if scope else None,
             headless=self._headless,
             findings=self._findings_updater,
@@ -123,10 +115,8 @@ class BrowserTaskTool(Tool):
         )
 
         # Create browser-use agent with custom tools
-        state_manager = BrowserStateManager(ttl_days=7)
         browser_use_agent, browser, combined_tools = browser_agent_def.create_browser_use_agent(
             container=self._container_manager,
-            state_manager=state_manager,
         )
 
         # --- Visualization bridge for browser-use actions ---
@@ -244,20 +234,6 @@ class BrowserTaskTool(Tool):
                 # If instrumentation fails, do not break the browser task.
                 pass
 
-        # Handle state loading if specified
-        if state_name:
-            try:
-                state = await state_manager.load(state_name)
-                if state:
-                    state_tools = BrowserUseStateTools(browser, state_manager)
-                    await state_tools.restore_state(state)
-            except Exception as e:
-                return ToolResult(
-                    success=False,
-                    output=f"Failed to load state '{state_name}': {str(e)}",
-                    error=str(e),
-                )
-
         # Emit visualization events if collector available
         if self._visualization_collector:
             # Get parent subagent ID from the collector (if it's a child collector)
@@ -275,19 +251,6 @@ class BrowserTaskTool(Tool):
         try:
             # Run browser-use agent
             history = await browser_use_agent.run(max_steps=max_steps)
-
-            # Handle state saving if specified
-            if save_state_as:
-                try:
-                    state_tools = BrowserUseStateTools(browser, state_manager)
-                    captured_state = await state_tools.capture_state(
-                        name=save_state_as,
-                        description=f"State saved after browser task: {task[:100]}"
-                    )
-                    await state_manager.save(captured_state)
-                except Exception as e:
-                    # Log error but don't fail the task
-                    pass
 
             # Extract results from history
             steps_taken = len(history.history) if hasattr(history, "history") else 0
@@ -338,8 +301,6 @@ class BrowserTaskTool(Tool):
                 output=output,
                 metadata={
                     "steps_taken": steps_taken,
-                    "state_loaded": state_name if state_name else None,
-                    "state_saved": save_state_as if save_state_as else None,
                 },
             )
 
@@ -385,23 +346,6 @@ class BrowserTaskTool(Tool):
                     "url": {
                         "type": "string",
                         "description": "Starting URL to navigate to (optional)",
-                        "default": "",
-                    },
-                    "state_name": {
-                        "type": "string",
-                        "description": (
-                            "Optional name of saved browser state to load "
-                            "(e.g., 'admin_session'). The browser will restore "
-                            "cookies and storage from this state."
-                        ),
-                        "default": "",
-                    },
-                    "save_state_as": {
-                        "type": "string",
-                        "description": (
-                            "Optional name to save browser state as after task completion. "
-                            "Use this to persist authenticated sessions for later reuse."
-                        ),
                         "default": "",
                     },
                     "scope": {

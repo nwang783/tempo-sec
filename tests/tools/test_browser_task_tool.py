@@ -20,8 +20,6 @@ class TestBrowserTaskTool:
         props = schema.parameters["properties"]
         assert "task" in props
         assert "url" in props
-        assert "state_name" in props
-        assert "save_state_as" in props
         assert "scope" in props
         assert "use_browser_use_llm" in props
         assert schema.parameters["required"] == ["task"]
@@ -45,33 +43,32 @@ class TestBrowserTaskTool:
         mock_tools = MagicMock()
 
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager"):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, mock_tools)
-                )
-                mock_browser_agent.return_value = mock_def
+            mock_def = MagicMock()
+            mock_def.create_browser_use_agent = MagicMock(
+                return_value=(mock_agent, mock_browser, mock_tools)
+            )
+            mock_browser_agent.return_value = mock_def
 
-                result = await tool.execute(
-                    task="test task",
-                    purpose="testing",
-                )
+            result = await tool.execute(
+                task="test task",
+                purpose="testing",
+            )
 
-                # Verify BrowserAgent was created
-                mock_browser_agent.assert_called_once()
+            # Verify BrowserAgent was created
+            mock_browser_agent.assert_called_once()
 
-                # Verify create_browser_use_agent was called
-                mock_def.create_browser_use_agent.assert_called_once()
+            # Verify create_browser_use_agent was called
+            mock_def.create_browser_use_agent.assert_called_once()
 
-                # Verify agent.run was called
-                mock_agent.run.assert_called_once_with(max_steps=50)
+            # Verify agent.run was called
+            mock_agent.run.assert_called_once_with(max_steps=50)
 
-                # Verify browser was closed
-                mock_browser.close.assert_called_once()
+            # Verify browser was closed
+            mock_browser.close.assert_called_once()
 
-                assert result.success
-                assert "completed" in result.output.lower()
-                assert result.metadata["steps_taken"] == 2
+            assert result.success
+            assert "completed" in result.output.lower()
+            assert result.metadata["steps_taken"] == 2
 
     @pytest.mark.asyncio
     async def test_execute_passes_parameters_to_browser_agent(self):
@@ -89,31 +86,26 @@ class TestBrowserTaskTool:
         mock_browser.close = AsyncMock()
 
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager"):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, MagicMock())
-                )
-                mock_browser_agent.return_value = mock_def
+            mock_def = MagicMock()
+            mock_def.create_browser_use_agent = MagicMock(
+                return_value=(mock_agent, mock_browser, MagicMock())
+            )
+            mock_browser_agent.return_value = mock_def
 
-                await tool.execute(
-                    task="Login to admin panel",
-                    url="https://example.com/login",
-                    state_name="saved_session",
-                    save_state_as="new_session",
-                    scope="Only test example.com",
-                    use_browser_use_llm=True,
-                )
+            await tool.execute(
+                task="Login to admin panel",
+                url="https://example.com/login",
+                scope="Only test example.com",
+                use_browser_use_llm=True,
+            )
 
-                # Verify BrowserAgent was called with correct params
-                call_kwargs = mock_browser_agent.call_args[1]
-                assert call_kwargs["task"] == "Login to admin panel"
-                assert call_kwargs["url"] == "https://example.com/login"
-                assert call_kwargs["state_name"] == "saved_session"
-                assert call_kwargs["save_state_as"] == "new_session"
-                assert call_kwargs["scope"] == "Only test example.com"
-                assert call_kwargs["headless"] is False
-                assert call_kwargs["use_browser_use_llm"] is True
+            # Verify BrowserAgent was called with correct params
+            call_kwargs = mock_browser_agent.call_args[1]
+            assert call_kwargs["task"] == "Login to admin panel"
+            assert call_kwargs["url"] == "https://example.com/login"
+            assert call_kwargs["scope"] == "Only test example.com"
+            assert call_kwargs["headless"] is False
+            assert call_kwargs["use_browser_use_llm"] is True
 
     @pytest.mark.asyncio
     async def test_execute_handles_failure(self):
@@ -127,16 +119,15 @@ class TestBrowserTaskTool:
         mock_browser.close = AsyncMock()
 
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager"):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, MagicMock())
-                )
-                mock_browser_agent.return_value = mock_def
+            mock_def = MagicMock()
+            mock_def.create_browser_use_agent = MagicMock(
+                return_value=(mock_agent, mock_browser, MagicMock())
+            )
+            mock_browser_agent.return_value = mock_def
 
-                result = await tool.execute(task="test task")
+            result = await tool.execute(task="test task")
 
-                assert not result.success
-                assert "Browser crashed" in result.error
-                # Browser should still be closed on failure
-                mock_browser.close.assert_called_once()
+            assert not result.success
+            assert "Browser crashed" in result.error
+            # Browser should still be closed on failure
+            mock_browser.close.assert_called_once()

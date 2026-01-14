@@ -15,7 +15,6 @@ from tempo.infra.protocols import DEFAULT_SCOPE_PLACEHOLDERS
 if TYPE_CHECKING:
     from tempo.context.store import ContextStore
     from tempo.infra.container import ContainerManager
-    from tempo.infra.browser_state import BrowserStateManager
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
     from tempo.infra.protocols import FindingsUpdater
@@ -31,7 +30,6 @@ class BrowserAgent(BaseAgentDefinition):
     
     Features:
     - Browser-only tools (navigate, snapshot, click, type, fill_form)
-    - State management tools (save, load, list, delete states)
     - Visual tools (screenshot, coordinate click, scroll, wait)
     - Task completion tool to signal done and return findings
     - Scope support for constrained browsing
@@ -46,11 +44,8 @@ class BrowserAgent(BaseAgentDefinition):
         self,
         task: str,
         url: str | None = None,
-        state_name: str | None = None,
-        save_state_as: str | None = None,
         scope: str | None = None,
         headless: bool = True,
-        state_ttl_days: int = 7,
         findings: "FindingsUpdater | None" = None,
         agent_email: str | None = None,
         imap_config: dict | None = None,
@@ -63,11 +58,8 @@ class BrowserAgent(BaseAgentDefinition):
         Args:
             task: Description of the browser task to accomplish
             url: Optional starting URL to navigate to
-            state_name: Optional name of saved state to load at start
-            save_state_as: Optional name to save state as after completion
             scope: Optional scope constraints for the browser agent
             headless: Whether to run browser in headless mode
-            state_ttl_days: Default TTL for saved states in days
             findings: Optional FindingsDocument for accessing prior work
             agent_email: Optional email address for signups
             imap_config: Optional IMAP config dict {host, port, password}
@@ -76,11 +68,8 @@ class BrowserAgent(BaseAgentDefinition):
         """
         self.task = task
         self.url = url
-        self.state_name = state_name
-        self.save_state_as = save_state_as
         self.scope = scope
         self.headless = headless
-        self.state_ttl_days = state_ttl_days
         self.findings = findings
         self.agent_email = agent_email
         self.imap_config = imap_config
@@ -119,7 +108,6 @@ class BrowserAgent(BaseAgentDefinition):
     def create_browser_use_agent(
         self,
         container: "ContainerManager | None" = None,
-        state_manager: "BrowserStateManager | None" = None,
     ):
         """
         Create a browser-use Agent with custom tempo-sec tools.
@@ -129,21 +117,14 @@ class BrowserAgent(BaseAgentDefinition):
 
         Args:
             container: Container manager for shell/file operations
-            state_manager: Browser state manager for session persistence
 
         Returns:
             Tuple of (browser-use Agent instance, Browser instance, Tools instance)
         """
         from browser_use import Agent, Browser
         from browser_use.tools.service import Tools
-        from tempo.infra.browser_state import BrowserStateManager
         from tempo.infra.browser_use_llm import create_browser_use_llm
         from tempo.tools.browser_use_adapter import BrowserUseToolsAdapter
-        from tempo.tools.browser_use_state import BrowserUseStateTools
-
-        # Create state manager if not provided
-        if state_manager is None:
-            state_manager = BrowserStateManager(ttl_days=self.state_ttl_days)
 
         # Derive allowed domains (best-effort) from url/scope to constrain browsing.
         allowed_domains: list[str] | None = None
@@ -188,16 +169,6 @@ class BrowserAgent(BaseAgentDefinition):
             agent_email=self.agent_email,
             tools_instance=shared_tools,  # Pass shared instance
         )
-
-        # Create state management tools with shared Tools instance
-        state_tools = BrowserUseStateTools(
-            browser=browser,
-            state_manager=state_manager,
-            tools_instance=shared_tools,  # Pass shared instance
-        )
-
-        # No need to merge - both adapters registered on shared_tools
-        # tools_adapter and state_tools have already registered their actions
 
         # Select LLM based on configuration
         llm = create_browser_use_llm(
@@ -249,9 +220,6 @@ class BrowserAgent(BaseAgentDefinition):
             tool_schemas=tool_schemas,
             scope_content=scope_content,
             findings_context=findings_context,
-            state_name=self.state_name,
-            save_state_as=self.save_state_as,
-            ttl_days=self.state_ttl_days,
             agent_email=self.agent_email,
         )
     
@@ -264,7 +232,7 @@ class BrowserAgent(BaseAgentDefinition):
             **kwargs: Ignored
             
         Returns:
-            Formatted objective with task, URL, and state instructions
+            Formatted objective with task and URL
         """
         objective_parts = [f"**Task**: {self.task}"]
         
@@ -272,20 +240,6 @@ class BrowserAgent(BaseAgentDefinition):
             objective_parts.append(f"\n**Starting URL**: {self.url}")
         else:
             objective_parts.append("\n**Starting URL**: Navigate as needed to accomplish the task")
-        
-        # Add state loading instruction if specified
-        if self.state_name:
-            objective_parts.append(
-                f"\n**Initial State**: Load saved state '{self.state_name}' "
-                "at the start using `browser_load_state`."
-            )
-        
-        # Add state saving instruction if specified
-        if self.save_state_as:
-            objective_parts.append(
-                f"\n**Save State**: Before completing, save browser state as "
-                f"'{self.save_state_as}' using `browser_save_state`."
-            )
         
         objective_parts.append("\nComplete the task and call `complete_browser_task` with your findings.")
 

@@ -85,32 +85,6 @@ class TestScopePropagation:
         # Should still have the rest of the prompt
         assert "Browser Agent" in prompt
 
-    def test_browser_prompt_with_state_instructions(self):
-        """Test that browser prompt includes state loading/saving instructions."""
-        builder = PromptBuilder()
-        
-        schemas = [
-            {
-                "function": {
-                    "name": "browser_navigate",
-                    "description": "Navigate to URL",
-                    "parameters": {"type": "object", "properties": {}},
-                }
-            },
-        ]
-        
-        prompt = builder.build_browser_prompt(
-            tool_schemas=schemas,
-            state_name="admin_session",
-            save_state_as="updated_admin",
-        )
-        
-        # Verify state instructions are included
-        assert "Initial State" in prompt
-        assert "admin_session" in prompt
-        assert "Save State" in prompt
-        assert "updated_admin" in prompt
-
     def test_browser_task_tool_schema_includes_scope(self):
         """Test that BrowserTaskTool schema includes scope parameter."""
         tool = BrowserTaskTool()
@@ -119,24 +93,9 @@ class TestScopePropagation:
         assert "scope" in schema.parameters["properties"]
         assert "constraints" in schema.parameters["properties"]["scope"]["description"].lower()
 
-    def test_browser_task_tool_schema_includes_state_params(self):
-        """Test that BrowserTaskTool schema includes state parameters."""
-        tool = BrowserTaskTool()
-        schema = tool.get_schema()
-        
-        # Check state_name parameter
-        assert "state_name" in schema.parameters["properties"]
-        state_name_desc = schema.parameters["properties"]["state_name"]["description"]
-        assert "load" in state_name_desc.lower() or "saved" in state_name_desc.lower()
-        
-        # Check save_state_as parameter
-        assert "save_state_as" in schema.parameters["properties"]
-        save_state_desc = schema.parameters["properties"]["save_state_as"]["description"]
-        assert "save" in save_state_desc.lower()
-
 
 class TestBrowserTaskToolIntegration:
-    """Integration tests for BrowserTaskTool scope and state handling."""
+    """Integration tests for BrowserTaskTool scope handling."""
 
     @pytest.mark.asyncio
     async def test_browser_task_creates_agent_with_scope(self):
@@ -155,124 +114,22 @@ class TestBrowserTaskToolIntegration:
         mock_browser.close = AsyncMock()
 
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager"):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, MagicMock())
-                )
-                mock_browser_agent.return_value = mock_def
+            mock_def = MagicMock()
+            mock_def.create_browser_use_agent = MagicMock(
+                return_value=(mock_agent, mock_browser, MagicMock())
+            )
+            mock_browser_agent.return_value = mock_def
 
-                await tool.execute(
-                    task="Test the login page",
-                    url="https://example.com",
-                    scope="Only test example.com, do not access external links",
-                )
+            await tool.execute(
+                task="Test the login page",
+                url="https://example.com",
+                scope="Only test example.com, do not access external links",
+            )
 
-                # Verify BrowserAgent was created with scope
-                mock_browser_agent.assert_called_once()
-                call_kwargs = mock_browser_agent.call_args[1]
-                assert call_kwargs.get("scope") == "Only test example.com, do not access external links"
-
-    @pytest.mark.asyncio
-    async def test_browser_task_creates_agent_with_state_name(self):
-        """Test that BrowserTaskTool passes state_name to browser agent."""
-        tool = BrowserTaskTool(headless=True)
-
-        mock_agent = MagicMock()
-        mock_history = MagicMock()
-        mock_history.history = []
-        mock_history.final_result = MagicMock(return_value="Done")
-        mock_history.extracted_content = MagicMock(return_value=None)
-        mock_agent.run = AsyncMock(return_value=mock_history)
-
-        mock_browser = MagicMock()
-        mock_browser.close = AsyncMock()
-
-        with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager"):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, MagicMock())
-                )
-                mock_browser_agent.return_value = mock_def
-
-                await tool.execute(
-                    task="Access admin panel",
-                    state_name="admin_session",
-                )
-
-                call_kwargs = mock_browser_agent.call_args[1]
-                assert call_kwargs.get("state_name") == "admin_session"
-
-    @pytest.mark.asyncio
-    async def test_browser_task_creates_agent_with_save_state_as(self):
-        """Test that BrowserTaskTool passes save_state_as to browser agent."""
-        tool = BrowserTaskTool(headless=True)
-
-        mock_agent = MagicMock()
-        mock_history = MagicMock()
-        mock_history.history = []
-        mock_history.final_result = MagicMock(return_value="Done")
-        mock_history.extracted_content = MagicMock(return_value=None)
-        mock_agent.run = AsyncMock(return_value=mock_history)
-
-        mock_browser = MagicMock()
-        mock_browser.close = AsyncMock()
-
-        with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager"):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, MagicMock())
-                )
-                mock_browser_agent.return_value = mock_def
-
-                await tool.execute(
-                    task="Log in as admin",
-                    url="https://example.com/login",
-                    save_state_as="new_admin_session",
-                )
-
-                call_kwargs = mock_browser_agent.call_args[1]
-                assert call_kwargs.get("save_state_as") == "new_admin_session"
-
-    @pytest.mark.asyncio
-    async def test_browser_task_result_includes_state_metadata(self):
-        """Test that BrowserTaskTool result includes state-related metadata."""
-        tool = BrowserTaskTool(headless=True)
-
-        mock_agent = MagicMock()
-        mock_history = MagicMock()
-        mock_history.history = []
-        mock_history.final_result = MagicMock(return_value="Done")
-        mock_history.extracted_content = MagicMock(return_value=None)
-        mock_agent.run = AsyncMock(return_value=mock_history)
-
-        mock_browser = MagicMock()
-        mock_browser.close = AsyncMock()
-
-        # Mock BrowserStateManager with async methods
-        mock_state_manager = MagicMock()
-        mock_state_manager.load = AsyncMock(return_value=None)  # No state to load
-        mock_state_manager.save = AsyncMock()
-
-        with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.infra.browser_state.BrowserStateManager", return_value=mock_state_manager):
-                mock_def = MagicMock()
-                mock_def.create_browser_use_agent = MagicMock(
-                    return_value=(mock_agent, mock_browser, MagicMock())
-                )
-                mock_browser_agent.return_value = mock_def
-
-                result = await tool.execute(
-                    task="Test with state",
-                    state_name="existing_session",
-                    save_state_as="updated_session",
-                )
-
-                assert result.success
-                assert result.metadata.get("state_loaded") == "existing_session"
-                assert result.metadata.get("state_saved") == "updated_session"
+            # Verify BrowserAgent was created with scope
+            mock_browser_agent.assert_called_once()
+            call_kwargs = mock_browser_agent.call_args[1]
+            assert call_kwargs.get("scope") == "Only test example.com, do not access external links"
 
 
 class TestPromptBuilderScopeSection:
@@ -370,24 +227,3 @@ class TestBrowserAgentScopeIntegration:
         
         # The prompt should include the scope
         assert "Scope Constraints" in prompt or "external domains" in prompt
-
-    def test_browser_agent_build_objective_mentions_state(self):
-        """Test that BrowserAgent.build_objective mentions state when applicable."""
-        from tempo.agents.browser import BrowserAgent
-        
-        # With state loading
-        agent_load = BrowserAgent(
-            task="Access admin panel",
-            state_name="admin_session",
-        )
-        objective_load = agent_load.build_objective()
-        assert "admin_session" in objective_load or "load" in objective_load.lower()
-        
-        # With state saving
-        agent_save = BrowserAgent(
-            task="Login and save",
-            save_state_as="new_session",
-        )
-        objective_save = agent_save.build_objective()
-        assert "new_session" in objective_save or "save" in objective_save.lower()
-

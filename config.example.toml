@@ -81,10 +81,6 @@ imap_port = 993
 # Note: IMAP password should be set via TEMPO_IMAP_PASSWORD env var for security
 
 [browser]
-# Browser state persistence directory
-state_dir = "~/.tempo-sec/browser_states"
-# Default TTL for browser states (days)
-state_ttl_days = 7
 # Run browser in headless mode (no visible window)
 headless = false
 # Default timeout for browser operations (milliseconds)

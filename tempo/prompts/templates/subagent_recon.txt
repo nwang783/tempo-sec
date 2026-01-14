@@ -90,18 +90,10 @@ browser_task(
     url="https://example.com"
 )
 
-# Establish authenticated session for later reuse
+# Explore protected areas
 browser_task(
-    task="Log in with credentials admin/admin123 and save the session",
-    url="https://example.com/login",
-    save_state_as="admin_session"
-)
-
-# Explore protected areas with saved state
-browser_task(
-    task="Navigate to /admin and list all available admin functions",
-    state_name="admin_session",
-    url="https://example.com/admin"
+    task="Log in with credentials admin/admin123 and navigate to /admin to list all available admin functions",
+    url="https://example.com/login"
 )
 
 # Discover hidden content in JavaScript-heavy pages
