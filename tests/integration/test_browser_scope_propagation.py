@@ -142,143 +142,137 @@ class TestBrowserTaskToolIntegration:
     async def test_browser_task_creates_agent_with_scope(self):
         """Test that BrowserTaskTool passes scope to browser agent."""
         tool = BrowserTaskTool(headless=True)
-        
-        # Patch at the location where BrowserAgent is imported inside execute()
+
+        # Create mock browser-use components
+        mock_agent = MagicMock()
+        mock_history = MagicMock()
+        mock_history.history = []
+        mock_history.final_result = MagicMock(return_value="Done")
+        mock_history.extracted_content = MagicMock(return_value=None)
+        mock_agent.run = AsyncMock(return_value=mock_history)
+
+        mock_browser = MagicMock()
+        mock_browser.close = AsyncMock()
+
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.agent.runner.Agent") as mock_agent:
-                with patch("tempo.infra.llm.LiteLLMClient"):
-                    # Setup mock browser agent definition
-                    mock_def = MagicMock()
-                    mock_def.model = "openai/gpt-4o-mini"
-                    mock_def.create_tools.return_value = MagicMock()
-                    mock_def.create_tools.return_value.get_schemas.return_value = []
-                    mock_def.build_system_prompt.return_value = "System prompt"
-                    mock_def.build_objective.return_value = "Test objective"
-                    mock_browser_agent.return_value = mock_def
-                    
-                    # Setup mock agent runner
-                    mock_runner = MagicMock()
-                    mock_runner.run = AsyncMock(return_value=MagicMock(
-                        success=True,
-                        steps_taken=3,
-                        findings=[{"findings": "Test completed"}],
-                        error=None,
-                    ))
-                    mock_agent.return_value = mock_runner
-                    
-                    # Execute with scope
-                    await tool.execute(
-                        task="Test the login page",
-                        url="https://example.com",
-                        scope="Only test example.com, do not access external links",
-                    )
-                    
-                    # Verify BrowserAgent was created with scope
-                    mock_browser_agent.assert_called_once()
-                    call_kwargs = mock_browser_agent.call_args[1]
-                    assert call_kwargs.get("scope") == "Only test example.com, do not access external links"
+            with patch("tempo.infra.browser_state.BrowserStateManager"):
+                mock_def = MagicMock()
+                mock_def.create_browser_use_agent = MagicMock(
+                    return_value=(mock_agent, mock_browser, MagicMock())
+                )
+                mock_browser_agent.return_value = mock_def
+
+                await tool.execute(
+                    task="Test the login page",
+                    url="https://example.com",
+                    scope="Only test example.com, do not access external links",
+                )
+
+                # Verify BrowserAgent was created with scope
+                mock_browser_agent.assert_called_once()
+                call_kwargs = mock_browser_agent.call_args[1]
+                assert call_kwargs.get("scope") == "Only test example.com, do not access external links"
 
     @pytest.mark.asyncio
     async def test_browser_task_creates_agent_with_state_name(self):
         """Test that BrowserTaskTool passes state_name to browser agent."""
         tool = BrowserTaskTool(headless=True)
-        
+
+        mock_agent = MagicMock()
+        mock_history = MagicMock()
+        mock_history.history = []
+        mock_history.final_result = MagicMock(return_value="Done")
+        mock_history.extracted_content = MagicMock(return_value=None)
+        mock_agent.run = AsyncMock(return_value=mock_history)
+
+        mock_browser = MagicMock()
+        mock_browser.close = AsyncMock()
+
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.agent.runner.Agent") as mock_agent:
-                with patch("tempo.infra.llm.LiteLLMClient"):
-                    mock_def = MagicMock()
-                    mock_def.model = "openai/gpt-4o-mini"
-                    mock_def.create_tools.return_value = MagicMock()
-                    mock_def.create_tools.return_value.get_schemas.return_value = []
-                    mock_def.build_system_prompt.return_value = "System prompt"
-                    mock_def.build_objective.return_value = "Test objective"
-                    mock_browser_agent.return_value = mock_def
-                    
-                    mock_runner = MagicMock()
-                    mock_runner.run = AsyncMock(return_value=MagicMock(
-                        success=True,
-                        steps_taken=3,
-                        findings=[{"findings": "Test completed"}],
-                        error=None,
-                    ))
-                    mock_agent.return_value = mock_runner
-                    
-                    await tool.execute(
-                        task="Access admin panel",
-                        state_name="admin_session",
-                    )
-                    
-                    call_kwargs = mock_browser_agent.call_args[1]
-                    assert call_kwargs.get("state_name") == "admin_session"
+            with patch("tempo.infra.browser_state.BrowserStateManager"):
+                mock_def = MagicMock()
+                mock_def.create_browser_use_agent = MagicMock(
+                    return_value=(mock_agent, mock_browser, MagicMock())
+                )
+                mock_browser_agent.return_value = mock_def
+
+                await tool.execute(
+                    task="Access admin panel",
+                    state_name="admin_session",
+                )
+
+                call_kwargs = mock_browser_agent.call_args[1]
+                assert call_kwargs.get("state_name") == "admin_session"
 
     @pytest.mark.asyncio
     async def test_browser_task_creates_agent_with_save_state_as(self):
         """Test that BrowserTaskTool passes save_state_as to browser agent."""
         tool = BrowserTaskTool(headless=True)
-        
+
+        mock_agent = MagicMock()
+        mock_history = MagicMock()
+        mock_history.history = []
+        mock_history.final_result = MagicMock(return_value="Done")
+        mock_history.extracted_content = MagicMock(return_value=None)
+        mock_agent.run = AsyncMock(return_value=mock_history)
+
+        mock_browser = MagicMock()
+        mock_browser.close = AsyncMock()
+
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.agent.runner.Agent") as mock_agent:
-                with patch("tempo.infra.llm.LiteLLMClient"):
-                    mock_def = MagicMock()
-                    mock_def.model = "openai/gpt-4o-mini"
-                    mock_def.create_tools.return_value = MagicMock()
-                    mock_def.create_tools.return_value.get_schemas.return_value = []
-                    mock_def.build_system_prompt.return_value = "System prompt"
-                    mock_def.build_objective.return_value = "Test objective"
-                    mock_browser_agent.return_value = mock_def
-                    
-                    mock_runner = MagicMock()
-                    mock_runner.run = AsyncMock(return_value=MagicMock(
-                        success=True,
-                        steps_taken=3,
-                        findings=[{"findings": "Logged in successfully"}],
-                        error=None,
-                    ))
-                    mock_agent.return_value = mock_runner
-                    
-                    await tool.execute(
-                        task="Log in as admin",
-                        url="https://example.com/login",
-                        save_state_as="new_admin_session",
-                    )
-                    
-                    call_kwargs = mock_browser_agent.call_args[1]
-                    assert call_kwargs.get("save_state_as") == "new_admin_session"
+            with patch("tempo.infra.browser_state.BrowserStateManager"):
+                mock_def = MagicMock()
+                mock_def.create_browser_use_agent = MagicMock(
+                    return_value=(mock_agent, mock_browser, MagicMock())
+                )
+                mock_browser_agent.return_value = mock_def
+
+                await tool.execute(
+                    task="Log in as admin",
+                    url="https://example.com/login",
+                    save_state_as="new_admin_session",
+                )
+
+                call_kwargs = mock_browser_agent.call_args[1]
+                assert call_kwargs.get("save_state_as") == "new_admin_session"
 
     @pytest.mark.asyncio
     async def test_browser_task_result_includes_state_metadata(self):
         """Test that BrowserTaskTool result includes state-related metadata."""
         tool = BrowserTaskTool(headless=True)
-        
+
+        mock_agent = MagicMock()
+        mock_history = MagicMock()
+        mock_history.history = []
+        mock_history.final_result = MagicMock(return_value="Done")
+        mock_history.extracted_content = MagicMock(return_value=None)
+        mock_agent.run = AsyncMock(return_value=mock_history)
+
+        mock_browser = MagicMock()
+        mock_browser.close = AsyncMock()
+
+        # Mock BrowserStateManager with async methods
+        mock_state_manager = MagicMock()
+        mock_state_manager.load = AsyncMock(return_value=None)  # No state to load
+        mock_state_manager.save = AsyncMock()
+
         with patch("tempo.agents.browser.BrowserAgent") as mock_browser_agent:
-            with patch("tempo.agent.runner.Agent") as mock_agent:
-                with patch("tempo.infra.llm.LiteLLMClient"):
-                    mock_def = MagicMock()
-                    mock_def.model = "openai/gpt-4o-mini"
-                    mock_def.create_tools.return_value = MagicMock()
-                    mock_def.create_tools.return_value.get_schemas.return_value = []
-                    mock_def.build_system_prompt.return_value = "System prompt"
-                    mock_def.build_objective.return_value = "Test objective"
-                    mock_browser_agent.return_value = mock_def
-                    
-                    mock_runner = MagicMock()
-                    mock_runner.run = AsyncMock(return_value=MagicMock(
-                        success=True,
-                        steps_taken=5,
-                        findings=[{"findings": "Task completed"}],
-                        error=None,
-                    ))
-                    mock_agent.return_value = mock_runner
-                    
-                    result = await tool.execute(
-                        task="Test with state",
-                        state_name="existing_session",
-                        save_state_as="updated_session",
-                    )
-                    
-                    assert result.success
-                    assert result.metadata.get("state_loaded") == "existing_session"
-                    assert result.metadata.get("state_saved") == "updated_session"
+            with patch("tempo.infra.browser_state.BrowserStateManager", return_value=mock_state_manager):
+                mock_def = MagicMock()
+                mock_def.create_browser_use_agent = MagicMock(
+                    return_value=(mock_agent, mock_browser, MagicMock())
+                )
+                mock_browser_agent.return_value = mock_def
+
+                result = await tool.execute(
+                    task="Test with state",
+                    state_name="existing_session",
+                    save_state_as="updated_session",
+                )
+
+                assert result.success
+                assert result.metadata.get("state_loaded") == "existing_session"
+                assert result.metadata.get("state_saved") == "updated_session"
 
 
 class TestPromptBuilderScopeSection:
