@@ -49,7 +49,7 @@ browser_select(element="Country dropdown", ref="ref_5", option="Canada")
 ## Available Tools
 
 {tools}
-{scope_section}{findings_section}
+{scope_section}{findings_section}{email_section}
 ## State Management
 
 For authenticated sessions:

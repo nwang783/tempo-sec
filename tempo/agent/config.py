@@ -72,6 +72,12 @@ class AgentConfig:
     browser_viewport_height: int = 720
     browser_tool_call_delay: float = 0.0  # seconds between tool calls (0 = no delay, set > 0 for rate limiting)
 
+    # Email settings (for account signup verification via IMAP)
+    agent_email: str | None = None  # Email address for signups
+    imap_host: str = "imap.gmail.com"
+    imap_port: int = 993
+    imap_password: str | None = None  # App password for IMAP access
+
     # Legacy/convenience aliases
     scope: str | None = None  # Optional scope description
     scope_file: str | None = None  # Path to scope file (set via CLI)
@@ -240,5 +246,16 @@ class AgentConfig:
                 kwargs["browser_viewport_height"] = br["viewport_height"]
             if "tool_call_delay" in br:
                 kwargs["browser_tool_call_delay"] = br["tool_call_delay"]
+
+        # [email] section
+        if "email" in data:
+            em = data["email"]
+            if "agent_email" in em:
+                kwargs["agent_email"] = em["agent_email"]
+            if "imap_host" in em:
+                kwargs["imap_host"] = em["imap_host"]
+            if "imap_port" in em:
+                kwargs["imap_port"] = em["imap_port"]
+            # Note: imap_password should come from environment for security
 
         return cls(**kwargs)

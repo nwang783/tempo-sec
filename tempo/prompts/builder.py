@@ -208,6 +208,7 @@ class PromptBuilder:
         state_name: str | None = None,
         save_state_as: str | None = None,
         ttl_days: int = 7,
+        agent_email: str | None = None,
     ) -> str:
         """
         Build the system prompt for browser agent.
@@ -222,6 +223,7 @@ class PromptBuilder:
             state_name: Optional name of saved state to load at start
             save_state_as: Optional name to save state as after completion
             ttl_days: Default TTL for saved states in days
+            agent_email: Optional email address for signups
 
         Returns:
             Formatted browser agent system prompt
@@ -260,12 +262,23 @@ class PromptBuilder:
                 "\nNo specific state loading or saving required for this task.\n"
             )
 
+        # Build email section if agent email is configured
+        email_section = ""
+        if agent_email:
+            email_section = (
+                f"\n## Email for Signups\n\n"
+                f"Your email for account signups is: **{agent_email}**\n\n"
+                "Use `check_inbox` to poll for verification emails and "
+                "`get_email_content` to extract verification links or codes.\n"
+            )
+
         return template.format(
             tools=tool_descriptions,
             scope_section=scope_section,
             findings_section=findings_section,
             state_instructions=state_instructions,
             ttl_days=ttl_days,
+            email_section=email_section,
         )
     
     def filter_schemas_for_subagent(self, schemas: list[dict]) -> list[dict]:
