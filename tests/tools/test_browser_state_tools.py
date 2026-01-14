@@ -414,3 +414,4 @@ class TestToolSchemaFormat:
             assert "description" in openai_schema["function"]
             assert "parameters" in openai_schema["function"]
 
+
