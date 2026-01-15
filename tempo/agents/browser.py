@@ -126,33 +126,13 @@ class BrowserAgent(BaseAgentDefinition):
         from tempo.infra.browser_use_llm import create_browser_use_llm
         from tempo.tools.browser_use_adapter import BrowserUseToolsAdapter
 
-        # Derive allowed domains (best-effort) from url/scope to constrain browsing.
-        allowed_domains: list[str] | None = None
-        try:
-            from urllib.parse import urlparse
-
-            candidate_urls: list[str] = []
-            if self.url:
-                candidate_urls.append(self.url)
-            if self.scope:
-                # Very lightweight extraction: grab any tokens that look like URLs
-                for token in self.scope.replace("(", " ").replace(")", " ").split():
-                    if token.startswith("http://") or token.startswith("https://"):
-                        candidate_urls.append(token)
-            domains = []
-            for u in candidate_urls:
-                netloc = urlparse(u).netloc
-                if netloc:
-                    domains.append(netloc)
-            allowed_domains = sorted(set(domains)) or None
-        except Exception:
-            allowed_domains = None
-
         # Create browser-use Browser (BrowserSession) instance
+        # Note: No allowed_domains restriction - agent can navigate freely.
+        # Scope is provided as guidance in the prompt, not enforced at browser level.
         browser = Browser(
             headless=self.headless,
             use_cloud=False,  # Use local browser
-            allowed_domains=allowed_domains,
+            allowed_domains=None,
             # Reduce flakiness on JS-heavy pages (souschefhub is slow to become "ready")
             minimum_wait_page_load_time=1.0,
             wait_for_network_idle_page_load_time=3.0,
