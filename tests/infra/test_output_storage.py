@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -101,7 +101,7 @@ class TestTruncatedOutputStorage:
         # Manually update expiration to past (hyphens are kept in filename)
         meta_path = tmp_path / "test-session" / "test-123.meta.json"
         data = json.loads(meta_path.read_text())
-        data["expires_at"] = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        data["expires_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         meta_path.write_text(json.dumps(data))
 
         # Cleanup should remove the file

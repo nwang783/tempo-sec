@@ -60,7 +60,7 @@ class CreateTestPlanTool(Tool):
             ToolResult indicating success/failure
         """
         import uuid
-        from datetime import datetime
+        from datetime import datetime, timezone
         
         if not items:
             return ToolResult(
@@ -91,7 +91,7 @@ class CreateTestPlanTool(Tool):
                 "priority": priority,
                 "status": "pending",
                 "reason": None,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "completed_at": None,
             })
         

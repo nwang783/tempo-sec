@@ -1,6 +1,6 @@
 """Tests for tempo/findings/schema.py."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -62,7 +62,7 @@ class TestAttackSurface:
 
     def test_with_all_fields(self):
         """Test creating attack surface with all fields."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         surface = AttackSurface(
             id="test-id",
             surface_type="form",
@@ -112,7 +112,7 @@ class TestFinding:
 
     def test_with_all_fields(self):
         """Test creating finding with all fields."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         finding = Finding(
             id="finding-id",
             title="XSS Vulnerability",
@@ -190,7 +190,7 @@ class TestFindingsDocumentSchema:
 
     def test_with_full_data(self):
         """Test creating document with all data."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         recon_summary = ReconSummary(
             total_endpoints=10,

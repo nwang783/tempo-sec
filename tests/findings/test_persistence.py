@@ -1,7 +1,7 @@
 """Tests for tempo/findings/persistence.py."""
 
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -93,7 +93,7 @@ class TestSaveToYaml:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = str(Path(tmpdir) / "test.yaml")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             doc = FindingsDocumentSchema(
                 target="https://example.com",
                 created_at=now,
@@ -123,8 +123,8 @@ class TestLoadFromYaml:
             data = {
                 "version": "1.0",
                 "target": "https://example.com",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
             with open(path, "w") as f:
@@ -145,8 +145,8 @@ class TestLoadFromYaml:
             data = {
                 "version": "1.0",
                 "target": "https://example.com",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
                 "attack_surfaces": [
                     {
                         "id": "surf-1",
@@ -154,7 +154,7 @@ class TestLoadFromYaml:
                         "url": "https://example.com/api",
                         "description": "Test",
                         "discovered_by": "recon",
-                        "discovered_at": datetime.utcnow().isoformat(),
+                        "discovered_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
                 "findings": [
@@ -166,7 +166,7 @@ class TestLoadFromYaml:
                         "description": "Test finding",
                         "evidence": "proof",
                         "discovered_by": "tester",
-                        "discovered_at": datetime.utcnow().isoformat(),
+                        "discovered_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
             }

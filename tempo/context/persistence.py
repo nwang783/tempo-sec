@@ -6,7 +6,7 @@ Handles saving and loading context trees to/from JSON files.
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -79,7 +79,7 @@ def save_context_tree(
     
     # Check if file exists to get created_at
     file_path = path / f"{session_id}.json"
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     if file_path.exists():
         with open(file_path, "r") as f:

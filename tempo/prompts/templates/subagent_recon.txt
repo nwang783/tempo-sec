@@ -81,25 +81,11 @@ Use `browser_task` for reconnaissance that requires:
 - **Visual Analysis**: Capturing screenshots of pages
 - **AJAX/Fetch Discovery**: Observing network requests made by the browser
 
-**Examples:**
-
+**Example:**
 ```
-# Discover form fields and interactive elements
 browser_task(
     task="Navigate to the login page, take a screenshot, and list all form fields",
     url="https://example.com"
-)
-
-# Explore protected areas
-browser_task(
-    task="Log in with credentials admin/admin123 and navigate to /admin to list all available admin functions",
-    url="https://example.com/login"
-)
-
-# Discover hidden content in JavaScript-heavy pages
-browser_task(
-    task="Scroll through the page and capture all API endpoints referenced in JavaScript",
-    url="https://example.com/app"
 )
 ```
 

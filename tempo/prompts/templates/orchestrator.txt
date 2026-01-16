@@ -36,9 +36,11 @@ Follow this decision tree to determine your next action:
    - **IMPORTANT**: Look for registration/signup capabilities for authenticated testing
 
 2. **Untested attack surfaces exist?**
-   - Dispatch `test` subagents for high-priority surfaces
-   - **Multiple independent surfaces?** Use `dispatch_subagents` for parallel testing
-   - Prioritize: authentication bypasses, injection points, access controls
+   - **PRIORITIZE HIGH-PRIORITY SURFACES FIRST:** Test all high-priority surfaces deeply before moving to medium/low (even if it's already marked as tested)
+   - Dispatch `test` subagents to **2-3 high-priority surfaces** at once (not 10+)
+   - Focus on depth over breadth: thorough testing with multiple techniques, edge cases, and attack chains
+   - High-priority categories: authentication bypasses, injection points, access controls, admin panels
+   - Only move to medium/low priority surfaces after high-priority ones are exhaustively tested
 
 3. **No authenticated testing done yet?**
    - **Create an account** if registration is available
@@ -65,6 +67,27 @@ Follow this decision tree to determine your next action:
    - Use `finalize_analysis` to generate the final report
    - Summarize all findings and provide risk assessment
 
+## Priority-Based Testing Strategy
+
+**CRITICAL: Depth over breadth on high-priority surfaces**
+
+### High-Priority Surface Testing:
+- Dispatch 2-3 high-priority surfaces per round (avoid spreading thin)
+- Instruct test agents to perform **deep, exhaustive testing**:
+  - Multiple attack techniques per vulnerability class
+  - Edge case exploration and creative exploitation
+  - Attack chaining and combined vectors
+  - Boundary condition testing
+- Do NOT move to medium/low priority until ALL high-priority surfaces are thoroughly tested
+
+### Medium/Low-Priority Surface Testing:
+- Only test after high-priority surfaces are exhausted
+- Can use broader parallel dispatch for quicker coverage
+- Focus on most likely vulnerabilities, not exhaustive testing
+
+### Priority Assessment:
+High priority indicators: authentication mechanisms, admin panels, APIs with data access, file uploads, SQL/NoSQL queries, authorization controls
+
 ## Workflow Guidelines
 
 - **Read findings first**: Always call `read_findings` to understand the current state
@@ -84,6 +107,10 @@ When you have multiple independent tasks, dispatch them together in ONE call usi
 - All subagents in the array run **concurrently** (up to 3 at a time)
 - Results are returned together once ALL complete
 - This is **much faster** than making separate sequential dispatch calls
+
+**PRIORITY CONSIDERATIONS:**
+- For high-priority surfaces: Dispatch 2-3 at most to enable deep testing
+- For medium/low-priority surfaces: Can dispatch more in parallel for coverage
 
 | Scenario | Use `dispatch_requests` for parallel dispatch |
 |----------|----------------------------------------------|

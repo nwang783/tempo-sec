@@ -6,6 +6,7 @@ security testing and consumed by the orchestrator.
 """
 
 from datetime import datetime
+from datetime import timezone
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -52,7 +53,7 @@ class AttackSurface(BaseModel):
     tested: bool = Field(default=False, description="Whether this surface has been tested")
     priority: str = Field(default="medium", description="Testing priority (high, medium, low)")
     discovered_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When this surface was discovered"
     )
     discovered_by: str = Field(description="Agent or tool that discovered this surface")
@@ -83,7 +84,7 @@ class Finding(BaseModel):
     )
     remediation: str = Field(default="", description="Recommended remediation")
     discovered_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When this finding was discovered"
     )
     discovered_by: str = Field(description="Agent or tool that discovered this finding")
@@ -126,11 +127,11 @@ class SessionSummary(BaseModel):
     """
     session_id: str = Field(description="Unique session identifier (UUID)")
     started_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When this session started"
     )
     ended_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When this session ended"
     )
     agent_type: str = Field(
@@ -167,11 +168,11 @@ class FindingsDocumentSchema(BaseModel):
     version: str = Field(default="1.0", description="Schema version")
     target: str = Field(description="Primary target (URL, domain, application)")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When this document was created"
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Last update timestamp"
     )
     recon_summary: ReconSummary | None = Field(

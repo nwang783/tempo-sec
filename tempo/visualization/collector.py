@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ class VisualizationEvent:
     def create(cls, event_type: str, data: Dict[str, Any]) -> "VisualizationEvent":
         return cls(
             type=event_type,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             data=data
         )
     

@@ -6,7 +6,7 @@ including messages, tool calls, agent state, and frames.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, TYPE_CHECKING
 import uuid
@@ -28,7 +28,7 @@ class Message:
     """A single message in the conversation."""
     role: MessageRole
     content: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> dict:
@@ -59,7 +59,7 @@ class ToolCall:
     input: dict[str, Any] = field(default_factory=dict)
     raw_output: str = ""                    # Original output (preserved for reference)
     summary: str | None = None              # Compressed version (used in context if set)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     duration_ms: int = 0
     success: bool = True
     error: str | None = None
@@ -229,7 +229,7 @@ class ContextFrame:
     """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     parent_id: str | None = None            # None for root frame
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     messages: list[Message] = field(default_factory=list)
     tool_calls: list[ToolCall] = field(default_factory=list)
     state: AgentState = field(default_factory=AgentState)
