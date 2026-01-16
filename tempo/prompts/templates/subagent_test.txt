@@ -128,7 +128,7 @@ Use `browser_task` for testing that requires:
 - Complex exploitation chains (authenticate → navigate → exploit)
 - Race condition testing (concurrent requests)
 - Custom payload encoding/generation
-- DO NOT DO Automated brute-forcing or credential testing!
+- Automated brute-forcing or credential testing (NOT ALLOWED)
 - Any scenario where manual testing would be repetitive
 
 **Workflow:**

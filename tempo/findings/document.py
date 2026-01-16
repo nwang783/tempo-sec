@@ -9,7 +9,7 @@ asyncio.Lock for thread-safe concurrent access during parallel subagent executio
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -46,8 +46,8 @@ class FindingsDocument:
         self.file_path = file_path
         self._data = FindingsDocumentSchema(
             target=target,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         # Lock for async-safe operations during parallel subagent execution
         self._lock = asyncio.Lock()
@@ -87,7 +87,7 @@ class FindingsDocument:
             raise ValueError("No file path specified for save operation")
 
         # Update timestamp
-        self._data.updated_at = datetime.utcnow()
+        self._data.updated_at = datetime.now(timezone.utc)
 
         save_to_yaml(self._data, path)
 
@@ -204,12 +204,12 @@ class FindingsDocument:
             parameters=parameters or [],
             technology_hints=technology_hints or [],
             priority=priority,
-            discovered_at=datetime.utcnow(),
+            discovered_at=datetime.now(timezone.utc),
             discovered_by=discovered_by,
         )
 
         self._data.attack_surfaces.append(surface)
-        self._data.updated_at = datetime.utcnow()
+        self._data.updated_at = datetime.now(timezone.utc)
 
         return surface
 
@@ -256,13 +256,13 @@ class FindingsDocument:
             evidence=evidence,
             reproduction_steps=reproduction_steps or [],
             remediation=remediation,
-            discovered_at=datetime.utcnow(),
+            discovered_at=datetime.now(timezone.utc),
             discovered_by=discovered_by,
             validated_by=validated_by,
         )
 
         self._data.findings.append(finding)
-        self._data.updated_at = datetime.utcnow()
+        self._data.updated_at = datetime.now(timezone.utc)
 
         return finding
 
@@ -279,7 +279,7 @@ class FindingsDocument:
         for surface in self._data.attack_surfaces:
             if surface.id == surface_id:
                 surface.tested = True
-                self._data.updated_at = datetime.utcnow()
+                self._data.updated_at = datetime.now(timezone.utc)
                 return True
 
         return False
@@ -325,7 +325,7 @@ class FindingsDocument:
         if notes is not None:
             self._data.recon_summary.notes = notes
 
-        self._data.updated_at = datetime.utcnow()
+        self._data.updated_at = datetime.now(timezone.utc)
 
         return self._data.recon_summary
 
@@ -340,7 +340,7 @@ class FindingsDocument:
         """
         if agent_name not in self._data.agents_invoked:
             self._data.agents_invoked.append(agent_name)
-            self._data.updated_at = datetime.utcnow()
+            self._data.updated_at = datetime.now(timezone.utc)
 
     def increment_steps(self, count: int = 1) -> None:
         """
@@ -350,7 +350,7 @@ class FindingsDocument:
             count: Number of steps to add (default 1)
         """
         self._data.total_steps_taken += count
-        self._data.updated_at = datetime.utcnow()
+        self._data.updated_at = datetime.now(timezone.utc)
 
     # Session history methods
 
@@ -380,7 +380,7 @@ class FindingsDocument:
         session = SessionSummary(
             session_id=session_id,
             started_at=self._data.created_at,  # Use document creation as session start
-            ended_at=datetime.utcnow(),
+            ended_at=datetime.now(timezone.utc),
             agent_type=agent_type,
             summary=summary,
             surfaces_discovered=surfaces_discovered,
@@ -389,7 +389,7 @@ class FindingsDocument:
         )
 
         self._data.session_history.append(session)
-        self._data.updated_at = datetime.utcnow()
+        self._data.updated_at = datetime.now(timezone.utc)
 
         return session
 

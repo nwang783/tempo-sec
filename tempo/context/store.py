@@ -7,7 +7,7 @@ branching, and context rendering.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from tempo.context.frame import (
@@ -369,7 +369,7 @@ class ContextStore:
             "priority": priority,
             "status": "pending",
             "reason": None,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
         }
         self.current_frame.state.test_plan.append(item)
@@ -398,7 +398,7 @@ class ContextStore:
             if item["id"] == item_id:
                 item["status"] = status
                 item["reason"] = reason
-                item["completed_at"] = datetime.utcnow().isoformat()
+                item["completed_at"] = datetime.now(timezone.utc).isoformat()
                 return True
         return False
     

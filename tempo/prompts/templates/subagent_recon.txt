@@ -81,6 +81,14 @@ Use `browser_task` for reconnaissance that requires:
 - **Visual Analysis**: Capturing screenshots of pages
 - **AJAX/Fetch Discovery**: Observing network requests made by the browser
 
+**Example:**
+```
+browser_task(
+    task="Navigate to the login page, take a screenshot, and list all form fields",
+    url="https://example.com"
+)
+```
+
 **Don't use `browser_task` for:**
 - Simple HTTP requests (use `shell` with curl instead)
 - Static HTML analysis (use `shell` with wget + grep)

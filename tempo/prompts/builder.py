@@ -206,6 +206,7 @@ class PromptBuilder:
         scope_content: str | None = None,
         findings_context: str | None = None,
         agent_email: str | None = None,
+        task: str = "Complete the assigned browser task.",
     ) -> str:
         """
         Build the system prompt for browser agent.
@@ -218,6 +219,7 @@ class PromptBuilder:
             scope_content: Optional scope constraints for the browser agent
             findings_context: Optional prior findings to avoid duplicate work
             agent_email: Optional email address for signups
+            task: The browser task description to inject into prompt
 
         Returns:
             Formatted browser agent system prompt
@@ -251,6 +253,7 @@ class PromptBuilder:
             )
 
         return template.format(
+            task=task,
             tools=tool_descriptions,
             scope_section=scope_section,
             findings_section=findings_section,

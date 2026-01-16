@@ -7,7 +7,7 @@ allowing the AI to access full content via file_read tool.
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -91,7 +91,7 @@ class TruncatedOutputStorage:
             output_path.write_text(content, encoding="utf-8")
 
             # Save metadata
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             metadata = OutputMetadata(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
@@ -116,7 +116,7 @@ class TruncatedOutputStorage:
             return 0
 
         deleted_count = 0
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Walk all session directories
         for session_dir in self.output_dir.iterdir():

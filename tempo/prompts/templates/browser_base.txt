@@ -63,9 +63,9 @@ import requests
 
 payloads = ['<script>alert(1)</script>', '"><img src=x onerror=alert(1)>', ...]
 for payload in payloads:
-    r = requests.get(f'https://target.com/search?q={payload}')
+    r = requests.get(f'https://target.com/search?q={{payload}}')
     if '<script>' in r.text or 'onerror=' in r.text:
-        print(f'XSS found: {payload}')
+        print(f'XSS found: {{payload}}')
 '''
 )
 
