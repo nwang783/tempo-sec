@@ -87,6 +87,7 @@ class BrowserTaskTool(Tool):
         import uuid
         import os
         from tempo.agents.browser import BrowserAgent
+        from tempo.tools.network_capture import NetworkRequestCapture
 
         # Fixed step limit for browser agent
         max_steps = 50
@@ -102,6 +103,12 @@ class BrowserTaskTool(Tool):
                 "password": imap_password,
             }
 
+        # Create network request capture for API traffic visibility
+        network_capture = NetworkRequestCapture(
+            output_dir="/workspace",
+            capture_response_bodies=True,  # Queue bodies for on-demand fetch via get_network_requests(include_bodies=True)
+        )
+
         # Create browser agent definition
         browser_agent_def = BrowserAgent(
             task=task,
@@ -114,10 +121,28 @@ class BrowserTaskTool(Tool):
             use_browser_use_llm=use_browser_use_llm,
         )
 
-        # Create browser-use agent with custom tools
+        # Create browser-use agent with custom tools (including network capture tool)
         browser_use_agent, browser, combined_tools = browser_agent_def.create_browser_use_agent(
             container=self._container_manager,
+            network_capture=network_capture,
         )
+
+        # Attach network capture to browser session after it's available
+        # Note: The browser session exists on the agent, but CDP is set up during run()
+        # We'll attach after the browser session starts via a background hook
+        async def attach_network_capture_after_start():
+            """Wait for browser session to have CDP client, then attach network capture."""
+            for _ in range(50):  # Wait up to 5 seconds
+                if hasattr(browser_use_agent, 'browser_session'):
+                    session = browser_use_agent.browser_session
+                    if session and getattr(session, '_cdp_client_root', None):
+                        await network_capture.attach(session)
+                        return
+                await asyncio.sleep(0.1)
+
+        # Start the attachment in background (will complete during agent.run())
+        import asyncio
+        attach_task = asyncio.create_task(attach_network_capture_after_start())
 
         # --- Visualization bridge for browser-use actions ---
         # browser-use executes browser interactions via combined_tools.registry.execute_action(...)
@@ -322,6 +347,13 @@ class BrowserTaskTool(Tool):
             )
         
         finally:
+            # Clean up background attach task if still running
+            try:
+                if 'attach_task' in locals() and not attach_task.done():
+                    attach_task.cancel()
+            except Exception:
+                pass
+
             # Clean up browser resources
             try:
                 await browser.close()

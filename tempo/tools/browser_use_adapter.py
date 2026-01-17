@@ -36,6 +36,7 @@ def _run_async(coro: Coroutine[None, None, T]) -> T:
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
     from tempo.infra.protocols import FindingsUpdater
+    from tempo.tools.network_capture import NetworkRequestCapture
 
 
 class BrowserUseToolsAdapter:
@@ -48,6 +49,7 @@ class BrowserUseToolsAdapter:
         imap_config: dict | None = None,
         agent_email: str | None = None,
         tools_instance: Tools | None = None,
+        network_capture: "NetworkRequestCapture | None" = None,
     ):
         """
         Initialize the tools adapter.
@@ -58,18 +60,21 @@ class BrowserUseToolsAdapter:
             imap_config: IMAP configuration for email tools
             agent_email: Email address for verification flows
             tools_instance: Optional shared Tools instance (if None, creates new)
+            network_capture: Optional NetworkRequestCapture for network requests
         """
         self.container = container_manager
         self.findings = findings_updater
         self.imap_config = imap_config or {}
         self.agent_email = agent_email
         self.tools = tools_instance if tools_instance is not None else Tools()
+        self.network_capture = network_capture
 
         # Register all custom tools
         self._register_findings_tools()
         self._register_shell_tools()
         self._register_filesystem_tools()
         self._register_email_tools()
+        self._register_network_tools()
 
     def _register_findings_tools(self):
         """Register findings management tools."""
@@ -377,6 +382,61 @@ class BrowserUseToolsAdapter:
                 return f"Error: {result.error}"
             return result.output
 
+    def _register_network_tools(self):
+        """Register network request capture tools."""
+        if not self.network_capture:
+            return
+
+        network_capture = self.network_capture
+
+        @self.tools.action(
+            "Get captured network requests (XHR/fetch) from the current page"
+        )
+        def get_network_requests(
+            filter_type: str = "",
+            include_bodies: bool = False,
+            max_requests: int = 30,
+        ) -> str:
+            """
+            Get captured XHR/fetch network requests from the current page.
+
+            Use this to analyze API calls made by the web application:
+            - View API endpoints and request/response patterns
+            - Capture authentication tokens and headers for security testing
+            - Understand client-side API interactions
+
+            Note: Requests are saved on page navigation. Use file_read on the
+            saved file path to access complete request history if output is truncated.
+
+            Args:
+                filter_type: Filter by type: "xhr", "fetch", "all" (default: xhr+fetch)
+                include_bodies: Include request/response bodies (use for API analysis)
+                max_requests: Maximum requests to return (default: 30)
+
+            Returns:
+                Formatted list of network requests with headers and optional bodies
+            """
+            # Use async version if bodies requested (to fetch via CDP)
+            if include_bodies:
+                output, saved_file = _run_async(
+                    network_capture.get_requests_async(
+                        filter_type=filter_type,
+                        include_bodies=include_bodies,
+                        max_requests=max_requests,
+                    )
+                )
+            else:
+                output, saved_file = network_capture.get_requests(
+                    filter_type=filter_type,
+                    include_bodies=include_bodies,
+                    max_requests=max_requests,
+                )
+
+            if saved_file:
+                return f"{output}\n\nFull data saved to: {saved_file}"
+            return output
+
     def get_tools(self) -> Tools:
         """Return the browser-use Tools instance."""
         return self.tools
+
