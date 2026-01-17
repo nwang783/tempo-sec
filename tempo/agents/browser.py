@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from tempo.tools.registry import ToolRegistry
     from tempo.prompts.builder import PromptBuilder
     from tempo.infra.protocols import FindingsUpdater
+    from tempo.tools.network_capture import NetworkRequestCapture
 
 
 @register_agent
@@ -108,6 +109,7 @@ class BrowserAgent(BaseAgentDefinition):
     def create_browser_use_agent(
         self,
         container: "ContainerManager | None" = None,
+        network_capture: "NetworkRequestCapture | None" = None,
     ):
         """
         Create a browser-use Agent with custom tempo-sec tools.
@@ -117,9 +119,10 @@ class BrowserAgent(BaseAgentDefinition):
 
         Args:
             container: Container manager for shell/file operations
+            network_capture: Optional NetworkRequestCapture for network request visibility
 
         Returns:
-            Tuple of (browser-use Agent instance, Browser instance, Tools instance)
+            Tuple of (browser-use Agent instance, Browser instance, Tools instance, NetworkRequestCapture or None)
         """
         from browser_use import Agent, Browser
         from browser_use.tools.service import Tools
@@ -148,6 +151,7 @@ class BrowserAgent(BaseAgentDefinition):
             imap_config=self.imap_config,
             agent_email=self.agent_email,
             tools_instance=shared_tools,  # Pass shared instance
+            network_capture=network_capture,  # Pass network capture for tool registration
         )
 
         # Select LLM based on configuration

@@ -112,6 +112,31 @@ Review prior work to avoid duplication and build on existing knowledge.
 - Use `file_write` to create test scripts, payloads, or save extracted data
 - Use findings tools to document discoveries for the security assessment
 - Use `read_findings` to check what's already been tested
+- Use `get_network_requests` to inspect API calls made by the page (see below)
+
+## Network Request Analysis
+
+Use `get_network_requests` to inspect XHR/fetch requests made by the web application:
+
+**When to use:**
+- Analyzing API endpoints and request/response patterns
+- Capturing authentication tokens (bearer tokens, API keys, session cookies)
+- Understanding client-side API interactions on modern SPAs
+- Finding hidden API endpoints not visible in the page source
+- Bypassing WAF restrictions by replaying legitimate browser requests
+
+**Parameters:**
+- `filter_type`: Filter by "xhr", "fetch", or "all" (default: both xhr and fetch)
+- `include_bodies`: Set to `true` to include request/response bodies (useful for API analysis)
+- `max_requests`: Maximum requests to return (default: 30)
+
+**Note:** If output is truncated, the full data is saved to a file. Use `file_read` on the saved path to access complete request history.
+
+**Example workflow:**
+1. Navigate to a page that makes API calls
+2. Call `get_network_requests()` to see captured requests
+3. If you need request/response bodies, call `get_network_requests(include_bodies=true)`
+4. Use captured tokens in `shell` commands for direct API testing
 
 ## Common Testing Scenarios
 
