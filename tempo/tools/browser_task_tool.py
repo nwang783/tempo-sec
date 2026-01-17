@@ -4,9 +4,12 @@ Browser Task Tool.
 Tool for parent agents to delegate browser tasks to a specialized browser agent.
 """
 
+import logging
 from typing import TYPE_CHECKING
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager
@@ -125,6 +128,15 @@ class BrowserTaskTool(Tool):
         browser_use_agent, browser, combined_tools = browser_agent_def.create_browser_use_agent(
             container=self._container_manager,
             network_capture=network_capture,
+        )
+
+        # DEBUG: Log browser agent configuration before run
+        logger.debug(
+            f"[BrowserTask] Starting browser agent: task='{task[:100]}...', "
+            f"url='{url}', max_steps={max_steps}, "
+            f"agent_max_failures={getattr(browser_use_agent.settings, 'max_failures', 'unknown')}, "
+            f"agent_step_timeout={getattr(browser_use_agent.settings, 'step_timeout', 'unknown')}s, "
+            f"agent_llm_timeout={getattr(browser_use_agent.settings, 'llm_timeout', 'unknown')}s"
         )
 
         # Attach network capture to browser session after it's available
@@ -276,6 +288,33 @@ class BrowserTaskTool(Tool):
         try:
             # Run browser-use agent
             history = await browser_use_agent.run(max_steps=max_steps)
+
+            # DEBUG: Log post-run state for debugging timeout issues
+            agent_state = getattr(browser_use_agent, 'state', None)
+            consecutive_failures = getattr(agent_state, 'consecutive_failures', 'unknown') if agent_state else 'no_state'
+            is_done = history.is_done() if hasattr(history, 'is_done') else 'unknown'
+            is_successful = history.is_successful() if hasattr(history, 'is_successful') else 'unknown'
+            final_result_raw = history.final_result() if hasattr(history, 'final_result') else None
+            
+            logger.debug(
+                f"[BrowserTask] Agent run completed: "
+                f"consecutive_failures={consecutive_failures}, "
+                f"is_done={is_done}, is_successful={is_successful}, "
+                f"history_items={len(history.history) if hasattr(history, 'history') else 0}, "
+                f"final_result_preview='{str(final_result_raw)[:200] if final_result_raw else None}...'"
+            )
+            
+            # If agent exited due to consecutive failures, log more details
+            if consecutive_failures != 'unknown' and isinstance(consecutive_failures, int) and consecutive_failures >= 3:
+                logger.warning(
+                    f"[BrowserTask] Agent exited with {consecutive_failures} consecutive failures! "
+                    f"This may indicate timeout issues. Check browser-use logs for step_timeout errors."
+                )
+                # Log last few errors from history
+                if hasattr(history, 'errors'):
+                    recent_errors = history.errors()[-5:] if callable(getattr(history, 'errors', None)) else []
+                    for i, err in enumerate(recent_errors):
+                        logger.warning(f"[BrowserTask] Recent error {i+1}: {err[:200] if err else 'None'}")
 
             # Extract results from history
             steps_taken = len(history.history) if hasattr(history, "history") else 0
