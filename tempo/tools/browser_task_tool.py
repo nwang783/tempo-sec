@@ -129,8 +129,8 @@ class BrowserTaskTool(Tool):
 
         # Callback to capture browser-use step info for visualization
         def step_callback(
-            browser_state,  # BrowserStateSummary
-            agent_output,   # AgentOutput
+            _browser_state,  # BrowserStateSummary (unused)
+            agent_output,    # AgentOutput
             step_number: int,
         ) -> None:
             """Forward browser-use step info to visualization."""
