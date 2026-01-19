@@ -5,6 +5,7 @@ A specialized agent for browser automation tasks that can be invoked
 by parent agents to handle web interaction subtasks.
 """
 
+import logging
 import os
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,35 @@ if TYPE_CHECKING:
     from tempo.prompts.builder import PromptBuilder
     from tempo.infra.protocols import FindingsUpdater
     from tempo.tools.network_capture import NetworkRequestCapture
+
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_env_int(env_var: str, default: int | None = None) -> int | None:
+    """
+    Parse an integer from an environment variable with validation.
+
+    Args:
+        env_var: Name of the environment variable
+        default: Default value if not set
+
+    Returns:
+        Parsed integer value, or default if not set
+
+    Logs a warning and returns default if the value is not a valid integer.
+    """
+    value = os.getenv(env_var)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(
+            f"Invalid value for {env_var}: '{value}' is not an integer. "
+            f"Using default: {default}"
+        )
+        return default
 
 
 @register_agent
@@ -169,24 +199,26 @@ class BrowserAgent(BaseAgentDefinition):
         # Create browser-use Agent
         # Allow runtime overrides for stability testing (Debug Mode / ops tuning).
         # Defaults preserve browser-use behavior (model-derived llm_timeout, max_failures=3).
-        llm_timeout_override = os.getenv("TEMPO_BROWSER_USE_LLM_TIMEOUT")
-        max_failures_override = os.getenv("TEMPO_BROWSER_USE_MAX_FAILURES")
-        max_history_items_override = os.getenv("TEMPO_BROWSER_USE_MAX_HISTORY_ITEMS")
+        llm_timeout_val = _parse_env_int("TEMPO_BROWSER_USE_LLM_TIMEOUT")
+        max_failures_val = _parse_env_int("TEMPO_BROWSER_USE_MAX_FAILURES", default=3)
+        max_history_items_val = _parse_env_int("TEMPO_BROWSER_USE_MAX_HISTORY_ITEMS")
 
-        # Evidence-based default: gpt-5.* can exceed 60s when prompts get large (we observed CancelledError + 60s timeout).
-        # If no explicit override is provided, bump to 120s for gpt-5 models.
-        llm_timeout_val = int(llm_timeout_override) if llm_timeout_override else None
-        max_failures_val = int(max_failures_override) if max_failures_override else 3
-        max_history_items_val = int(max_history_items_override) if max_history_items_override else None
-
+        # Evidence-based default: gpt-5.* can exceed 60s when prompts get large
+        # (we observed CancelledError + 60s timeout). Apply guardrails for gpt-5 models.
         model_name = str(getattr(llm, "model", "")).lower()
         if "gpt-5" in model_name:
-            # Guardrail: even if TEMPO_BROWSER_USE_LLM_TIMEOUT is set lower (e.g. 60),
-            # enforce a minimum that avoids known cancellations.
+            # Guardrail: enforce minimum timeout that avoids known cancellations.
             if llm_timeout_val is None or llm_timeout_val < 120:
+                logger.info(
+                    f"Applying GPT-5 guardrail: llm_timeout={120}s "
+                    f"(was {llm_timeout_val or 'unset'})"
+                )
                 llm_timeout_val = 120
             # Guardrail: avoid overly-low failure caps which exacerbate intermittent provider issues.
             if max_failures_val < 3:
+                logger.info(
+                    f"Applying GPT-5 guardrail: max_failures={3} (was {max_failures_val})"
+                )
                 max_failures_val = 3
 
         agent = Agent(

@@ -88,3 +88,21 @@ default_timeout = 300000
 # Viewport dimensions
 viewport_width = 1280
 viewport_height = 720
+
+# Environment variables for browser agent stability tuning:
+# These can be set in .env or shell environment for operational adjustments.
+#
+# TEMPO_BROWSER_USE_LLM_TIMEOUT: LLM response timeout in seconds (default: model-derived)
+#   - For GPT-5 models, automatically raised to minimum 120s to prevent timeouts
+#   - Example: TEMPO_BROWSER_USE_LLM_TIMEOUT=180
+#
+# TEMPO_BROWSER_USE_MAX_FAILURES: Max consecutive failures before abort (default: 3)
+#   - For GPT-5 models, enforces minimum of 3 to handle intermittent issues
+#   - Example: TEMPO_BROWSER_USE_MAX_FAILURES=5
+#
+# TEMPO_BROWSER_USE_MAX_HISTORY_ITEMS: Cap on conversation history items (default: unlimited)
+#   - Use to reduce context size and prevent LLM timeouts on long tasks
+#   - Example: TEMPO_BROWSER_USE_MAX_HISTORY_ITEMS=50
+#
+# TEMPO_BROWSER_USE_MAX_COMPLETION_TOKENS: Max tokens for LLM response (default: model-derived)
+#   - Example: TEMPO_BROWSER_USE_MAX_COMPLETION_TOKENS=4096
