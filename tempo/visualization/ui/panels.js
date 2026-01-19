@@ -378,8 +378,6 @@ export function initTabs() {
 
             if (tabName === 'graph') {
                 document.getElementById('tree-container')?.classList.add('active');
-            } else if (tabName === 'testplan') {
-                document.getElementById('testplan-container')?.classList.add('active');
             } else if (tabName === 'context') {
                 document.getElementById('context-container')?.classList.add('active');
                 // Load context for the currently active agent

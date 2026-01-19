@@ -140,6 +140,7 @@ class BrowserAgent(BaseAgentDefinition):
         self,
         container: "ContainerManager | None" = None,
         network_capture: "NetworkRequestCapture | None" = None,
+        register_new_step_callback=None,
     ):
         """
         Create a browser-use Agent with custom tempo-sec tools.
@@ -150,6 +151,7 @@ class BrowserAgent(BaseAgentDefinition):
         Args:
             container: Container manager for shell/file operations
             network_capture: Optional NetworkRequestCapture for network request visibility
+            register_new_step_callback: Optional callback for step events (BrowserStateSummary, AgentOutput, int)
 
         Returns:
             Tuple of (browser-use Agent instance, Browser instance, Tools instance, NetworkRequestCapture or None)
@@ -229,6 +231,7 @@ class BrowserAgent(BaseAgentDefinition):
             llm_timeout=llm_timeout_val,
             max_failures=max_failures_val,
             max_history_items=max_history_items_val,
+            register_new_step_callback=register_new_step_callback,
         )
 
         return agent, browser, shared_tools
