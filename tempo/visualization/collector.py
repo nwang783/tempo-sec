@@ -337,3 +337,32 @@ class VisualizationCollector:
         """
         self.emit("findings_update", findings_summary)
 
+    def on_browser_step_info(
+        self,
+        subagent_id: str,
+        step_number: int,
+        thinking: str | None,
+        memory: str | None,
+        next_goal: str | None,
+        evaluation: str | None,
+    ) -> None:
+        """Called when browser-use agent completes a step with metadata.
+        
+        Args:
+            subagent_id: Browser agent's unique identifier
+            step_number: Current step number
+            thinking: Agent's internal reasoning
+            memory: Accumulated memory
+            next_goal: What the agent plans to do next
+            evaluation: Evaluation of previous action
+        """
+        self.emit("browser_step_info", {
+            "subagent_id": subagent_id,
+            "step_number": step_number,
+            "thinking": thinking[:500] if thinking else None,  # Truncate for UI
+            "memory": memory[:500] if memory else None,
+            "next_goal": next_goal[:200] if next_goal else None,
+            "evaluation": evaluation[:200] if evaluation else None,
+        })
+
+

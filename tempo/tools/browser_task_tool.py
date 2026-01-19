@@ -124,10 +124,37 @@ class BrowserTaskTool(Tool):
             use_browser_use_llm=use_browser_use_llm,
         )
 
+        # Pre-generate browser_id so closures can capture it
+        browser_id = f"browser_{uuid.uuid4().hex[:8]}" if self._visualization_collector else None
+
+        # Callback to capture browser-use step info for visualization
+        def step_callback(
+            browser_state,  # BrowserStateSummary
+            agent_output,   # AgentOutput
+            step_number: int,
+        ) -> None:
+            """Forward browser-use step info to visualization."""
+            if not self._visualization_collector:
+                return
+            if not hasattr(self._visualization_collector, "on_browser_step_info"):
+                return
+
+            current_state = getattr(agent_output, "current_state", None)
+            if current_state:
+                self._visualization_collector.on_browser_step_info(
+                    subagent_id=browser_id or "browser",
+                    step_number=step_number,
+                    thinking=getattr(current_state, "thinking", None),
+                    memory=getattr(current_state, "memory", None),
+                    next_goal=getattr(current_state, "next_goal", None),
+                    evaluation=getattr(current_state, "evaluation_previous_goal", None),
+                )
+
         # Create browser-use agent with custom tools (including network capture tool)
         browser_use_agent, browser, combined_tools = browser_agent_def.create_browser_use_agent(
             container=self._container_manager,
             network_capture=network_capture,
+            register_new_step_callback=step_callback if self._visualization_collector else None,
         )
 
         # Attach network capture to browser session after it's available
@@ -152,8 +179,7 @@ class BrowserTaskTool(Tool):
         # The Tempo visualization UI expects events via VisualizationCollector.on_step/on_tool_call_start/on_tool_call.
         # We wrap execute_action so each browser-use action shows up as a "tool call" under the browser subagent.
         browser_step_counter = 0
-        # Pre-generate browser_id so the closure can capture it
-        browser_id = f"browser_{uuid.uuid4().hex[:8]}" if self._visualization_collector else None
+        # Use the browser_id already defined above for step_callback
         if self._visualization_collector and hasattr(combined_tools, "registry"):
             try:
                 import json

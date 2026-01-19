@@ -153,6 +153,9 @@ export function addToolNode(toolData) {
 /**
  * Add a tool call node to a specific subagent's graph.
  * 
+ * If a pending node with the same ID already exists (from tool_call_start),
+ * update it instead of creating a duplicate.
+ * 
  * @param {Object} toolData - Tool call data from the server
  * @param {string} subagentId - ID of the subagent to add the tool to
  */
@@ -185,6 +188,24 @@ export function addToolNodeForSubagent(toolData, subagentId) {
         };
         subagent.rootNode.children.push(stepNode);
         subagent.stepsMap.set(stepKey, stepNode);
+    }
+
+    // Check if this is an update to an existing pending node
+    // (handles tool_call_start followed by tool_call for same ID)
+    const existingNode = stepNode.children.find(
+        n => n.id === toolData.id && n.data?.pending
+    );
+
+    if (existingNode) {
+        // Update existing node instead of creating new one
+        existingNode.data = toolData;
+        existingNode.data.pending = false;
+
+        // Re-render if viewing this subagent
+        if (state.appState.activeAgentView === subagentId) {
+            debouncedUpdate();
+        }
+        return;
     }
 
     const isPhase = toolData.tool_name === 'transition_phase';
@@ -575,11 +596,19 @@ export function showDetails(d) {
 
     if (d.type === 'tool' || d.type === 'phase_marker') {
         html += `<div class="tool-badge">${d.name}</div>`;
-        html += `
+
+        // Check if this is a browser-use tool (they don't use purpose field)
+        const isBrowserUseTool = toolData.metadata?.browser_use === true;
+
+        if (!isBrowserUseTool && toolData.input?.purpose) {
+            html += `
             <div class="field-group">
                 <span class="field-label">Purpose</span>
-                <div class="field-value">${escapeHtml(toolData.input?.purpose || "N/A")}</div>
-            </div>
+                <div class="field-value">${escapeHtml(toolData.input.purpose)}</div>
+            </div>`;
+        }
+
+        html += `
             <div class="field-group">
                 <span class="field-label">Input</span>
                 <div class="field-value highlight">${escapeHtml(JSON.stringify(toolData.input, null, 2))}</div>
@@ -589,6 +618,15 @@ export function showDetails(d) {
                 <div class="field-value">${escapeHtml(toolData.raw_output || toolData.output || "(no output)")}</div>
             </div>
         `;
+
+        // Show browser step info if viewing a browser subagent's tool
+        const activeAgentId = state.appState.activeAgentView;
+        if (activeAgentId && activeAgentId !== 'orchestrator') {
+            const subagent = state.agentHierarchy.subagents.find(s => s.id === activeAgentId);
+            if (subagent && subagent.type === 'browser' && subagent.browserStepInfo) {
+                html += renderBrowserStepInfoPanel(subagent.browserStepInfo);
+            }
+        }
     } else if (d.type === 'user_prompt') {
         html += `<div class="tool-badge" style="border-left-color:#9c27b0;background:rgba(156,39,176,0.1)">💬 USER PROMPT</div>`;
         html += `
@@ -607,10 +645,51 @@ export function showDetails(d) {
     } else if (d.type === 'step') {
         html += `<div class="tool-badge" style="background:#222">STEP ${toolData.step_number}</div>`;
         html += `<p style="color:#888">Agent execution step container.</p>`;
+
+        // Show browser step info when clicking on a step in browser subagent
+        const activeAgentId = state.appState.activeAgentView;
+        if (activeAgentId && activeAgentId !== 'orchestrator') {
+            const subagent = state.agentHierarchy.subagents.find(s => s.id === activeAgentId);
+            if (subagent && subagent.type === 'browser' && subagent.browserStepInfo) {
+                html += renderBrowserStepInfoPanel(subagent.browserStepInfo);
+            }
+        }
     }
 
     html += `</div>`;
     detailsContent.innerHTML = html;
+}
+
+/**
+ * Render browser step info panel HTML.
+ * @param {Object} info - Browser step info object
+ * @returns {string} HTML string
+ */
+function renderBrowserStepInfoPanel(info) {
+    let html = `
+        <div class="field-group" style="margin-top:15px;padding-top:15px;border-top:1px solid #333">
+            <span class="field-label">🌐 Browser Agent Thinking</span>
+    `;
+
+    if (info.nextGoal) {
+        html += `<div class="browser-step-detail"><span class="browser-detail-icon">🎯</span> <strong>Next Goal:</strong> ${escapeHtml(info.nextGoal)}</div>`;
+    }
+
+    if (info.memory) {
+        html += `<div class="browser-step-detail"><span class="browser-detail-icon">🧠</span> <strong>Memory:</strong> ${escapeHtml(info.memory)}</div>`;
+    }
+
+    if (info.evaluation) {
+        const evalIcon = info.evaluation.toLowerCase().includes('success') ? '✓' : '⚠';
+        html += `<div class="browser-step-detail"><span class="browser-detail-icon">${evalIcon}</span> <strong>Evaluation:</strong> ${escapeHtml(info.evaluation)}</div>`;
+    }
+
+    if (info.thinking) {
+        html += `<div class="browser-step-detail"><span class="browser-detail-icon">💭</span> <strong>Thinking:</strong> ${escapeHtml(info.thinking)}</div>`;
+    }
+
+    html += `</div>`;
+    return html;
 }
 
 // ============================================================================

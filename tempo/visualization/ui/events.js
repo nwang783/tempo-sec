@@ -112,6 +112,10 @@ export function handleEvent(event) {
         case "findings_update":
             handleFindingsUpdate(data);
             break;
+
+        case "browser_step_info":
+            handleBrowserStepInfo(data);
+            break;
     }
 }
 
@@ -319,6 +323,28 @@ function handleSubagentFinish(data) {
 function handleFindingsUpdate(data) {
     state.updateFindingsSummary(data);
     agentTree.render();
+}
+
+/**
+ * Handle browser step info event from browser-use agent.
+ * Stores the step metadata on the subagent for display in the agent tree.
+ */
+function handleBrowserStepInfo(data) {
+    const subagentId = data.subagent_id;
+    const subagent = state.agentHierarchy.subagents.find(s => s.id === subagentId);
+
+    if (subagent) {
+        // Store latest browser step info for display
+        subagent.browserStepInfo = {
+            thinking: data.thinking,
+            memory: data.memory,
+            nextGoal: data.next_goal,
+            evaluation: data.evaluation,
+            stepNumber: data.step_number,
+        };
+
+        agentTree.render();
+    }
 }
 
 // ============================================================================
