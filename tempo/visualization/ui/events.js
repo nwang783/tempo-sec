@@ -199,23 +199,11 @@ function handleStep(data) {
             subagent.steps++;
             subagent.currentStepNumber = data.step_number;
 
-            // Update phase display if this subagent is active
-            if (subagent.active && data.phase) {
-                const phaseEl = document.getElementById("state-phase");
-                if (phaseEl) phaseEl.textContent = data.phase;
-            }
-
             // Re-render agent tree to show updated step count
             agentTree.render();
         }
     } else {
         // Orchestrator step (existing logic)
-        // Update phase display
-        if (data.phase) {
-            const phaseEl = document.getElementById("state-phase");
-            if (phaseEl) phaseEl.textContent = data.phase;
-        }
-
         // Update step number display
         if (data.step_number !== undefined && data.step_number !== null) {
             const stepEl = document.getElementById("state-step");
@@ -327,14 +315,22 @@ function handleFindingsUpdate(data) {
 
 /**
  * Handle browser step info event from browser-use agent.
- * Stores the step metadata on the subagent for display in the agent tree.
+ * Stores the step metadata on the subagent for display in the details panel.
+ * Also increments the step counter for the browser subagent.
  */
 function handleBrowserStepInfo(data) {
     const subagentId = data.subagent_id;
     const subagent = state.agentHierarchy.subagents.find(s => s.id === subagentId);
 
     if (subagent) {
-        // Store latest browser step info for display
+        // Increment step counter if this is a new step
+        const newStepNumber = data.step_number;
+        if (newStepNumber !== undefined && newStepNumber > (subagent.currentStepNumber || 0)) {
+            subagent.steps = newStepNumber;
+            subagent.currentStepNumber = newStepNumber;
+        }
+
+        // Store latest browser step info for display in details panel
         subagent.browserStepInfo = {
             thinking: data.thinking,
             memory: data.memory,
