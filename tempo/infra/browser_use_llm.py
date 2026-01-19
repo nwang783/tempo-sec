@@ -51,6 +51,8 @@ def create_browser_use_llm(
     # Prefer OpenAI direct if available; fallback to OpenRouter.
     openai_key = os.getenv("OPENAI_API_KEY")
     openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    max_completion_tokens_env = os.getenv("TEMPO_BROWSER_USE_MAX_COMPLETION_TOKENS")
+    max_completion_tokens = int(max_completion_tokens_env) if max_completion_tokens_env else None
 
     if openai_key:
         from browser_use.llm.openai.chat import ChatOpenAI as BrowserUseChatOpenAI
@@ -59,6 +61,7 @@ def create_browser_use_llm(
             model=model,
             api_key=openai_key,
             temperature=0.2,
+            max_completion_tokens=max_completion_tokens,
         )
 
     if openrouter_key:
@@ -70,6 +73,7 @@ def create_browser_use_llm(
             model=openrouter_model,
             api_key=openrouter_key,
             temperature=0.2,
+            max_completion_tokens=max_completion_tokens,
             default_headers={
                 "HTTP-Referer": "https://github.com/your-repo/tempo-sec",
                 "X-Title": "tempo-sec browser agent",

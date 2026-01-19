@@ -167,11 +167,36 @@ class BrowserAgent(BaseAgentDefinition):
             task_description = f"{self.task}\n\nStarting URL: {self.url}"
 
         # Create browser-use Agent
+        # Allow runtime overrides for stability testing (Debug Mode / ops tuning).
+        # Defaults preserve browser-use behavior (model-derived llm_timeout, max_failures=3).
+        llm_timeout_override = os.getenv("TEMPO_BROWSER_USE_LLM_TIMEOUT")
+        max_failures_override = os.getenv("TEMPO_BROWSER_USE_MAX_FAILURES")
+        max_history_items_override = os.getenv("TEMPO_BROWSER_USE_MAX_HISTORY_ITEMS")
+
+        # Evidence-based default: gpt-5.* can exceed 60s when prompts get large (we observed CancelledError + 60s timeout).
+        # If no explicit override is provided, bump to 120s for gpt-5 models.
+        llm_timeout_val = int(llm_timeout_override) if llm_timeout_override else None
+        max_failures_val = int(max_failures_override) if max_failures_override else 3
+        max_history_items_val = int(max_history_items_override) if max_history_items_override else None
+
+        model_name = str(getattr(llm, "model", "")).lower()
+        if "gpt-5" in model_name:
+            # Guardrail: even if TEMPO_BROWSER_USE_LLM_TIMEOUT is set lower (e.g. 60),
+            # enforce a minimum that avoids known cancellations.
+            if llm_timeout_val is None or llm_timeout_val < 120:
+                llm_timeout_val = 120
+            # Guardrail: avoid overly-low failure caps which exacerbate intermittent provider issues.
+            if max_failures_val < 3:
+                max_failures_val = 3
+
         agent = Agent(
             task=task_description,
             llm=llm,
             browser=browser,
             tools=shared_tools,  # Use the shared Tools instance
+            llm_timeout=llm_timeout_val,
+            max_failures=max_failures_val,
+            max_history_items=max_history_items_val,
         )
 
         return agent, browser, shared_tools
