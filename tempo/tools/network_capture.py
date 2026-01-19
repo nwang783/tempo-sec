@@ -373,7 +373,6 @@ class NetworkRequestCapture:
 
     def get_requests(
         self,
-        filter_type: str = "",
         include_bodies: bool = False,
         max_requests: int = 50,
     ) -> tuple[str, str | None]:
@@ -381,7 +380,6 @@ class NetworkRequestCapture:
         Get formatted summary of captured requests.
 
         Args:
-            filter_type: Filter by resource type (xhr, fetch, all, or empty for default)
             include_bodies: Include request/response bodies
             max_requests: Maximum number of requests to return
 
@@ -390,13 +388,6 @@ class NetworkRequestCapture:
         """
         # Determine which requests to include
         requests_to_show = list(self._requests)
-
-        if filter_type:
-            filter_type_upper = filter_type.upper()
-            if filter_type_upper != "ALL":
-                requests_to_show = [
-                    r for r in requests_to_show if r.resource_type == filter_type_upper
-                ]
 
         # Limit to max_requests (most recent)
         if len(requests_to_show) > max_requests:
@@ -438,7 +429,6 @@ class NetworkRequestCapture:
 
     async def get_requests_async(
         self,
-        filter_type: str = "",
         include_bodies: bool = False,
         max_requests: int = 50,
     ) -> tuple[str, str | None]:
@@ -449,7 +439,6 @@ class NetworkRequestCapture:
         via CDP before formatting the output.
 
         Args:
-            filter_type: Filter by resource type (xhr, fetch, all, or empty for default)
             include_bodies: Include request/response bodies (triggers async fetch)
             max_requests: Maximum number of requests to return
 
@@ -462,7 +451,6 @@ class NetworkRequestCapture:
 
         # Delegate to sync method for formatting
         return self.get_requests(
-            filter_type=filter_type,
             include_bodies=include_bodies,
             max_requests=max_requests,
         )

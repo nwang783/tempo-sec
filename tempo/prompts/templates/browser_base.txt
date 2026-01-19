@@ -126,7 +126,6 @@ Use `get_network_requests` to inspect XHR/fetch requests made by the web applica
 - Bypassing WAF restrictions by replaying legitimate browser requests
 
 **Parameters:**
-- `filter_type`: Filter by "xhr", "fetch", or "all" (default: both xhr and fetch)
 - `include_bodies`: Set to `true` to include request/response bodies (useful for API analysis)
 - `max_requests`: Maximum requests to return (default: 30)
 

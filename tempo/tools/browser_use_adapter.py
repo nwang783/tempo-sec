@@ -345,7 +345,6 @@ class BrowserUseToolsAdapter:
             "Get captured network requests (XHR/fetch) from the current page"
         )
         def get_network_requests(
-            filter_type: str = "",
             include_bodies: bool = False,
             max_requests: int = 30,
         ) -> str:
@@ -361,7 +360,6 @@ class BrowserUseToolsAdapter:
             saved file path to access complete request history if output is truncated.
 
             Args:
-                filter_type: Filter by type: "xhr", "fetch", "all" (default: xhr+fetch)
                 include_bodies: Include request/response bodies (use for API analysis)
                 max_requests: Maximum requests to return (default: 30)
 
@@ -372,14 +370,12 @@ class BrowserUseToolsAdapter:
             if include_bodies:
                 output, saved_file = _run_async(
                     network_capture.get_requests_async(
-                        filter_type=filter_type,
                         include_bodies=include_bodies,
                         max_requests=max_requests,
                     )
                 )
             else:
                 output, saved_file = network_capture.get_requests(
-                    filter_type=filter_type,
                     include_bodies=include_bodies,
                     max_requests=max_requests,
                 )
