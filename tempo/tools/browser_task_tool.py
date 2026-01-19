@@ -4,9 +4,12 @@ Browser Task Tool.
 Tool for parent agents to delegate browser tasks to a specialized browser agent.
 """
 
+import logging
 from typing import TYPE_CHECKING
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from tempo.infra.container import ContainerManager

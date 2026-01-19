@@ -251,71 +251,23 @@ class BrowserUseToolsAdapter:
             return result.output
 
     def _register_filesystem_tools(self):
-        """Register file operations tools."""
-        from tempo.tools.filesystem import FileReadTool, FileWriteTool
-
-        file_read_tool = FileReadTool(self.container)
-        file_write_tool = FileWriteTool(self.container)
-
-        @self.tools.action("Read the contents of a file")
-        def file_read(
-            path: str,
-            encoding: str = "utf-8",
-            max_bytes: int = 0,
-        ) -> str:
-            """
-            Read file contents.
-
-            Args:
-                path: Path to the file
-                encoding: Text encoding (default: utf-8)
-                max_bytes: Maximum bytes to read (0 = unlimited)
-
-            Returns:
-                File contents
-            """
-            max_bytes_param = max_bytes if max_bytes > 0 else None
-            result = _run_async(
-                file_read_tool.execute(
-                    path=path,
-                    encoding=encoding,
-                    max_bytes=max_bytes_param,
-                )
-            )
-            if not result.success:
-                return f"Error: {result.error}"
-            return result.output
-
-        @self.tools.action("Write content to a file (creates or overwrites)")
-        def file_write(
-            path: str,
-            content: str,
-            append: bool = False,
-            encoding: str = "utf-8",
-        ) -> str:
-            """
-            Write to a file.
-
-            Args:
-                path: Path to the file
-                content: Content to write
-                append: Append instead of overwrite
-                encoding: Text encoding (default: utf-8)
-
-            Returns:
-                Success confirmation
-            """
-            result = _run_async(
-                file_write_tool.execute(
-                    path=path,
-                    content=content,
-                    append=append,
-                    encoding=encoding,
-                )
-            )
-            if not result.success:
-                return f"Error: {result.error}"
-            return result.output
+        """Register file operations tools.
+        
+        NOTE: Removed - browser-use already provides built-in file system tools:
+        - write_file: Write to files in browser-use's temp filesystem
+        - read_file: Read files from browser-use's temp filesystem  
+        - replace_file: Replace strings in files
+        
+        The tempo-sec file_read/file_write tools were duplicates that operated
+        on the Docker container filesystem, but the browser agent should use
+        browser-use's built-in tools for consistency with its todo.md and
+        other file-based workflows.
+        
+        For Docker container file operations, the shell tool can be used:
+        - shell(command="cat /path/to/file") for reading
+        - shell(command="echo 'content' > /path/to/file") for writing
+        """
+        pass  # No custom filesystem tools - use browser-use built-ins
 
     def _register_email_tools(self):
         """Register email verification tools."""
@@ -393,7 +345,6 @@ class BrowserUseToolsAdapter:
             "Get captured network requests (XHR/fetch) from the current page"
         )
         def get_network_requests(
-            filter_type: str = "",
             include_bodies: bool = False,
             max_requests: int = 30,
         ) -> str:
@@ -409,7 +360,6 @@ class BrowserUseToolsAdapter:
             saved file path to access complete request history if output is truncated.
 
             Args:
-                filter_type: Filter by type: "xhr", "fetch", "all" (default: xhr+fetch)
                 include_bodies: Include request/response bodies (use for API analysis)
                 max_requests: Maximum requests to return (default: 30)
 
@@ -420,14 +370,12 @@ class BrowserUseToolsAdapter:
             if include_bodies:
                 output, saved_file = _run_async(
                     network_capture.get_requests_async(
-                        filter_type=filter_type,
                         include_bodies=include_bodies,
                         max_requests=max_requests,
                     )
                 )
             else:
                 output, saved_file = network_capture.get_requests(
-                    filter_type=filter_type,
                     include_bodies=include_bodies,
                     max_requests=max_requests,
                 )
