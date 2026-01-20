@@ -86,7 +86,8 @@ class TestVisualizationCollectorEvents:
         
         mock_server.set_agent_state.assert_called_once_with({
             "objective": "Test objective",
-            "model": "anthropic/claude-sonnet"
+            "model": "anthropic/claude-sonnet",
+            "status": "running",
         })
     
     def test_on_agent_start_emits_event(self):
@@ -101,7 +102,8 @@ class TestVisualizationCollectorEvents:
             
             mock_emit.assert_called_once_with("start", {
                 "objective": "Test objective",
-                "model": "test-model"
+                "model": "test-model",
+                "status": "running",
             })
     
     @pytest.mark.asyncio
