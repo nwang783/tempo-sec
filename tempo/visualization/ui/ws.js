@@ -145,3 +145,12 @@ export function sendUserPrompt(content) {
 export function sendStopSignal() {
     return send('stop_agent');
 }
+
+/**
+ * Send a pause signal to the agent.
+ * 
+ * @returns {boolean} True if sent successfully
+ */
+export function sendPauseSignal() {
+    return send('pause_agent');
+}

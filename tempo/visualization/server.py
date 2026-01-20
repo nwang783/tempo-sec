@@ -41,6 +41,7 @@ class VisualizationServer:
         auto_open: bool = True,
         prompt_manager: "UserPromptManager | None" = None,
         stop_event: "asyncio.Event | None" = None,
+        pause_event: "asyncio.Event | None" = None,
         persistence_dir: str = "./contexts",
     ):
         self.host = host
@@ -48,6 +49,7 @@ class VisualizationServer:
         self.auto_open = auto_open
         self.prompt_manager = prompt_manager
         self.stop_event = stop_event
+        self.pause_event = pause_event
         self.persistence_dir = persistence_dir
         self.app = FastAPI(title="Tempo Sec Visualization")
         self.active_connections: List[WebSocket] = []
@@ -314,6 +316,11 @@ class VisualizationServer:
                         "error": "Stopped by user"
                     }))
             
+            elif msg_type == "pause_agent":
+                logger.warning("Received pause_agent signal from UI")
+                if self.pause_event:
+                    self.pause_event.set()
+            
             elif msg_type == "ping":
                 pass  # Keep-alive, no action needed
                 
@@ -375,4 +382,3 @@ class VisualizationServer:
             except asyncio.CancelledError:
                 pass
     
-

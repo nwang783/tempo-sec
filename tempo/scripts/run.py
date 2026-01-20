@@ -11,6 +11,8 @@ import asyncio
 import os
 import sys
 import uuid
+import shlex
+import signal
 from typing import NoReturn
 import logging
 
@@ -226,6 +228,7 @@ async def main() -> None:
     viz_collector = None
     prompt_manager = None
     stop_event = asyncio.Event()
+    pause_event = asyncio.Event()
     
     if not args.no_viz and config.enable_visualization and VisualizationServer:
         print(f"📊 Visualization running on {config.visualization_host}:{config.visualization_port}")
@@ -238,6 +241,7 @@ async def main() -> None:
             auto_open=config.auto_open_browser,
             prompt_manager=prompt_manager,
             stop_event=stop_event,
+            pause_event=pause_event,
             persistence_dir=config.persistence_dir,
         )
         viz_server.set_context_store(context)
@@ -246,6 +250,19 @@ async def main() -> None:
 
     # Initialize PromptBuilder
     prompts = PromptBuilder()
+
+    sigint_count = 0
+    def _handle_sigint(signum, frame) -> None:
+        nonlocal sigint_count
+        sigint_count += 1
+        if sigint_count == 1:
+            print("\n⏸️ Pause requested. Finishing current step...")
+            pause_event.set()
+        else:
+            print("\n🛑 Force stop requested.")
+            stop_event.set()
+    
+    signal.signal(signal.SIGINT, _handle_sigint)
     
     # Execution Wrapper
     async def run_agent(tools):
@@ -297,6 +314,7 @@ async def main() -> None:
             visualization_collector=viz_collector,
             prompt_manager=prompt_manager,
             stop_event=stop_event,
+            pause_event=pause_event,
         )
         
 
@@ -346,7 +364,9 @@ async def main() -> None:
             
         # Final Report
         print(f"\n{'='*50}")
-        if result.success:
+        if result.paused:
+            print("⏸️ Agent paused")
+        elif result.success:
             print("✅ Agent completed successfully")
         else:
             print(f"❌ Agent failed: {result.error}")
@@ -361,6 +381,31 @@ async def main() -> None:
         # Save Context
         save_path = context.save()
         print(f"\n💾 Context saved to: {save_path}")
+        if result.paused:
+            resume_cmd = ["tempo", "--agent", args.agent, "--context", save_path]
+            if args.config:
+                resume_cmd += ["--config", args.config]
+            if args.model:
+                resume_cmd += ["--model", args.model]
+            if args.max_steps:
+                resume_cmd += ["--max-steps", str(args.max_steps)]
+            if args.local:
+                resume_cmd.append("--local")
+            if args.no_viz:
+                resume_cmd.append("--no-viz")
+            if args.scope_file:
+                resume_cmd += ["--scope-file", args.scope_file]
+            if args.manifest:
+                resume_cmd += ["--manifest", args.manifest]
+            if args.output:
+                resume_cmd += ["--output", args.output]
+            if args.findings:
+                resume_cmd += ["--findings", args.findings]
+            if args.max_iterations:
+                resume_cmd += ["--max-iterations", str(args.max_iterations)]
+            resume_cmd_str = " ".join(shlex.quote(part) for part in resume_cmd)
+            print("▶️  Resume with:")
+            print(f"   {resume_cmd_str}")
 
     except Exception as e:
 

@@ -4,6 +4,8 @@ Unit tests for visualization components.
 Tests for VisualizationServer state management and VisualizationCollector events.
 """
 
+import asyncio
+import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
@@ -52,6 +54,20 @@ class TestVisualizationServerState:
         server.clear_agent_state()
         
         assert server._agent_state == {}
+
+    @pytest.mark.asyncio
+    async def test_pause_agent_message_sets_event(self):
+        """pause_agent message should set pause event."""
+        from tempo.visualization.server import VisualizationServer
+        
+        pause_event = asyncio.Event()
+        server = VisualizationServer(auto_open=False, pause_event=pause_event)
+        
+        await server._handle_incoming_message(json.dumps({
+            "type": "pause_agent"
+        }))
+        
+        assert pause_event.is_set() is True
 
 
 class TestVisualizationCollectorEvents:

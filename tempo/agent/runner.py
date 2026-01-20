@@ -56,6 +56,7 @@ class AgentResult:
     findings: list[dict] = field(default_factory=list)
     hypotheses: list[dict] = field(default_factory=list)
     context_id: str = ""  # For resumption
+    paused: bool = False
     error: str | None = None
 
 
@@ -79,6 +80,7 @@ class Agent:
         visualization_collector: "VisualizationCollector | None" = None,
         prompt_manager: "UserPromptManager | None" = None,
         stop_event: "asyncio.Event | None" = None,
+        pause_event: "asyncio.Event | None" = None,
     ):
         """
         Initialize the agent.
@@ -125,6 +127,7 @@ class Agent:
         self._viz_collector = visualization_collector
         self._prompt_manager = prompt_manager
         self.stop_event = stop_event
+        self.pause_event = pause_event
         
         self.summarizer = OutputSummarizer(llm, self.prompts, config)
 
@@ -295,7 +298,28 @@ class Agent:
                         findings=self._findings,
                         hypotheses=self._hypotheses,
                         context_id=self.context.current_frame.id,
+                        paused=False,
                         error="Stopped by user",
+                    )
+                
+                # Check for pause request
+                if self.pause_event and self.pause_event.is_set():
+                    self.context.add_message(
+                        MessageRole.SYSTEM,
+                        "[System] Agent paused by user request. Resume from CLI when ready."
+                    )
+                    if self._viz_collector:
+                        self._viz_collector.on_agent_paused(
+                            reason="Agent paused. Resume from CLI when ready."
+                        )
+                    return AgentResult(
+                        success=True,
+                        objective=objective,
+                        steps_taken=self._step_count,
+                        findings=self._findings,
+                        hypotheses=self._hypotheses,
+                        context_id=self.context.current_frame.id,
+                        paused=True,
                     )
 
 

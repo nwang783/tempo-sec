@@ -1,5 +1,6 @@
 """Tests for tempo/agent/runner.py."""
 
+import asyncio
 import pytest
 
 from tempo.agent.config import AgentConfig
@@ -77,6 +78,7 @@ class TestAgentResult:
         
         assert result.success is True
         assert result.steps_taken == 5
+        assert result.paused is False
     
     def test_create_failure(self):
         """Test creating a failed result."""
@@ -89,6 +91,7 @@ class TestAgentResult:
         
         assert result.success is False
         assert result.error == "Tool execution failed"
+        assert result.paused is False
 
 
 class TestAgent:
@@ -147,6 +150,23 @@ class TestAgent:
         result = await agent.run("Test", max_steps=2)
         
         assert result.steps_taken == 2
+
+    @pytest.mark.asyncio
+    async def test_run_paused(self):
+        """Test that pause_event causes a neutral pause result."""
+        config = AgentConfig()
+        llm = MockLLMClient([
+            LLMResponse(content="Step 1", tool_calls=[]),
+        ])
+        tools = ToolRegistry()
+        pause_event = asyncio.Event()
+        pause_event.set()
+        
+        agent = Agent(config, llm, tools, pause_event=pause_event)
+        result = await agent.run("Test objective", max_steps=2)
+        
+        assert result.paused is True
+        assert result.success is True
     
     def test_checkpoint(self):
         """Test checkpointing."""

@@ -235,7 +235,7 @@ class VisualizationCollector:
 
     def on_agent_start(self, objective: str, model_name: str = "") -> None:
         """Called when agent starts execution."""
-        state = {"objective": objective, "model": model_name}
+        state = {"objective": objective, "model": model_name, "status": "running"}
         # Store state on server so new connections get it
         self.server.set_agent_state(state)
         self.emit("start", state)
@@ -251,10 +251,12 @@ class VisualizationCollector:
 
     def on_agent_paused(self, reason: str = "") -> None:
         """Called when agent enters pause state (e.g., awaiting user input)."""
+        self.server.update_agent_state(status="paused", pause_reason=reason)
         self.emit("paused", {"reason": reason})
 
     def on_agent_resumed(self, prompt_preview: str = "") -> None:
         """Called when agent resumes from pause state."""
+        self.server.update_agent_state(status="running", pause_reason="")
         self.emit("resumed", {
             "prompt_preview": prompt_preview[:100] if prompt_preview else ""
         })
@@ -364,5 +366,4 @@ class VisualizationCollector:
             "next_goal": next_goal[:200] if next_goal else None,
             "evaluation": evaluation[:200] if evaluation else None,
         })
-
 
