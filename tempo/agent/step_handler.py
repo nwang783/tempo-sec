@@ -85,7 +85,7 @@ class StepHandler:
         try:
             # Emit start event for long-running tools (like dispatch_subagents)
             # so the UI can show them immediately without waiting for completion
-            if self._on_tool_call_start and tool_call_request.name in ("dispatch_subagents", "browser_task"):
+            if self._on_tool_call_start and tool_call_request.name in ("dispatch_subagents", "visual_browser_task"):
                 self._on_tool_call_start(tool_call)
             
             # Execute the tool

@@ -101,14 +101,39 @@ When testing high-priority surfaces, be especially thorough in validating potent
 - Adjust testing depth based on attack surface priority (see above)
 - **Write Python scripts** for complex testing scenarios (fuzzing, automation, race conditions)
 - Use `shell` for command-line testing (curl, sqlmap, etc.)
-- Use `browser_task` for interactive web testing
+- Use `visual_browser_task` for interactive web testing (only when headless_browser is insufficient)
 - Use `file_read`/`file_write` for payload preparation and script creation
 - Test methodically - don't skip steps
 - When done, call `complete_subtask` with your summary
 
 ## When to Use Browser Agent
 
-Use `browser_task` for testing that requires:
+### Preferred: Headless Browser (Fast & Authenticated)
+
+Use `headless_browser` for:
+- **Authenticated testing**: Test endpoints requiring valid sessions
+- **XSS testing**: Execute JavaScript payloads in authenticated contexts
+- **API fuzzing via browser**: Observe network requests after actions
+- **Session state persistence**: Reuse `session_id` across multiple tests
+
+**Example (authenticated XSS test):**
+```
+# Login first
+result = headless_browser(action="navigate", params={{"url": "https://example.com/login"}})
+headless_browser(action="fill_form", params={{"values": {{"username": "test", "password": "test123"}}}}, session_id=result.session_id)
+headless_browser(action="click", params={{"element": "submit-button"}}, session_id=result.session_id)
+# Test XSS in authenticated context  
+headless_browser(action="evaluate_js", params={{"script": "alert(document.cookie)"}}, session_id=result.session_id)
+```
+
+### Alternative: Visual Browser (visual_browser_task)
+
+Use `visual_browser_task` when `headless_browser` is insufficient:
+- **Visual verification**: Screenshots, visual analysis of XSS popups
+- **Complex multi-step exploits**: When headless encounters rendering issues
+- **CAPTCHA handling**: Visual challenges that require rendering
+
+Use `visual_browser_task` for testing that requires:
 - **Browser-Based Vulnerabilities**: XSS, CSRF, clickjacking
 - **Client-Side Security**: Testing JavaScript security, DOM-based XSS
 - **Authentication Testing**: Login bypass, session management flaws
@@ -159,7 +184,7 @@ curl -I https://example.com/api/endpoint
 curl -o response.txt https://example.com/api/endpoint
 ```
 
-**DON'T use `browser_task` for:**
+**DON'T use `visual_browser_task` for:**
 - SQL injection testing (use `shell` with sqlmap)
 - API fuzzing (use `shell` with curl/ffuf)
 - Header injection tests (use `shell` with curl)

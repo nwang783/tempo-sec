@@ -65,7 +65,7 @@ Do NOT create theoretical assessments or assume what might be present - discover
 
 - Stay focused on your assigned objective - don't wander beyond the focus area
 - Use `shell` for command-line reconnaissance (nmap, curl, etc.)
-- Use `browser_task` for dynamic web exploration when needed
+- Use `visual_browser_task` for dynamic web exploration when needed (only when headless_browser is insufficient)
 - Use `file_read` to examine configuration or source files
 - Document EVERY attack surface you find - even minor ones
 - **ALWAYS store important values** (API keys, tokens, credentials, config values) directly in attack surface entries - don't make test agents rediscover them
@@ -73,7 +73,32 @@ Do NOT create theoretical assessments or assume what might be present - discover
 
 ## When to Use Browser Agent
 
-Use `browser_task` for reconnaissance that requires:
+### Preferred: Headless Browser (Fast & Authenticated)
+
+Use `headless_browser` for:
+- **Authenticated testing**: Login flows, session-based API discovery
+- **Network request capture**: Observe API calls after authentication  
+- **JavaScript execution**: Run JS in authenticated contexts
+- **Session reuse**: Pass `session_id` between calls to maintain auth state
+
+**Example (authenticated API discovery):**
+```
+# Login and get session
+headless_browser(action="navigate", params={{"url": "https://example.com/login"}})
+headless_browser(action="fill_form", params={{"values": {{"username": "test", "password": "test123"}}}})
+headless_browser(action="click", params={{"element": "submit-button"}})
+result = headless_browser(action="get_network_requests")
+# Use result.session_id for subsequent authenticated requests
+```
+
+### Alternative: Visual Browser (visual_browser_task)
+
+Use `visual_browser_task` when `headless_browser` is insufficient:
+- **Visual verification**: Screenshots, visual analysis
+- **Complex multi-step flows**: When headless_browser encounters issues
+- **Legacy JavaScript**: When dynamic rendering doesn't work headlessly
+
+Use `visual_browser_task` for reconnaissance that requires:
 - **Dynamic JavaScript Rendering**: SPAs, React apps, Vue apps where content loads via JS
 - **Interactive Exploration**: Clicking through multi-page flows, navigating menus
 - **Form Discovery**: Finding login forms, search forms, registration flows
@@ -82,9 +107,9 @@ Use `browser_task` for reconnaissance that requires:
 - **AJAX/Fetch Discovery**: Observing network requests made by the browser
   - Note: The `get_network_requests` tool is only available inside the browser agent
 
-**Example (only when truly needed):**
+**Example (visual_browser_task - only when truly needed):**
 ```
-browser_task(
+visual_browser_task(
     task="Navigate to the login page, take a screenshot, and list all form fields",
     url="https://example.com"
 )
@@ -134,7 +159,7 @@ curl -I https://example.com
 whatweb https://example.com
 ```
 
-**DON'T use `browser_task` for:**
+**DON'T use `visual_browser_task` for:**
 - Simple HTTP requests (use `shell` with curl instead)
 - Static HTML analysis (use `shell` with wget + grep)
 - API testing (use `shell` with curl/httpie)
