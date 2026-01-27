@@ -440,7 +440,7 @@ PLAYWRIGHT_MCP_TOOLS = {
         "description": "Upload a file to a file input element",
         "parameters": {
             "element": {"type": "string", "description": "File input element reference", "required": True},
-            "paths": {"type": "array", "description": "File paths to upload", "required": True},
+            "paths": {"type": "array", "description": "File paths to upload", "required": True, "items": {"type": "string"}},
         },
     },
     "browser_handle_dialog": {
