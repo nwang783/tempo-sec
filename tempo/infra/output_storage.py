@@ -13,6 +13,7 @@ from typing import Any
 
 
 DEFAULT_OUTPUT_DIR = Path.home() / ".tempo-sec" / "truncated_outputs"
+FALLBACK_OUTPUT_DIR = Path("/tmp/tempo-sec/truncated_outputs")
 DEFAULT_TTL_HOURS = 24
 
 
@@ -51,7 +52,12 @@ class TruncatedOutputStorage:
         # Create session-specific directory
         if self.enabled:
             self.session_dir = self.output_dir / self.session_id if session_id else self.output_dir
-            self.session_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.session_dir.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                self.output_dir = FALLBACK_OUTPUT_DIR
+                self.session_dir = self.output_dir / self.session_id if session_id else self.output_dir
+                self.session_dir.mkdir(parents=True, exist_ok=True)
 
     def _output_path(self, tool_call_id: str) -> Path:
         """Get the file path for a tool call's output."""

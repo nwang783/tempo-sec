@@ -58,7 +58,9 @@ class CompleteBrowserTaskTool(Tool):
             output="\n".join(output_parts),
             metadata={
                 "browser_task_complete": True,
+                "task_complete": True,
                 "findings": summary,
+                "summary": summary,
                 "task_success": success,
                 "extracted_data": outputs or {},
                 "notes": notes,

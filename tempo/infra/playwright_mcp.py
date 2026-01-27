@@ -8,6 +8,7 @@ Uses JSON-RPC over stdin/stdout for reliable communication.
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import uuid
 from typing import Any
@@ -40,6 +41,8 @@ class PlaywrightMCPClient:
         headless: bool = True,
         browser: str = "chromium",
         timeout: int = 60000,
+        version: str | None = None,
+        read_limit: int | None = None,
     ):
         """
         Initialize the Playwright MCP client.
@@ -48,10 +51,14 @@ class PlaywrightMCPClient:
             headless: Whether to run browser in headless mode
             browser: Browser engine to use (chromium, firefox, webkit)
             timeout: Default action timeout in milliseconds
+            version: Playwright MCP npm package version (default: env TEMPO_PLAYWRIGHT_MCP_VERSION or "latest")
+            read_limit: Max bytes per JSON-RPC message line (default: env TEMPO_PLAYWRIGHT_MCP_READ_LIMIT or 10MB)
         """
         self.headless = headless
         self.browser = browser
         self.timeout = timeout
+        self.version = version or os.getenv("TEMPO_PLAYWRIGHT_MCP_VERSION", "latest")
+        self.read_limit = read_limit or int(os.getenv("TEMPO_PLAYWRIGHT_MCP_READ_LIMIT", str(10 * 1024 * 1024)))
         self._process: subprocess.Popen | None = None
         self._session_id: str = str(uuid.uuid4())[:8]
         self._server_ready = False
@@ -70,7 +77,7 @@ class PlaywrightMCPClient:
         """
         Start MCP server with stdio transport.
         
-        Spawns: npx @playwright/mcp@latest --headless --browser <browser>
+        Spawns: npx @playwright/mcp@<version> --headless --browser <browser>
         
         Raises:
             RuntimeError: If server fails to start
@@ -82,7 +89,7 @@ class PlaywrightMCPClient:
         # Build command arguments (no --port for stdio transport)
         cmd = [
             "npx",
-            "@playwright/mcp@latest",
+            f"@playwright/mcp@{self.version}",
             "--browser", self.browser,
         ]
         
@@ -98,6 +105,7 @@ class PlaywrightMCPClient:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=self.read_limit,
             )
             
             # Set up stream reader/writer
@@ -354,8 +362,7 @@ PLAYWRIGHT_MCP_TOOLS = {
     "browser_click": {
         "description": "Click on an element",
         "parameters": {
-            "element": {"type": "string", "description": "Element reference from snapshot", "required": True},
-            "ref": {"type": "string", "description": "Element reference number", "required": False},
+            "ref": {"type": "string", "description": "Element reference from snapshot (e.g., 'e59')", "required": True},
         },
     },
     "browser_type": {
@@ -374,14 +381,14 @@ PLAYWRIGHT_MCP_TOOLS = {
     "browser_select_option": {
         "description": "Select an option from a dropdown",
         "parameters": {
-            "element": {"type": "string", "description": "Select element reference", "required": True},
+            "ref": {"type": "string", "description": "Select element reference", "required": True},
             "value": {"type": "string", "description": "Option value to select", "required": True},
         },
     },
     "browser_hover": {
         "description": "Hover over an element",
         "parameters": {
-            "element": {"type": "string", "description": "Element reference", "required": True},
+            "ref": {"type": "string", "description": "Element reference", "required": True},
         },
     },
     "browser_drag": {
@@ -421,7 +428,7 @@ PLAYWRIGHT_MCP_TOOLS = {
     "browser_evaluate": {
         "description": "Execute JavaScript in the page context",
         "parameters": {
-            "script": {"type": "string", "description": "JavaScript code to execute", "required": True},
+            "function": {"type": "string", "description": "JavaScript function to execute", "required": True},
         },
     },
     
@@ -439,7 +446,7 @@ PLAYWRIGHT_MCP_TOOLS = {
     "browser_file_upload": {
         "description": "Upload a file to a file input element",
         "parameters": {
-            "element": {"type": "string", "description": "File input element reference", "required": True},
+            "ref": {"type": "string", "description": "File input element reference", "required": True},
             "paths": {"type": "array", "description": "File paths to upload", "required": True, "items": {"type": "string"}},
         },
     },

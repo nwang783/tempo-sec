@@ -148,20 +148,17 @@ class DispatchBrowserTool(Tool):
         try:
             # Run
             result = await agent.run(objective=objective)
-            
-            # Close client if it was created in create_tools and stored in subagent_def
-            if hasattr(subagent_def, "_client") and subagent_def._client:
-                await subagent_def._client.stop_server()
-                
-            # Visualization Finish
-                # Extract summary from findings
-                summary = "Browser Subagent Completed"
-                if result.findings:
-                    last_finding = result.findings[-1]
-                    summary = last_finding.get("findings", summary)
-                elif result.error:
-                    summary = f"Error: {result.error}"
 
+            # Extract summary from findings
+            summary = "Browser Subagent Completed"
+            if result.findings:
+                last_finding = result.findings[-1]
+                summary = last_finding.get("findings", summary)
+            elif result.error:
+                summary = f"Error: {result.error}"
+
+            # Visualization Finish
+            if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
                 self._visualization.on_subagent_finish(
                     subagent_id=subagent_id,
                     success=result.success,
@@ -169,7 +166,7 @@ class DispatchBrowserTool(Tool):
                     findings_count=0,
                     surfaces_count=0,
                 )
-                
+
             return ToolResult(
                 success=result.success,
                 output=f"Browser Subagent Completed:\n{summary}",
@@ -178,11 +175,8 @@ class DispatchBrowserTool(Tool):
                     "steps": result.steps_taken
                 }
             )
-            
+
         except Exception as e:
-            if hasattr(subagent_def, "_client") and subagent_def._client:
-                await subagent_def._client.stop_server()
-                
             if self._visualization and hasattr(self._visualization, 'on_subagent_finish'):
                 self._visualization.on_subagent_finish(
                     subagent_id=subagent_id,
@@ -192,6 +186,9 @@ class DispatchBrowserTool(Tool):
                     surfaces_count=0,
                 )
             return ToolResult(success=False, output=str(e), error=str(e))
+        finally:
+            if hasattr(subagent_def, "_client") and subagent_def._client:
+                await subagent_def._client.stop_server()
 
     def get_schema(self) -> ToolSchema:
         return ToolSchema(
