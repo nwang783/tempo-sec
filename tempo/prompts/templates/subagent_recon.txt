@@ -80,8 +80,9 @@ Use `browser_task` for reconnaissance that requires:
 - **Session Management**: Tasks requiring cookies or authentication state
 - **Visual Analysis**: Capturing screenshots of pages
 - **AJAX/Fetch Discovery**: Observing network requests made by the browser
+  - Note: The `get_network_requests` tool is only available inside the browser agent
 
-**Example:**
+**Example (only when truly needed):**
 ```
 browser_task(
     task="Navigate to the login page, take a screenshot, and list all form fields",
@@ -89,11 +90,56 @@ browser_task(
 )
 ```
 
-**Don't use `browser_task` for:**
+## Prefer Shell Commands (Faster & More Efficient)
+
+**IMPORTANT**: The browser agent is heavyweight. Prefer shell commands when possible:
+
+**For simple HTTP requests:**
+```bash
+# View response headers and body
+curl -i https://example.com/api/endpoint
+
+# See full request/response exchange
+curl -v https://example.com/api/users
+
+# POST request with JSON
+curl -X POST -H "Content-Type: application/json" \
+     -d '{{"key":"value"}}' https://example.com/api/data
+```
+
+**For API discovery:**
+```bash
+# Check common API paths
+curl -s -o /dev/null -w "%{{http_code}}" https://example.com/api/v1/users
+
+# Enumerate endpoints with wordlist
+ffuf -u https://example.com/api/FUZZ -w /usr/share/wordlists/common.txt
+```
+
+**For static HTML analysis:**
+```bash
+# Download and grep for forms
+curl -s https://example.com | grep -E '<form|<input|action='
+
+# Find links
+curl -s https://example.com | grep -oE 'href="[^"]+"'
+```
+
+**For technology fingerprinting:**
+```bash
+# Headers reveal stack
+curl -I https://example.com
+
+# Use whatweb for fingerprinting
+whatweb https://example.com
+```
+
+**DON'T use `browser_task` for:**
 - Simple HTTP requests (use `shell` with curl instead)
 - Static HTML analysis (use `shell` with wget + grep)
 - API testing (use `shell` with curl/httpie)
 - Fast port/service scanning (use `shell` with nmap)
+- Analyzing HTTP responses (use curl -v for verbose output)
 
 ## Workflow
 
