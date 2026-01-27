@@ -37,8 +37,8 @@ flowchart LR
     subgraph "Sub-agent (existing)"
         B["BrowserAgent"]
     end
-    R -.->|"browser_task"| B
-    T -.->|"browser_task"| B
+    R -.->|"visual_browser_task"| B
+    T -.->|"visual_browser_task"| B
 ```
 
 **Current Limitations:**
@@ -68,8 +68,8 @@ flowchart TB
     O -->|"dispatch_subagent"| RA
     O -->|"dispatch_subagent"| TA
     O -->|"dispatch_subagent"| VA
-    TA -->|"browser_task"| BA
-    RA -->|"browser_task"| BA
+    TA -->|"visual_browser_task"| BA
+    RA -->|"visual_browser_task"| BA
     
     RA -->|"update_findings"| FD
     TA -->|"update_findings"| FD

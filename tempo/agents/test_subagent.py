@@ -89,6 +89,7 @@ class TestSubagent(BaseAgentDefinition):
         from tempo.tools.shell import ShellTool
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
         from tempo.tools.browser_task_tool import BrowserTaskTool
+        from tempo.tools.headless_browser_tool import HeadlessBrowserTool
         from tempo.tools.findings_tools import (
             AddFindingTool,
             MarkSurfaceTestedTool,
@@ -111,6 +112,14 @@ class TestSubagent(BaseAgentDefinition):
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
+        
+        # Headless browser (preferred - faster, non-visual)
+        tools.register(HeadlessBrowserTool(
+            container_manager=container,
+            findings_updater=self.findings,
+        ))
+        
+        # Visual browser (fallback for complex visual tasks)
         tools.register(BrowserTaskTool(
             container_manager=container,
             visualization_collector=visualization,

@@ -9,14 +9,14 @@ from tempo.tools.browser_task_tool import BrowserTaskTool
 class TestBrowserTaskTool:
     def test_init(self):
         tool = BrowserTaskTool()
-        assert tool.name == "browser_task"
+        assert tool.name == "visual_browser_task"
 
     def test_schema_includes_required_params(self):
         """Test that schema includes all required parameters."""
         tool = BrowserTaskTool()
         schema = tool.get_schema()
 
-        assert schema.name == "browser_task"
+        assert schema.name == "visual_browser_task"
         props = schema.parameters["properties"]
         assert "task" in props
         assert "url" in props
