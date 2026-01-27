@@ -25,9 +25,9 @@ class BrowserTaskTool(Tool):
     browser-based tasks to a dedicated browser agent that runs
     autonomously and returns findings.
     
-    NOTE: Prefer headless_browser for most tasks. Use this only when:
+    NOTE: Prefer dispatch_browser for most tasks. Use this only when:
     - Visual verification is needed (screenshots, visual analysis)
-    - Complex multi-step flows fail with headless_browser
+    - Complex multi-step flows fail with non-visual automation
     - CAPTCHA or visual challenges require rendering
     
     Features:
@@ -39,9 +39,9 @@ class BrowserTaskTool(Tool):
     name = "visual_browser_task"
     description = (
         "Execute a browser-based task with VISUAL rendering. "
-        "ONLY use when headless_browser is insufficient: visual verification, screenshots, "
+        "ONLY use when dispatch_browser is insufficient: visual verification, screenshots, "
         "complex multi-step flows, or CAPTCHA handling. "
-        "Slower and more expensive than headless_browser."
+        "Slower and more expensive than non-visual automation."
     )
     category = ToolCategory.BROWSING
     

@@ -65,7 +65,8 @@ Do NOT create theoretical assessments or assume what might be present - discover
 
 - Stay focused on your assigned objective - don't wander beyond the focus area
 - Use `shell` for command-line reconnaissance (nmap, curl, etc.)
-- Use `visual_browser_task` for dynamic web exploration when needed (only when headless_browser is insufficient)
+- Use `dispatch_browser` for fast, non-visual browser automation when needed
+- Use `visual_browser_task` for dynamic web exploration when needed (only when dispatch_browser is insufficient)
 - Use `file_read` to examine configuration or source files
 - Document EVERY attack surface you find - even minor ones
 - **ALWAYS store important values** (API keys, tokens, credentials, config values) directly in attack surface entries - don't make test agents rediscover them
@@ -73,29 +74,27 @@ Do NOT create theoretical assessments or assume what might be present - discover
 
 ## When to Use Browser Agent
 
-### Preferred: Headless Browser (Fast & Authenticated)
+### Preferred: Browser Subagent (dispatch_browser)
 
-Use `headless_browser` for:
+Use `dispatch_browser` for:
 - **Authenticated testing**: Login flows, session-based API discovery
-- **Network request capture**: Observe API calls after authentication  
+- **Network request capture**: Observe API calls after authentication
 - **JavaScript execution**: Run JS in authenticated contexts
-- **Session reuse**: Pass `session_id` between calls to maintain auth state
+- **Session reuse**: Maintain auth state across multiple steps
 
 **Example (authenticated API discovery):**
 ```
-# Login and get session
-headless_browser(action="navigate", params={{"url": "https://example.com/login"}})
-headless_browser(action="fill_form", params={{"values": {{"username": "test", "password": "test123"}}}})
-headless_browser(action="click", params={{"element": "submit-button"}})
-result = headless_browser(action="get_network_requests")
-# Use result.session_id for subsequent authenticated requests
+dispatch_browser(
+    objective="Login, navigate to the dashboard, and capture API calls",
+    url="https://example.com/login"
+)
 ```
 
 ### Alternative: Visual Browser (visual_browser_task)
 
-Use `visual_browser_task` when `headless_browser` is insufficient:
+Use `visual_browser_task` when `dispatch_browser` is insufficient:
 - **Visual verification**: Screenshots, visual analysis
-- **Complex multi-step flows**: When headless_browser encounters issues
+- **Complex multi-step flows**: When non-visual automation encounters issues
 - **Legacy JavaScript**: When dynamic rendering doesn't work headlessly
 
 Use `visual_browser_task` for reconnaissance that requires:
@@ -207,4 +206,3 @@ add_attack_surface(
     notes="API key found in main.js bundle line 234. Test with: curl -H 'X-API-Key: sk_test_12345' https://example.com/api/users"
 )
 ```
-

@@ -101,36 +101,35 @@ When testing high-priority surfaces, be especially thorough in validating potent
 - Adjust testing depth based on attack surface priority (see above)
 - **Write Python scripts** for complex testing scenarios (fuzzing, automation, race conditions)
 - Use `shell` for command-line testing (curl, sqlmap, etc.)
-- Use `visual_browser_task` for interactive web testing (only when headless_browser is insufficient)
+- Use `dispatch_browser` for fast, non-visual browser automation when needed
+- Use `visual_browser_task` for interactive web testing (only when dispatch_browser is insufficient)
 - Use `file_read`/`file_write` for payload preparation and script creation
 - Test methodically - don't skip steps
 - When done, call `complete_subtask` with your summary
 
 ## When to Use Browser Agent
 
-### Preferred: Headless Browser (Fast & Authenticated)
+### Preferred: Browser Subagent (dispatch_browser)
 
-Use `headless_browser` for:
+Use `dispatch_browser` for:
 - **Authenticated testing**: Test endpoints requiring valid sessions
 - **XSS testing**: Execute JavaScript payloads in authenticated contexts
 - **API fuzzing via browser**: Observe network requests after actions
-- **Session state persistence**: Reuse `session_id` across multiple tests
+- **Session state persistence**: Reuse authenticated state across multiple steps
 
 **Example (authenticated XSS test):**
 ```
-# Login first
-result = headless_browser(action="navigate", params={{"url": "https://example.com/login"}})
-headless_browser(action="fill_form", params={{"values": {{"username": "test", "password": "test123"}}}}, session_id=result.session_id)
-headless_browser(action="click", params={{"element": "submit-button"}}, session_id=result.session_id)
-# Test XSS in authenticated context  
-headless_browser(action="evaluate_js", params={{"script": "alert(document.cookie)"}}, session_id=result.session_id)
+dispatch_browser(
+    objective="Login and execute an XSS payload in an authenticated session",
+    url="https://example.com/login"
+)
 ```
 
 ### Alternative: Visual Browser (visual_browser_task)
 
-Use `visual_browser_task` when `headless_browser` is insufficient:
+Use `visual_browser_task` when `dispatch_browser` is insufficient:
 - **Visual verification**: Screenshots, visual analysis of XSS popups
-- **Complex multi-step exploits**: When headless encounters rendering issues
+- **Complex multi-step exploits**: When non-visual automation encounters rendering issues
 - **CAPTCHA handling**: Visual challenges that require rendering
 
 Use `visual_browser_task` for testing that requires:
@@ -234,4 +233,3 @@ complete_subtask(
 - Tests that require manual verification (visual bugs, complex workflows)
 - Tools that failed or returned inconclusive results
 - Time constraints that prevented exhaustive testing
-
