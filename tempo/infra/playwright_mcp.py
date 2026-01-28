@@ -11,6 +11,7 @@ import logging
 import os
 import subprocess
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class PlaywrightMCPClient:
         timeout: int = 60000,
         version: str | None = None,
         read_limit: int | None = None,
+        user_data_dir: str | None = None,
     ):
         """
         Initialize the Playwright MCP client.
@@ -53,12 +55,17 @@ class PlaywrightMCPClient:
             timeout: Default action timeout in milliseconds
             version: Playwright MCP npm package version (default: env TEMPO_PLAYWRIGHT_MCP_VERSION or "latest")
             read_limit: Max bytes per JSON-RPC message line (default: env TEMPO_PLAYWRIGHT_MCP_READ_LIMIT or 10MB)
+            user_data_dir: Path to persistent browser profile directory for session state
+                (cookies, localStorage, sessionStorage). If None, uses --isolated mode
+                which runs with a fresh in-memory profile (no persistence between runs).
+                Use persistent profiles for authenticated testing workflows.
         """
         self.headless = headless
         self.browser = browser
         self.timeout = timeout
         self.version = version or os.getenv("TEMPO_PLAYWRIGHT_MCP_VERSION", "latest")
         self.read_limit = read_limit or int(os.getenv("TEMPO_PLAYWRIGHT_MCP_READ_LIMIT", str(10 * 1024 * 1024)))
+        self.user_data_dir = user_data_dir
         self._process: subprocess.Popen | None = None
         self._session_id: str = str(uuid.uuid4())[:8]
         self._server_ready = False
@@ -92,6 +99,12 @@ class PlaywrightMCPClient:
             f"@playwright/mcp@{self.version}",
             "--browser", self.browser,
         ]
+        
+        # Use persistent user-data-dir if provided, otherwise isolated mode
+        if self.user_data_dir:
+            cmd.extend(["--user-data-dir", self.user_data_dir])
+        else:
+            cmd.append("--isolated")  # In-memory profile (no persistence)
         
         if self.headless:
             cmd.append("--headless")
@@ -339,6 +352,132 @@ class PlaywrightMCPClient:
         """Async context manager exit - stop server."""
         await self.stop_server()
 
+    def _extract_json_from_output(self, output: str) -> str | None:
+        """Extract JSON from browser_evaluate markdown output.
+        
+        The MCP browser_evaluate tool returns markdown like:
+        ### Result
+        "[{\"name\": \"cookie\", \"value\": \"test\"}]"
+        ### Ran Playwright code
+        ...
+        
+        We need to extract just the JSON portion between ### Result and ### Ran.
+        """
+        if not output:
+            return None
+        
+        # Look for ### Result section
+        lines = output.split("\n")
+        result_value = None
+        
+        for i, line in enumerate(lines):
+            if line.strip() == "### Result":
+                # Next non-empty line should have the value
+                for j in range(i + 1, len(lines)):
+                    next_line = lines[j].strip()
+                    if next_line and not next_line.startswith("###"):
+                        result_value = next_line
+                        break
+                break
+        
+        if result_value:
+            # Remove surrounding quotes if present (JSON string is double-quoted)
+            if result_value.startswith('"') and result_value.endswith('"'):
+                try:
+                    # The value itself is a JSON-encoded string, decode it
+                    return json.loads(result_value)
+                except json.JSONDecodeError:
+                    return result_value.strip('"')
+            return result_value
+        
+        return None
+
+    async def get_cookies(self) -> list[dict[str, Any]]:
+        """Get cookies from the current page context."""
+        # Use document.cookie to get accessible cookies (non-HttpOnly)
+        script = """() => {
+            const cookies = document.cookie.split(';').map(c => {
+                const [name, ...v] = c.trim().split('=');
+                return { name, value: v.join('=') };
+            }).filter(c => c.name);
+            return JSON.stringify(cookies);
+        }"""
+        
+        result = await self.call_tool("browser_evaluate", {"function": script})
+        if result["success"] and result["output"]:
+            json_str = self._extract_json_from_output(result["output"])
+            if json_str:
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    logger.debug(f"Failed to parse cookies JSON: {json_str}")
+        return []
+
+    async def get_local_storage(self) -> dict[str, str]:
+        """Get local storage data."""
+        script = "() => JSON.stringify({...localStorage})"
+        result = await self.call_tool("browser_evaluate", {"function": script})
+        if result["success"] and result["output"]:
+            json_str = self._extract_json_from_output(result["output"])
+            if json_str:
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    logger.debug(f"Failed to parse localStorage JSON: {json_str}")
+        return {}
+
+    async def get_session_storage(self) -> dict[str, str]:
+        """Get session storage data."""
+        script = "() => JSON.stringify({...sessionStorage})"
+        result = await self.call_tool("browser_evaluate", {"function": script})
+        if result["success"] and result["output"]:
+            json_str = self._extract_json_from_output(result["output"])
+            if json_str:
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    logger.debug(f"Failed to parse sessionStorage JSON: {json_str}")
+        return {}
+        
+    async def get_url(self) -> str:
+        """Get current URL."""
+        script = "() => window.location.href"
+        result = await self.call_tool("browser_evaluate", {"function": script})
+        if result["success"] and result["output"]:
+            url = self._extract_json_from_output(result["output"])
+            if url:
+                return url.strip()
+        return ""
+
+    async def get_full_state(self) -> dict[str, Any]:
+        """
+        Get full browser state (cookies, storage, url).
+        
+        Returns:
+            Dictionary containing state capture.
+        """
+        if not self._server_ready:
+            return {}
+            
+        try:
+            # Gather state in parallel or sequence
+            # Browser ops usually serialized, so sequence is fine
+            url = await self.get_url()
+            cookies = await self.get_cookies()
+            local_storage = await self.get_local_storage()
+            session_storage = await self.get_session_storage()
+            
+            return {
+                "url": url,
+                "cookies": cookies,
+                "local_storage": local_storage,
+                "session_storage": session_storage,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Failed to capture browser state: {e}")
+            return {"error": str(e)}
+
 
 # Available Playwright MCP tools
 PLAYWRIGHT_MCP_TOOLS = {
@@ -366,8 +505,9 @@ PLAYWRIGHT_MCP_TOOLS = {
         },
     },
     "browser_type": {
-        "description": "Type text into the focused element",
+        "description": "Type text into an element",
         "parameters": {
+            "ref": {"type": "string", "description": "Element reference from snapshot", "required": True},
             "text": {"type": "string", "description": "Text to type", "required": True},
             "submit": {"type": "boolean", "description": "Press Enter after typing", "required": False},
         },

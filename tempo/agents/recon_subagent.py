@@ -90,7 +90,6 @@ class ReconSubagent(BaseAgentDefinition):
         from tempo.tools.filesystem import FileReadTool, FileWriteTool
         from tempo.tools.browser_task_tool import BrowserTaskTool
         from tempo.tools.dispatch_browser import DispatchBrowserTool
-        from tempo.tools.headless_browser_tool import HeadlessBrowserTool
         from tempo.tools.findings_tools import (
             AddAttackSurfaceTool,
             UpdateReconSummaryTool,
@@ -113,12 +112,6 @@ class ReconSubagent(BaseAgentDefinition):
         tools.register(ShellTool(container_manager=container))
         tools.register(FileReadTool(container_manager=container))
         tools.register(FileWriteTool(container_manager=container))
-        
-        # Headless browser tool (legacy fast path)
-        tools.register(HeadlessBrowserTool(
-            container_manager=container,
-            findings_updater=self.findings,
-        ))
         
         # Headless browser subagent (preferred - faster, non-visual)
         tools.register(DispatchBrowserTool(

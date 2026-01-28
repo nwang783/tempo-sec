@@ -399,6 +399,8 @@ class PromptBuilder:
         objective: str,
         starting_url: str = "",
         scope_content: str | None = None,
+        agent_email: str | None = None,
+        session_context: str = "",
     ) -> str:
         """
         Build the system prompt for a BrowserSubagent.
@@ -408,6 +410,8 @@ class PromptBuilder:
             objective: The browser task objective
             starting_url: Optional starting URL
             scope_content: Optional scope constraints
+            agent_email: Optional email address for verification flows
+            session_context: Optional context from previous browser sessions
 
         Returns:
             Formatted browser subagent system prompt
@@ -429,11 +433,30 @@ class PromptBuilder:
         if starting_url:
             starting_url_section = f"**Starting URL**: {starting_url}"
 
+        # Build email section if agent email is configured
+        email_section = ""
+        if agent_email:
+            email_section = (
+                f"\n## Email for Verification\n\n"
+                f"Your email address is: **{agent_email}**\n\n"
+                "When handling email verification flows:\n"
+                "1. Use `check_inbox` to poll for verification emails\n"
+                "2. Use `get_email_content` to extract verification links/codes\n"
+                "3. Navigate to the link or enter the code in the browser\n"
+            )
+
+        # Build session context section showing previous browser sessions
+        session_context_section = ""
+        if session_context:
+            session_context_section = f"\n{session_context}\n"
+
         return template.format(
             tools=tool_descriptions,
             objective=objective,
             starting_url_section=starting_url_section,
             scope_section=scope_section,
+            email_section=email_section,
+            session_context_section=session_context_section,
         )
 
     def build_orchestrator_prompt(
