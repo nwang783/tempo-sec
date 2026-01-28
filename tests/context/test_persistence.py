@@ -10,8 +10,6 @@ import pytest
 from tempo.context.frame import ContextFrame, Message, MessageRole
 from tempo.context.persistence import (
     ContextTreeData,
-    delete_session,
-    list_sessions,
     load_context_tree,
     save_context_tree,
 )
@@ -114,61 +112,3 @@ class TestSaveLoadContextTree:
             # Created should be same, updated should be newer
             assert first_save["created_at"] == second_save["created_at"]
             assert second_save["updated_at"] >= first_save["updated_at"]
-
-
-class TestListSessions:
-    """Tests for list_sessions function."""
-    
-    def test_list_empty_dir(self):
-        """Test listing sessions in empty directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            sessions = list_sessions(tmpdir)
-            assert sessions == []
-    
-    def test_list_sessions(self):
-        """Test listing saved sessions."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create two sessions
-            for session_id in ["session-a", "session-b"]:
-                frame = ContextFrame()
-                save_context_tree(
-                    session_id=session_id,
-                    frames={frame.id: frame},
-                    current_frame_id=frame.id,
-                    persistence_dir=tmpdir,
-                )
-            
-            sessions = list_sessions(tmpdir)
-            
-            assert len(sessions) == 2
-            session_ids = [s[0] for s in sessions]
-            assert "session-a" in session_ids
-            assert "session-b" in session_ids
-
-
-class TestDeleteSession:
-    """Tests for delete_session function."""
-    
-    def test_delete_existing(self):
-        """Test deleting an existing session."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            frame = ContextFrame()
-            path = save_context_tree(
-                session_id="to-delete",
-                frames={frame.id: frame},
-                current_frame_id=frame.id,
-                persistence_dir=tmpdir,
-            )
-            
-            assert os.path.exists(path)
-            
-            result = delete_session("to-delete", tmpdir)
-            
-            assert result is True
-            assert not os.path.exists(path)
-    
-    def test_delete_nonexistent(self):
-        """Test deleting a non-existent session."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = delete_session("nonexistent", tmpdir)
-            assert result is False

@@ -73,7 +73,7 @@ browser_click(ref="ref_2")  # Click login button
 For parent agents (Recon, Test) to delegate browser tasks to a specialized browser agent:
 
 ```python
-browser_task(
+visual_browser_task(
     task="Log in and explore the admin panel",
     url="https://example.com/login",
     scope="Only explore example.com domain",  # Optional: constraints

@@ -19,11 +19,16 @@ if TYPE_CHECKING:
 
 class BrowserTaskTool(Tool):
     """
-    Delegate a browser task to a specialized browser agent.
+    Delegate a browser task to a specialized visual browser agent.
     
     This tool allows parent agents (Recon, TestCycle) to offload
     browser-based tasks to a dedicated browser agent that runs
     autonomously and returns findings.
+    
+    NOTE: Prefer dispatch_browser for most tasks. Use this only when:
+    - Visual verification is needed (screenshots, visual analysis)
+    - Complex multi-step flows fail with non-visual automation
+    - CAPTCHA or visual challenges require rendering
     
     Features:
     - State persistence (load/save browser sessions)
@@ -31,12 +36,12 @@ class BrowserTaskTool(Tool):
     - Visualization event propagation (UI visibility)
     """
     
-    name = "browser_task"
+    name = "visual_browser_task"
     description = (
-        "Execute a browser-based task using a specialized browser agent. "
-        "Use this for web browsing, form filling, clicking, and page analysis. "
-        "Supports state persistence (reuse logged-in sessions) and scope constraints. "
-        "The browser agent will complete the task and return its findings."
+        "Execute a browser-based task with VISUAL rendering. "
+        "ONLY use when dispatch_browser is insufficient: visual verification, screenshots, "
+        "complex multi-step flows, or CAPTCHA handling. "
+        "Slower and more expensive than non-visual automation."
     )
     category = ToolCategory.BROWSING
     

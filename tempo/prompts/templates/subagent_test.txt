@@ -101,25 +101,95 @@ When testing high-priority surfaces, be especially thorough in validating potent
 - Adjust testing depth based on attack surface priority (see above)
 - **Write Python scripts** for complex testing scenarios (fuzzing, automation, race conditions)
 - Use `shell` for command-line testing (curl, sqlmap, etc.)
-- Use `browser_task` for interactive web testing
+- Use `dispatch_browser` for fast, non-visual browser automation when needed
+- Use `visual_browser_task` for interactive web testing (only when dispatch_browser is insufficient)
 - Use `file_read`/`file_write` for payload preparation and script creation
 - Test methodically - don't skip steps
 - When done, call `complete_subtask` with your summary
 
 ## When to Use Browser Agent
 
-Use `browser_task` for testing that requires:
+### Preferred: Browser Subagent (dispatch_browser)
+
+Use `dispatch_browser` for:
+- **Authenticated testing**: Test endpoints requiring valid sessions
+- **XSS testing**: Execute JavaScript payloads in authenticated contexts
+- **API fuzzing via browser**: Observe network requests after actions
+- **Session state persistence**: Reuse authenticated state across multiple steps
+
+**Example (authenticated XSS test):**
+```
+dispatch_browser(
+    objective="Login and execute an XSS payload in an authenticated session",
+    url="https://example.com/login"
+)
+```
+
+### Alternative: Visual Browser (visual_browser_task)
+
+Use `visual_browser_task` when `dispatch_browser` is insufficient:
+- **Visual verification**: Screenshots, visual analysis of XSS popups
+- **Complex multi-step exploits**: When non-visual automation encounters rendering issues
+- **CAPTCHA handling**: Visual challenges that require rendering
+
+Use `visual_browser_task` for testing that requires:
 - **Browser-Based Vulnerabilities**: XSS, CSRF, clickjacking
 - **Client-Side Security**: Testing JavaScript security, DOM-based XSS
 - **Authentication Testing**: Login bypass, session management flaws
 - **Multi-Step Exploitation**: Attacks requiring multiple page interactions
 - **Automated Attack Chains**: Login → Navigate → Exploit → Extract data
+  - Note: The `get_network_requests` tool is only available inside the browser agent
 
-**Don't use `browser_task` for:**
+## Prefer Shell Commands for Testing (Faster & More Efficient)
+
+**IMPORTANT**: Shell commands are faster and give you more control. Use them by default:
+
+**For SQL Injection testing:**
+```bash
+# Quick manual test
+curl "https://example.com/search?q=test'+OR+1=1--"
+
+# Use sqlmap for thorough testing
+sqlmap -u "https://example.com/search?q=test" --batch --level=3
+```
+
+**For API fuzzing:**
+```bash
+# Fuzz parameters
+ffuf -u https://example.com/api/users?FUZZ=test -w params.txt
+
+# Test authentication
+curl -H "Authorization: Bearer invalid" https://example.com/api/protected
+```
+
+**For header injection:**
+```bash
+# Test CRLF injection
+curl -v "https://example.com/redirect?url=http://evil%0d%0aSet-Cookie:+hack"
+
+# Test host header attacks
+curl -H "Host: evil.com" https://example.com
+```
+
+**For analyzing responses:**
+```bash
+# Verbose output shows full request/response
+curl -v https://example.com/api/endpoint
+
+# Just headers
+curl -I https://example.com/api/endpoint
+
+# Save response for analysis
+curl -o response.txt https://example.com/api/endpoint
+```
+
+**DON'T use `visual_browser_task` for:**
 - SQL injection testing (use `shell` with sqlmap)
 - API fuzzing (use `shell` with curl/ffuf)
 - Header injection tests (use `shell` with curl)
 - Timing-based attacks requiring precise control
+- Viewing HTTP responses (use curl -v or curl -i)
+- Capturing request/response data (use curl, not browser)
 
 ## Writing Test Scripts
 
@@ -163,4 +233,3 @@ complete_subtask(
 - Tests that require manual verification (visual bugs, complex workflows)
 - Tools that failed or returned inconclusive results
 - Time constraints that prevented exhaustive testing
-

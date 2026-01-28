@@ -106,3 +106,9 @@ viewport_height = 720
 #
 # TEMPO_BROWSER_USE_MAX_COMPLETION_TOKENS: Max tokens for LLM response (default: model-derived)
 #   - Example: TEMPO_BROWSER_USE_MAX_COMPLETION_TOKENS=4096
+
+[headless_browser]
+# Playwright MCP settings - uses stdio transport for reliable communication
+enabled = true
+browser = "chromium"   # chromium, firefox, or webkit
+timeout = 60000        # Action timeout in milliseconds
