@@ -57,6 +57,8 @@ The subagent(s) will:
         visualization: "VisualizationObserver | None" = None,
         max_concurrent: int = 3,
         config: "Any" = None,
+        stop_event: "asyncio.Event | None" = None,
+        pause_event: "asyncio.Event | None" = None,
     ):
         """
         Initialize the dispatch subagent tool.
@@ -67,12 +69,16 @@ The subagent(s) will:
             visualization: Optional visualization observer for UI events
             max_concurrent: Maximum concurrent subagent dispatches (default: 3)
             config: Optional AgentConfig for browser settings and other configuration
+            stop_event: Optional event to signal stop to subagents
+            pause_event: Optional event to signal pause to subagents
         """
         self._findings = findings
         self._container_manager = container_manager
         self._visualization = visualization
         self._max_concurrent = max_concurrent
         self._config = config
+        self._stop_event = stop_event
+        self._pause_event = pause_event
 
     def _save_limitations_file(
         self,
@@ -205,12 +211,14 @@ The subagent(s) will:
         if self._visualization and hasattr(self._visualization, 'for_subagent'):
             subagent_viz = self._visualization.for_subagent(subagent_id)
 
-        # Create tools for subagent (pass visualization and config)
+        # Create tools for subagent (pass visualization, config, and stop/pause events)
         subagent_tools = subagent_def.create_tools(
             context=subagent_context,
             container=self._container_manager,
             visualization=subagent_viz,
             config=self._config,
+            stop_event=self._stop_event,
+            pause_event=self._pause_event,
         )
 
         # Create LLM client with subagent's model
@@ -253,6 +261,8 @@ The subagent(s) will:
             tools=subagent_tools,
             context=subagent_context,
             visualization_collector=subagent_viz,
+            stop_event=self._stop_event,
+            pause_event=self._pause_event,
         )
 
         # Build objective

@@ -4,6 +4,8 @@ Unit tests for visualization components.
 Tests for VisualizationServer state management and VisualizationCollector events.
 """
 
+import asyncio
+import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
@@ -53,6 +55,52 @@ class TestVisualizationServerState:
         
         assert server._agent_state == {}
 
+    @pytest.mark.asyncio
+    async def test_pause_agent_message_sets_event(self):
+        """pause_agent message should set pause event."""
+        from tempo.visualization.server import VisualizationServer
+        
+        pause_event = asyncio.Event()
+        server = VisualizationServer(auto_open=False, pause_event=pause_event)
+        
+        await server._handle_incoming_message(json.dumps({
+            "type": "pause_agent"
+        }))
+        
+        assert pause_event.is_set() is True
+
+
+class TestVisualizationServerEventHistory:
+    """Tests for VisualizationServer event history and replay."""
+    
+    @pytest.mark.asyncio
+    async def test_broadcast_buffers_events(self):
+        """Broadcast events should be stored in _event_history."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        server.active_connections = [AsyncMock()]
+        
+        message = json.dumps({"type": "test", "data": "foo"})
+        await server.broadcast(message)
+        
+        assert len(server._event_history) == 1
+        assert server._event_history[0] == message
+        
+    @pytest.mark.asyncio
+    async def test_clear_agent_state_clears_history(self):
+        """Clearing agent state should also clear event history."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        server._event_history = ["event1", "event2"]
+        
+        server.clear_agent_state()
+        
+        assert server._event_history == []
+
+
+
 
 class TestVisualizationCollectorEvents:
     """Tests for VisualizationCollector event emission."""
@@ -70,7 +118,8 @@ class TestVisualizationCollectorEvents:
         
         mock_server.set_agent_state.assert_called_once_with({
             "objective": "Test objective",
-            "model": "anthropic/claude-sonnet"
+            "model": "anthropic/claude-sonnet",
+            "status": "running",
         })
     
     def test_on_agent_start_emits_event(self):
@@ -85,7 +134,8 @@ class TestVisualizationCollectorEvents:
             
             mock_emit.assert_called_once_with("start", {
                 "objective": "Test objective",
-                "model": "test-model"
+                "model": "test-model",
+                "status": "running",
             })
     
     @pytest.mark.asyncio

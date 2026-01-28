@@ -45,6 +45,7 @@ function init() {
     // Initialize event handlers
     events.initPromptInput();
     events.initStopButton();
+    events.initPauseButton();
     events.initContextRefresh();
 
     // Initialize agent tree

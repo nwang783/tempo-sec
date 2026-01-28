@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import webbrowser
 from pathlib import Path
 from typing import List, Optional, TYPE_CHECKING
@@ -41,6 +42,7 @@ class VisualizationServer:
         auto_open: bool = True,
         prompt_manager: "UserPromptManager | None" = None,
         stop_event: "asyncio.Event | None" = None,
+        pause_event: "asyncio.Event | None" = None,
         persistence_dir: str = "./contexts",
     ):
         self.host = host
@@ -48,6 +50,7 @@ class VisualizationServer:
         self.auto_open = auto_open
         self.prompt_manager = prompt_manager
         self.stop_event = stop_event
+        self.pause_event = pause_event
         self.persistence_dir = persistence_dir
         self.app = FastAPI(title="Tempo Sec Visualization")
         self.active_connections: List[WebSocket] = []
@@ -66,6 +69,10 @@ class VisualizationServer:
         # Subagent tracking for orchestrator mode
         self._subagent_contexts: dict[str, "ContextStore"] = {}
         self._subagent_registry: list[dict] = []
+        
+        # Event history for replaying to new connections (capped to prevent memory leaks)
+        self._event_history: List[str] = []
+        self._max_event_history = 1000  # Maximum events to buffer
         
         # Determine UI directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -90,6 +97,7 @@ class VisualizationServer:
     def clear_agent_state(self) -> None:
         """Clear the agent state (call when agent finishes)."""
         self._agent_state = {}
+        self._event_history = []
     
     def set_session_id(self, session_id: str) -> None:
         """Set the current session ID for context loading."""
@@ -99,6 +107,63 @@ class VisualizationServer:
         """Set the live context store for real-time context viewing."""
         self._context_store = context_store
         self._current_session_id = context_store.session_id
+    
+    def populate_events_from_context(self, context_store: "ContextStore") -> None:
+        """
+        Reconstruct event history from a context store.
+        
+        This is used when resuming a session to populate the graph view
+        with historical tool calls from the context.
+        
+        Args:
+            context_store: The context store to extract events from
+        """
+        import json
+        from datetime import datetime
+        
+        # Characters shown in graph view events (for output truncation)
+        OUTPUT_PREVIEW_CHARS = 500
+        
+        try:
+            # Clear any existing history
+            self._event_history = []
+            
+            # Walk the frame path and extract tool calls
+            step_number = 0
+            for frame in context_store._get_frame_path():
+                for tc in frame.tool_calls:
+                    try:
+                        step_number += 1
+                        
+                        # Use output_for_context (summary if available, else raw_output)
+                        output = tc.output_for_context or ""
+                        truncated_output = (
+                            output[:OUTPUT_PREVIEW_CHARS] + "..."
+                            if len(output) > OUTPUT_PREVIEW_CHARS
+                            else output
+                        )
+                        
+                        # Create a tool_call event for the graph
+                        event = {
+                            "type": "tool_call",
+                            "data": {
+                                "tool_name": tc.tool_name,
+                                "tool_call_id": tc.id,
+                                "input": tc.input,
+                                "output": truncated_output,
+                                "success": tc.success,
+                                "step_number": step_number,
+                                "timestamp": tc.timestamp.isoformat() if tc.timestamp else datetime.now().isoformat(),
+                            },
+                            "timestamp": tc.timestamp.isoformat() if tc.timestamp else datetime.now().isoformat(),
+                        }
+                        self._event_history.append(json.dumps(event))
+                    except Exception as e:
+                        logger.warning(f"Failed to create event for tool call {getattr(tc, 'id', 'unknown')}: {e}")
+                        continue
+        except Exception as e:
+            logger.error(f"Failed to populate events from context: {e}")
+            self._event_history = []  # Ensure clean state on failure
 
     def register_subagent(
         self,
@@ -151,6 +216,11 @@ class VisualizationServer:
                         "type": "start",
                         "data": self._agent_state
                     }))
+                    
+                    # Replay event history
+                    for event_json in self._event_history:
+                        await websocket.send_text(event_json)
+                        
                 except Exception as e:
                     logger.debug(f"Failed to send initial state to new connection: {e}")
             
@@ -232,7 +302,11 @@ class VisualizationServer:
         @self.app.get("/api/context/{session_id}")
         async def get_context_by_id(session_id: str):
             """Load a specific session's context data."""
-            # Validate path stays within persistence directory
+            # Security: Validate session_id format before path construction to prevent traversal
+            if not re.match(r'^[a-zA-Z0-9_-]+$', session_id):
+                raise HTTPException(status_code=400, detail="Invalid session ID format")
+            
+            # Validate path stays within persistence directory (defense in depth)
             try:
                 context_path = (Path(self.persistence_dir) / f"{session_id}.json").resolve()
                 if not context_path.is_relative_to(Path(self.persistence_dir).resolve()):
@@ -282,6 +356,12 @@ class VisualizationServer:
                 await connection.send_text(message)
             except Exception:
                 disconnected.append(connection)
+        
+        # Buffer event for future connections (with size limit to prevent memory leaks)
+        self._event_history.append(message)
+        if len(self._event_history) > self._max_event_history:
+            # Keep most recent events
+            self._event_history = self._event_history[-self._max_event_history:]
                 
         for conn in disconnected:
             if conn in self.active_connections:
@@ -313,6 +393,11 @@ class VisualizationServer:
                         "success": False,
                         "error": "Stopped by user"
                     }))
+            
+            elif msg_type == "pause_agent":
+                logger.warning("Received pause_agent signal from UI")
+                if self.pause_event:
+                    self.pause_event.set()
             
             elif msg_type == "ping":
                 pass  # Keep-alive, no action needed
@@ -375,4 +460,3 @@ class VisualizationServer:
             except asyncio.CancelledError:
                 pass
     
-

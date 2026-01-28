@@ -100,6 +100,8 @@ class TestSubagent(BaseAgentDefinition):
         # Extract visualization collector and config from kwargs
         visualization = kwargs.get("visualization")
         config = kwargs.get("config")
+        stop_event = kwargs.get("stop_event")
+        pause_event = kwargs.get("pause_event")
         
         # Get headless setting from config (default: True)
         headless = True
@@ -118,6 +120,8 @@ class TestSubagent(BaseAgentDefinition):
             container_manager=container,
             visualization=visualization,
             config=config,
+            stop_event=stop_event,
+            pause_event=pause_event,
         ))
         
         # Visual browser (fallback for complex visual tasks)

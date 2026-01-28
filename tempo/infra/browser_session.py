@@ -39,6 +39,8 @@ class BrowserSessionManager:
             tempfile.gettempdir(),
             f"tempo-browser-{self._run_id}"
         )
+        # Create directory with restrictive permissions (browser data may contain auth tokens)
+        os.makedirs(self._user_data_dir, mode=0o700, exist_ok=True)
         self._headless = False
         self._started_at: datetime | None = None
         
@@ -50,8 +52,10 @@ class BrowserSessionManager:
         return cls._instance
     
     @classmethod
-    def reset_instance(cls) -> None:
-        """Reset the singleton (for testing)."""
+    async def reset_instance(cls) -> None:
+        """Reset the singleton (for testing). Properly closes existing session."""
+        if cls._instance is not None:
+            await cls._instance.close()
         cls._instance = None
         
     def configure(self, headless: bool = False) -> None:

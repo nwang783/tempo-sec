@@ -187,6 +187,8 @@ class OrchestratorAgent(BaseAgentDefinition):
         # Extract visualization collector and config from kwargs (passed from run.py)
         visualization = kwargs.get("visualization")
         config = kwargs.get("config")
+        stop_event = kwargs.get("stop_event")
+        pause_event = kwargs.get("pause_event")
         max_concurrent = getattr(config, "max_concurrent_subagents", 3) if config else 3
 
         # Subagent dispatch - combined single/parallel dispatch tool
@@ -196,6 +198,8 @@ class OrchestratorAgent(BaseAgentDefinition):
             visualization=visualization,
             max_concurrent=max_concurrent,
             config=config,
+            stop_event=stop_event,
+            pause_event=pause_event,
         ))
 
         # Findings management tools (read-only - subagents handle writes)

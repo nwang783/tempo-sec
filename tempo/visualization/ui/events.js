@@ -135,6 +135,10 @@ function handleStart(data) {
         state.agentHierarchy.orchestrator.model = data.model;
         agentTree.render();
     }
+
+    if (data.status === "paused") {
+        handlePaused({ reason: data.pause_reason });
+    }
 }
 
 /**
@@ -242,7 +246,13 @@ function handlePaused(data) {
 
     const promptStatusEl = document.getElementById("prompt-status");
     if (promptStatusEl) {
-        promptStatusEl.textContent = data.reason || "Agent paused. Send a prompt to continue.";
+        promptStatusEl.textContent = data.reason || "Agent paused.";
+    }
+
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) {
+        pauseBtn.textContent = "PAUSED";
+        pauseBtn.disabled = true;
     }
 }
 
@@ -259,6 +269,12 @@ function handleResumed() {
     const promptStatusEl = document.getElementById("prompt-status");
     if (promptStatusEl) {
         promptStatusEl.textContent = "";
+    }
+
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) {
+        pauseBtn.textContent = "PAUSE";
+        pauseBtn.disabled = false;
     }
 }
 
@@ -282,6 +298,12 @@ function handleFinish(data) {
     if (statusEl) {
         statusEl.textContent = data.success ? "FINISHED" : "FAILED";
         statusEl.className = "status " + (data.success ? "connected" : "disconnected");
+    }
+
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) {
+        pauseBtn.textContent = "PAUSE";
+        pauseBtn.disabled = true;
     }
 }
 
@@ -441,6 +463,30 @@ export function initStopButton() {
         stopBtn.textContent = "STOPPING...";
         stopBtn.disabled = true;
         if (statusEl) statusEl.textContent = "STOPPING";
+    });
+}
+
+// ============================================================================
+// Pause Button Handling
+// ============================================================================
+
+/**
+ * Initialize pause button handling.
+ */
+export function initPauseButton() {
+    const pauseBtn = document.getElementById('pause-btn');
+    const statusEl = document.getElementById('status');
+
+    if (!pauseBtn) return;
+
+    pauseBtn.addEventListener('click', () => {
+        if (!ws.isConnected()) return;
+
+        ws.sendPauseSignal();
+
+        pauseBtn.textContent = "PAUSING...";
+        pauseBtn.disabled = true;
+        if (statusEl) statusEl.textContent = "PAUSING";
     });
 }
 
