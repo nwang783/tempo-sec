@@ -69,5 +69,29 @@ async def test_subagent_complete_tool():
     result = await tool.execute(summary="Done", success=True)
     
     assert result.success
-    assert result.metadata["task_complete"]
     assert result.metadata["summary"] == "Done"
+
+@pytest.mark.asyncio
+async def test_subagent_complete_tool_captures_state():
+    """Verify complete tool captures browser state from client."""
+    from tempo.tools.complete_browser_task import CompleteBrowserTaskTool
+    from tempo.infra.playwright_mcp import PlaywrightMCPClient
+    
+    # Mock client with get_full_state
+    mock_client = AsyncMock(spec=PlaywrightMCPClient)
+    mock_state = {
+        "url": "https://example.com",
+        "cookies": [{"name": "test", "value": "123"}],
+        "local_storage": {"key": "value"},
+        "session_storage": {},
+        "timestamp": "2025-01-01T00:00:00Z"
+    }
+    mock_client.get_full_state.return_value = mock_state
+    
+    tool = CompleteBrowserTaskTool(client=mock_client)
+    result = await tool.execute(summary="Done")
+    
+    assert result.success
+    assert result.metadata["browser_state"] == mock_state
+    assert "[Browser state (cookies/storage) captured in metadata]" in result.output
+

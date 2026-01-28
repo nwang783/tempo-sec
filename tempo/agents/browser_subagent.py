@@ -39,7 +39,7 @@ class PlaywrightToolWrapper(Tool):
         tool_func: Any,
         schema: dict,
         output_store: "Any" = None,
-        summary_chars: int = 2000,
+        summary_chars: int = 50000,
     ):
         self._name = name
         self._description = description
@@ -192,14 +192,20 @@ class BrowserSubagent(BaseAgentDefinition):
         objective: str,
         starting_url: str = "",
         session_id: str = "",
+        agent_email: str | None = None,
+        mcp_client: "Any" = None,
+        session_context: str = "",
         **kwargs: Any,
     ):
         self.objective = objective
         self.starting_url = starting_url
         self.session_id = session_id
+        self.agent_email = agent_email
+        self.session_context = session_context  # Previous session history
         
-        # We will hold the client reference to ensure it's closed
-        self._client = None
+        # Use shared client if provided, otherwise create new
+        self._client = mcp_client
+        self._owns_client = mcp_client is None  # Only stop if we created it
         
     @property
     def name(self) -> str:
@@ -224,17 +230,30 @@ class BrowserSubagent(BaseAgentDefinition):
             SearchStoredOutputTool,
             GetStoredOutputRangeTool,
         )
+        from tempo.tools.browser_state_tools import GetBrowserStateTool
+        from tempo.tools.email_tools import CheckInboxTool, GetEmailContentTool
+        import os
         
         tools = ToolRegistry()
         
-        # Initialize client (headless by default, or config/kwargs)
-        # We'll start it lazily or here? 
-        # Better to start it when first tool is called, or ideally the agent runner context manages start/stop?
-        # For now, we'll let the wrappers trigger start if needed, but we need a shared client instance.
+        # Use shared client if provided, otherwise create new one
+        if self._client is None:
+            # Determine headless mode from config
+            headless = True
+            config = kwargs.get("config")
+            
+            if config:
+                if hasattr(config, "browser_headless"):
+                    headless = config.browser_headless
+                elif hasattr(config, "headless"):
+                    headless = config["headless"]
+                elif isinstance(config, dict) and "browser" in config:
+                    headless = config.get("browser", {}).get("headless", True)
+                
+            from tempo.infra.playwright_mcp import PlaywrightMCPClient
+            self._client = PlaywrightMCPClient(headless=headless)
+            self._owns_client = True
         
-        self._client = PlaywrightMCPClient(headless=True)
-        # We should start it immediately or lazily. 
-        # Since tools are synchronous creation but async execution, we can't await start_server here.
         output_store = OutputStore.default()
         
         async def call_mcp_tool(name: str, params: dict) -> dict:
@@ -253,8 +272,11 @@ class BrowserSubagent(BaseAgentDefinition):
             )
             tools.register(tool)
             
-        # Register completion tool
-        tools.register(CompleteBrowserTaskTool())
+        # Register completion tool with client for state capture
+        tools.register(CompleteBrowserTaskTool(client=self._client))
+        
+        # Register state retrieval tool
+        tools.register(GetBrowserStateTool(client=self._client))
         
         # Register summarization tool
         tools.register(SummarizePreviousOutputTool(context_store=context))
@@ -262,6 +284,24 @@ class BrowserSubagent(BaseAgentDefinition):
         # Register stored output tools
         tools.register(SearchStoredOutputTool(output_store))
         tools.register(GetStoredOutputRangeTool(output_store))
+        
+        # Register email verification tools for handling signup flows
+        # Credentials come from kwargs (passed by dispatch_browser) or env
+        agent_email = kwargs.get("agent_email") or self.agent_email or os.getenv("TEMPO_AGENT_EMAIL")
+        imap_host = kwargs.get("imap_host") or os.getenv("TEMPO_IMAP_HOST", "imap.gmail.com")
+        imap_password = kwargs.get("imap_password") or os.getenv("TEMPO_IMAP_PASSWORD")
+        
+        if agent_email and imap_password:
+            tools.register(CheckInboxTool(
+                imap_host=imap_host,
+                agent_email=agent_email,
+                imap_password=imap_password,
+            ))
+            tools.register(GetEmailContentTool(
+                imap_host=imap_host,
+                agent_email=agent_email,
+                imap_password=imap_password,
+            ))
         
         return tools
         
@@ -279,6 +319,8 @@ class BrowserSubagent(BaseAgentDefinition):
             objective=self.objective,
             starting_url=self.starting_url,
             scope_content=scope_description,
+            agent_email=self.agent_email,
+            session_context=self.session_context,  # Previous session history
         )
 
     def build_objective(self, target: str | None = None, **kwargs: Any) -> str:

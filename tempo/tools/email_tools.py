@@ -17,12 +17,12 @@ from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
 
 
 class CheckInboxTool(Tool):
-    """Check email inbox for messages matching criteria."""
+    """Check email inbox and return recent messages."""
     
     name = "check_inbox"
     description = (
-        "Check email inbox for messages matching subject pattern or sender. "
-        "Polls the inbox with retry until a matching email is found or timeout occurs."
+        "Return the most recent emails from the inbox with subject, sender, and timestamp. "
+        "Optionally filter by subject pattern. Use this to find verification emails."
     )
     category = ToolCategory.NETWORK
     
@@ -49,24 +49,19 @@ class CheckInboxTool(Tool):
     
     async def execute(
         self,
+        max_emails: int = 20,
         subject_pattern: str = "",
-        from_address: str = "",
-        timeout_seconds: int = 60,
-        poll_interval: int = 10,
-        purpose: str = "",
+        **kwargs,
     ) -> ToolResult:
         """
-        Check inbox for emails matching criteria.
+        Get recent emails from inbox.
         
         Args:
-            subject_pattern: Regex pattern to match in subject (optional)
-            from_address: Sender address to filter by (optional)
-            timeout_seconds: Max time to wait for matching email
-            poll_interval: Seconds between poll attempts
-            purpose: Why this tool is being called
+            max_emails: Maximum number of emails to return (default: 20)
+            subject_pattern: Optional regex pattern to filter subjects
             
         Returns:
-            ToolResult with list of matching emails
+            ToolResult with list of recent emails
         """
         if not self.imap_password:
             return ToolResult(
@@ -94,75 +89,64 @@ class CheckInboxTool(Tool):
                     error=f"Invalid subject pattern: {e}",
                 )
         
-        start_time = asyncio.get_event_loop().time()
-        matching_emails: list[dict[str, Any]] = []
-        
-        while True:
-            try:
-                # Connect to IMAP server
-                emails_found = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: self._fetch_emails(subject_regex, from_address),
-                )
-                
-                if emails_found:
-                    matching_emails = emails_found
-                    break
-                
-                # Check timeout
-                elapsed = asyncio.get_event_loop().time() - start_time
-                if elapsed >= timeout_seconds:
-                    return ToolResult(
-                        success=True,
-                        output="No matching emails found within timeout period.",
-                        metadata={"count": 0, "timeout": True},
-                    )
-                
-                # Wait before next poll
-                await asyncio.sleep(poll_interval)
-                
-            except Exception as e:
+        try:
+            # Connect to IMAP server and fetch emails
+            emails_found = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self._fetch_recent_emails(max_emails, subject_regex),
+            )
+            
+            if not emails_found:
                 return ToolResult(
-                    success=False,
-                    output="",
-                    error=f"IMAP error: {str(e)}",
+                    success=True,
+                    output="No emails found in inbox.",
+                    metadata={"count": 0, "emails": []},
                 )
-        
-        # Format output
-        lines = [f"Found {len(matching_emails)} matching email(s):\n"]
-        for em in matching_emails:
-            lines.append(f"- ID: {em['id']}")
-            lines.append(f"  Subject: {em['subject']}")
-            lines.append(f"  From: {em['from']}")
-            lines.append(f"  Date: {em['date']}")
-            lines.append("")
-        
-        return ToolResult(
-            success=True,
-            output="\n".join(lines),
-            metadata={"count": len(matching_emails), "emails": matching_emails},
-        )
+            
+            # Format output
+            lines = [f"Found {len(emails_found)} email(s):\n"]
+            for em in emails_found:
+                lines.append(f"- ID: {em['id']}")
+                lines.append(f"  Subject: {em['subject']}")
+                lines.append(f"  From: {em['from']}")
+                lines.append(f"  Date: {em['date']}")
+                lines.append("")
+            
+            return ToolResult(
+                success=True,
+                output="\n".join(lines),
+                metadata={"count": len(emails_found), "emails": emails_found},
+            )
+                
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"IMAP error: {str(e)}",
+            )
     
-    def _fetch_emails(
+    def _fetch_recent_emails(
         self,
+        max_emails: int,
         subject_regex: re.Pattern | None,
-        from_address: str,
     ) -> list[dict[str, Any]]:
-        """Fetch emails matching criteria (runs in thread pool)."""
+        """Fetch recent emails (runs in thread pool)."""
         mail = imaplib.IMAP4_SSL(self.imap_host, self.imap_port)
         try:
             mail.login(self.agent_email, self.imap_password)
             mail.select("INBOX")
             
-            # Search for recent emails
-            search_criteria = "UNSEEN"
-            if from_address:
-                search_criteria = f'(UNSEEN FROM "{from_address}")'
+            # Search for ALL emails, get the most recent ones
+            _, message_ids = mail.search(None, "ALL")
             
-            _, message_ids = mail.search(None, search_criteria)
+            all_ids = message_ids[0].split()
+            # Get the most recent emails (last N)
+            recent_ids = all_ids[-max_emails:] if len(all_ids) > max_emails else all_ids
+            # Reverse to show newest first
+            recent_ids = list(reversed(recent_ids))
             
-            matching = []
-            for msg_id in message_ids[0].split():
+            emails = []
+            for msg_id in recent_ids:
                 _, msg_data = mail.fetch(msg_id, "(RFC822.HEADER)")
                 
                 if not msg_data or not msg_data[0]:
@@ -184,18 +168,18 @@ class CheckInboxTool(Tool):
                         for part, enc in decoded_parts
                     )
                 
-                # Check subject pattern
+                # Check subject pattern if provided
                 if subject_regex and not subject_regex.search(subject):
                     continue
                 
-                matching.append({
+                emails.append({
                     "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
                     "subject": subject,
                     "from": msg.get("From", ""),
                     "date": msg.get("Date", ""),
                 })
             
-            return matching
+            return emails
         finally:
             try:
                 mail.close()
@@ -211,23 +195,14 @@ class CheckInboxTool(Tool):
             parameters={
                 "type": "object",
                 "properties": {
+                    "max_emails": {
+                        "type": "integer",
+                        "description": "Maximum number of recent emails to return (default: 20)",
+                        "default": 20,
+                    },
                     "subject_pattern": {
                         "type": "string",
-                        "description": "Regex pattern to match in email subject (optional)",
-                    },
-                    "from_address": {
-                        "type": "string",
-                        "description": "Sender email address to filter by (optional)",
-                    },
-                    "timeout_seconds": {
-                        "type": "integer",
-                        "description": "Maximum seconds to wait for matching email (default: 60)",
-                        "default": 60,
-                    },
-                    "poll_interval": {
-                        "type": "integer",
-                        "description": "Seconds between poll attempts (default: 10)",
-                        "default": 10,
+                        "description": "Optional regex pattern to filter by subject",
                     },
                 },
                 "required": [],

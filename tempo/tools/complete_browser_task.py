@@ -4,9 +4,12 @@ Complete Browser Task Tool.
 Tool for the browser subagent to sign off its task and report back to the parent agent.
 """
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from tempo.tools.base import Tool, ToolCategory, ToolResult, ToolSchema
+
+if TYPE_CHECKING:
+    from tempo.infra.playwright_mcp import PlaywrightMCPClient
 
 
 class CompleteBrowserTaskTool(Tool):
@@ -22,6 +25,15 @@ class CompleteBrowserTaskTool(Tool):
         "Use this when you have achieved the goal or cannot proceed further."
     )
     category = ToolCategory.META
+    
+    def __init__(self, client: "PlaywrightMCPClient | None" = None):
+        """
+        Initialize the tool.
+        
+        Args:
+            client: Optional PlaywrightMCPClient to capture state from.
+        """
+        self.client = client
     
     async def execute(
         self,
@@ -46,6 +58,20 @@ class CompleteBrowserTaskTool(Tool):
         """
         output_parts = [f"Browser task {'completed' if success else 'failed'}: {summary}"]
         
+        browser_state = None
+        if self.client:
+            try:
+                # Attempt to capture state with a short timeout
+                # Note: get_full_state creates a new asyncio timestamp, so it's fast
+                # providing the underlying browser_evaluate calls don't hang.
+                # Since we are completing, spending an extra second to capture state is worth it.
+                browser_state = await self.client.get_full_state()
+                if "error" not in browser_state:
+                    output_parts.append("\n[Browser state (cookies/storage) captured in metadata]")
+            except Exception as e:
+                # Don't fail the task if state capture fails
+                output_parts.append(f"\n[Warning: Failed to capture browser state: {e}]")
+        
         if outputs:
             import json
             output_parts.append(f"\nOutputs: {json.dumps(outputs, indent=2)}")
@@ -64,6 +90,7 @@ class CompleteBrowserTaskTool(Tool):
                 "task_success": success,
                 "extracted_data": outputs or {},
                 "notes": notes,
+                "browser_state": browser_state,
             },
         )
     
@@ -76,7 +103,7 @@ class CompleteBrowserTaskTool(Tool):
                 "properties": {
                     "summary": {
                         "type": "string",
-                        "description": "Brief summary of what was accomplished or why the task failed",
+                        "description": "Detailed summary of what was accomplished, including specific actions taken, pages visited, and any findings or issues encountered. Do NOT be brief.",
                     },
                     "success": {
                         "type": "boolean",

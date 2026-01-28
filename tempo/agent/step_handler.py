@@ -191,6 +191,7 @@ class StepHandler:
                         "findings": tool_call.metadata.get("findings", ""),
                         "success": tool_call.metadata.get("task_success", True),
                         "extracted_data": tool_call.metadata.get("extracted_data", ""),
+                        "browser_state": tool_call.metadata.get("browser_state"),
                     },
                 )
 

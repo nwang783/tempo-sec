@@ -28,9 +28,7 @@ class TestCheckInboxTool:
         assert schema.name == "check_inbox"
         props = schema.parameters["properties"]
         assert "subject_pattern" in props
-        assert "from_address" in props
-        assert "timeout_seconds" in props
-        assert "poll_interval" in props
+        assert "max_emails" in props
         assert schema.parameters["required"] == []
     
     @pytest.mark.asyncio
@@ -78,7 +76,7 @@ class TestCheckInboxTool:
     
     @pytest.mark.asyncio
     async def test_execute_returns_emails(self):
-        """Execute returns matching emails."""
+        """Execute returns recent emails."""
         tool = CheckInboxTool(
             imap_password="test-password",
             agent_email="test@example.com",
@@ -93,28 +91,28 @@ class TestCheckInboxTool:
             }
         ]
         
-        with patch.object(tool, "_fetch_emails", return_value=mock_emails):
+        with patch.object(tool, "_fetch_recent_emails", return_value=mock_emails):
             result = await tool.execute(subject_pattern="verify")
         
         assert result.success
-        assert "Found 1 matching email" in result.output
+        assert "Found 1 email" in result.output
         assert "Verify your account" in result.output
         assert result.metadata["count"] == 1
     
     @pytest.mark.asyncio
-    async def test_execute_timeout_no_emails(self):
-        """Execute returns timeout message when no emails found."""
+    async def test_execute_no_emails(self):
+        """Execute returns empty message when no emails found."""
         tool = CheckInboxTool(
             imap_password="test-password",
             agent_email="test@example.com",
         )
         
-        with patch.object(tool, "_fetch_emails", return_value=[]):
-            result = await tool.execute(timeout_seconds=0)
+        with patch.object(tool, "_fetch_recent_emails", return_value=[]):
+            result = await tool.execute()
         
         assert result.success
-        assert "No matching emails found" in result.output
-        assert result.metadata["timeout"] is True
+        assert "No emails found" in result.output
+        assert result.metadata["count"] == 0
     
     @pytest.mark.asyncio
     async def test_execute_handles_imap_error(self):
@@ -124,7 +122,7 @@ class TestCheckInboxTool:
             agent_email="test@example.com",
         )
         
-        with patch.object(tool, "_fetch_emails", side_effect=Exception("Connection refused")):
+        with patch.object(tool, "_fetch_recent_emails", side_effect=Exception("Connection refused")):
             result = await tool.execute()
         
         assert not result.success
