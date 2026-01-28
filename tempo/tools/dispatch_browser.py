@@ -36,10 +36,14 @@ class DispatchBrowserTool(Tool):
         container_manager: "ContainerManager | None" = None,
         visualization: "VisualizationObserver | None" = None,
         config: "Any" = None,
+        stop_event: "asyncio.Event | None" = None,
+        pause_event: "asyncio.Event | None" = None,
     ):
         self._container_manager = container_manager
         self._visualization = visualization
         self._config = config
+        self._stop_event = stop_event
+        self._pause_event = pause_event
         
     async def execute(
         self,
@@ -171,6 +175,8 @@ class DispatchBrowserTool(Tool):
             tools=subagent_tools,
             context=subagent_context,
             visualization_collector=subagent_viz,
+            stop_event=self._stop_event,
+            pause_event=self._pause_event,
         )
         
         try:

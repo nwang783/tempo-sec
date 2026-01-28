@@ -70,6 +70,38 @@ class TestVisualizationServerState:
         assert pause_event.is_set() is True
 
 
+class TestVisualizationServerEventHistory:
+    """Tests for VisualizationServer event history and replay."""
+    
+    @pytest.mark.asyncio
+    async def test_broadcast_buffers_events(self):
+        """Broadcast events should be stored in _event_history."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        server.active_connections = [AsyncMock()]
+        
+        message = json.dumps({"type": "test", "data": "foo"})
+        await server.broadcast(message)
+        
+        assert len(server._event_history) == 1
+        assert server._event_history[0] == message
+        
+    @pytest.mark.asyncio
+    async def test_clear_agent_state_clears_history(self):
+        """Clearing agent state should also clear event history."""
+        from tempo.visualization.server import VisualizationServer
+        
+        server = VisualizationServer(auto_open=False)
+        server._event_history = ["event1", "event2"]
+        
+        server.clear_agent_state()
+        
+        assert server._event_history == []
+
+
+
+
 class TestVisualizationCollectorEvents:
     """Tests for VisualizationCollector event emission."""
     

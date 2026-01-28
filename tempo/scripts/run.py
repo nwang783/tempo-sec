@@ -245,6 +245,9 @@ async def main() -> None:
             persistence_dir=config.persistence_dir,
         )
         viz_server.set_context_store(context)
+        # If resuming, populate event history from context for graph view
+        if args.context:
+            viz_server.populate_events_from_context(context)
         await viz_server.start()
         viz_collector = VisualizationCollector(viz_server)
 
@@ -354,12 +357,12 @@ async def main() -> None:
             
             async with container:
                 # Create tools with container
-                tools = agent_def.create_tools(context, container, visualization=viz_collector, config=config)
+                tools = agent_def.create_tools(context, container, visualization=viz_collector, config=config, stop_event=stop_event, pause_event=pause_event)
                 result = await run_agent(tools)
         else:
             print("⚠️  Running in LOCAL mode (no sandbox)...")
             # Create local tools
-            tools = agent_def.create_tools(context, None, visualization=viz_collector, config=config)
+            tools = agent_def.create_tools(context, None, visualization=viz_collector, config=config, stop_event=stop_event, pause_event=pause_event)
             result = await run_agent(tools)
             
         # Final Report

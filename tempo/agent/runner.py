@@ -40,11 +40,13 @@ except ImportError:
 @dataclass
 class StepResult:
     """Result of a single agent step."""
-    step_number: int
-    llm_response: LLMResponse
+    step_number: int = 0
+    llm_response: LLMResponse | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
     should_continue: bool = True
     error: str | None = None
+    paused: bool = False
+    stopped: bool = False
 
 
 @dataclass
@@ -338,6 +340,34 @@ class Agent:
                         label=f"Step {self._step_count}"
                     )
                 
+                # Handle pause/stop signals from step (for immediate response in nested agents)
+                if step_result.paused:
+                    if self._viz_collector:
+                        self._viz_collector.on_agent_paused(
+                            reason="Agent paused by user request."
+                        )
+                    return AgentResult(
+                        success=True,
+                        objective=objective,
+                        steps_taken=self._step_count,
+                        findings=self._findings,
+                        hypotheses=self._hypotheses,
+                        context_id=self.context.current_frame.id,
+                        paused=True,
+                    )
+                
+                if step_result.stopped:
+                    return AgentResult(
+                        success=False,
+                        objective=objective,
+                        steps_taken=self._step_count,
+                        findings=self._findings,
+                        hypotheses=self._hypotheses,
+                        context_id=self.context.current_frame.id,
+                        paused=False,
+                        error="Stopped by user",
+                    )
+                
                 # Check for user prompts between steps
                 await self._check_for_user_prompts()
                 
@@ -393,6 +423,13 @@ class Agent:
         5. Return step result
         """
         self._step_count += 1
+        
+        # Check for pause/stop before doing any work in this step
+        # This ensures nested agents respond immediately to pause signals
+        if self.pause_event and self.pause_event.is_set():
+            return StepResult(paused=True)
+        if self.stop_event and self.stop_event.is_set():
+            return StepResult(stopped=True)
 
         # Check context size and optimize if needed
         if self.config.max_context_tokens and getattr(self.config, 'auto_summarize', True):
@@ -441,10 +478,34 @@ class Agent:
         if response.tool_calls:
             for tc in response.tool_calls:
                 # Execute via StepHandler
-                tool_call = await self.step_handler.execute_tool_call(
+                # create task for tool execution to allow cancellation
+                import asyncio
+                tool_task = asyncio.create_task(self.step_handler.execute_tool_call(
                     tc,
                     max_output_chars=self.config.max_output_chars,
-                )
+                ))
+                
+                if self.stop_event:
+                    # Race against stop event
+                    done, pending = await asyncio.wait(
+                        [tool_task, asyncio.create_task(self.stop_event.wait())],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    if self.stop_event.is_set():
+                        # Stop requested - cancel tool and break
+                        tool_task.cancel()
+                        try:
+                            await tool_task
+                        except asyncio.CancelledError:
+                            pass
+                        
+                        # We don't add this tool call to context since it was interrupted
+                        # The outer loop will see stop_event is set and handle the exit
+                        break
+                
+                # If we get here, either stop_event wasn't set or tool finished first
+                tool_call = await tool_task
                 step_result.tool_calls.append(tool_call)
                 
                 # Add to context
