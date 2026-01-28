@@ -256,7 +256,6 @@ class GetEmailContentTool(Tool):
     async def execute(
         self,
         message_id: str,
-        purpose: str = "",
     ) -> ToolResult:
         """
         Fetch email content and extract verification data.

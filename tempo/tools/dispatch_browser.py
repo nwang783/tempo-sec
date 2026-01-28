@@ -47,7 +47,6 @@ class DispatchBrowserTool(Tool):
         url: str = "",
         scope: str = "",
         purpose: str = "",
-        keep_alive: bool = False,
         **kwargs,
     ) -> ToolResult:
         """
@@ -325,11 +324,6 @@ class DispatchBrowserTool(Tool):
                         "type": "string",
                         "description": "Why this dispatch is needed",
                         "default": "",
-                    },
-                    "keep_alive": {
-                        "type": "boolean",
-                        "description": "Keep browser session alive after completion for authenticated testing reuse. Returns client handle in metadata.",
-                        "default": False,
                     },
                 },
                 "required": ["objective"],

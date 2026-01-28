@@ -85,20 +85,18 @@ class TestBrowserSubagentEmailTools:
         assert agent.agent_email == "init@example.com"
 
 
-class TestDispatchBrowserKeepAlive:
-    """Tests for keep_alive parameter in dispatch_browser."""
+class TestDispatchBrowserSessionPersistence:
+    """Tests for session persistence in dispatch_browser (keep_alive was removed)."""
     
-    def test_schema_includes_keep_alive(self):
-        """Dispatch browser schema includes keep_alive parameter."""
+    def test_schema_does_not_include_keep_alive(self):
+        """Dispatch browser schema should NOT include keep_alive (session manager handles persistence)."""
         from tempo.tools.dispatch_browser import DispatchBrowserTool
         
         tool = DispatchBrowserTool()
         schema = tool.get_schema()
         
-        assert "keep_alive" in schema.parameters["properties"]
-        prop = schema.parameters["properties"]["keep_alive"]
-        assert prop["type"] == "boolean"
-        assert prop["default"] is False
+        # keep_alive was removed - session manager now handles persistence automatically
+        assert "keep_alive" not in schema.parameters["properties"]
 
 
 class TestSessionStateFormatting:

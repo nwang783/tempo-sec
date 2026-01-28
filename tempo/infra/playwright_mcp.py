@@ -11,6 +11,7 @@ import logging
 import os
 import subprocess
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,10 @@ class PlaywrightMCPClient:
             timeout: Default action timeout in milliseconds
             version: Playwright MCP npm package version (default: env TEMPO_PLAYWRIGHT_MCP_VERSION or "latest")
             read_limit: Max bytes per JSON-RPC message line (default: env TEMPO_PLAYWRIGHT_MCP_READ_LIMIT or 10MB)
-            user_data_dir: Path to persistent browser profile directory. If None, uses --isolated (in-memory).
+            user_data_dir: Path to persistent browser profile directory for session state
+                (cookies, localStorage, sessionStorage). If None, uses --isolated mode
+                which runs with a fresh in-memory profile (no persistence between runs).
+                Use persistent profiles for authenticated testing workflows.
         """
         self.headless = headless
         self.browser = browser
@@ -468,7 +472,7 @@ class PlaywrightMCPClient:
                 "cookies": cookies,
                 "local_storage": local_storage,
                 "session_storage": session_storage,
-                "timestamp": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error(f"Failed to capture browser state: {e}")
